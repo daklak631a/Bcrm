@@ -77,8 +77,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('[AuthProvider] Auth state changed:', event);
-        if (event === 'SIGNED_IN' && session?.user) {
-          await verifyUser(session.user.id, session.user.email);
+        if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && session?.user) {
+          // Only verify if we don't already have a user set (callback page may have already done this)
+          const currentUser = useAuthStore.getState().user;
+          if (!currentUser) {
+            await verifyUser(session.user.id, session.user.email);
+          }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
         }

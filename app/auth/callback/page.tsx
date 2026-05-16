@@ -4,10 +4,11 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/store/useAuthStore';
+import { Profile } from '@/types/models';
 
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { setUser } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
   const processed = useRef(false);
 
@@ -31,36 +32,38 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        // Implicit flow: tokens arrive in hash fragment (#access_token=...&refresh_token=...)
+        // Implicit flow: tokens arrive in hash fragment
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
 
         if (accessToken) {
           console.log('[Callback] Found tokens in hash, setting session...');
-          const { error: sessionError } = await supabase.auth.setSession({
+          const { data, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken || '',
           });
 
-          if (sessionError) {
-            console.error('[Callback] setSession failed:', sessionError.message);
-            setError(`Lỗi xác thực: ${sessionError.message}`);
+          if (sessionError || !data.session) {
+            console.error('[Callback] setSession failed:', sessionError?.message);
+            setError(`Lỗi xác thực: ${sessionError?.message || 'Không tạo được phiên'}`);
             setTimeout(() => router.push('/login'), 3000);
             return;
           }
 
-          console.log('[Callback] Session established successfully');
-          // Clear hash from URL for cleanliness
+          console.log('[Callback] Session established, verifying user...');
           window.history.replaceState(null, '', window.location.pathname);
-          // AuthProvider's onAuthStateChange will pick up the SIGNED_IN event
+
+          // Directly verify and redirect — don't wait for AuthProvider
+          await verifyAndRedirect(data.session.user.id, data.session.user.email || '');
           return;
         }
 
-        // Fallback: maybe session already exists (e.g. page refresh)
+        // Fallback: maybe session already exists
         console.log('[Callback] No tokens in URL, checking existing session...');
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          console.log('[Callback] Existing session found for:', session.user.email);
+          console.log('[Callback] Existing session found, verifying...');
+          await verifyAndRedirect(session.user.id, session.user.email || '');
           return;
         }
 
@@ -76,27 +79,51 @@ export default function AuthCallbackPage() {
       }
     };
 
-    processCallback();
-  }, [router]);
+    const verifyAndRedirect = async (userId: string, userEmail: string) => {
+      try {
+        console.log(`[Callback] Calling /api/auth/verify for ${userEmail}...`);
+        const res = await fetch('/api/auth/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, userEmail }),
+        });
 
-  // When AuthProvider sets user, redirect to dashboard
-  useEffect(() => {
-    if (user) {
-      console.log('[Callback] User verified, redirecting to dashboard');
-      router.push('/dashboard');
-    }
-  }, [user, router]);
+        const data = await res.json();
+        console.log('[Callback] Verify response:', res.status, data);
+
+        if (res.ok && data.profile) {
+          console.log('[Callback] Verified! Role:', data.profile.role);
+          setUser(data.profile as Profile);
+          router.push('/dashboard');
+          return;
+        }
+
+        // Rejected
+        console.warn('[Callback] Rejected:', data.error);
+        const supabase = getSupabase();
+        await supabase.auth.signOut();
+        setError(data.error || 'Tài khoản chưa được cấp quyền.');
+        setTimeout(() => router.push('/login'), 4000);
+      } catch (err: any) {
+        console.error('[Callback] Verify network error:', err);
+        setError('Lỗi kết nối server. Vui lòng thử lại.');
+        setTimeout(() => router.push('/login'), 3000);
+      }
+    };
+
+    processCallback();
+  }, [router, setUser]);
 
   // Timeout safety net
   useEffect(() => {
     const timeout = setTimeout(() => {
-      if (!user && !error) {
+      if (!error) {
         setError('Xác thực mất quá lâu. Vui lòng thử lại.');
         setTimeout(() => router.push('/login'), 3000);
       }
-    }, 15000);
+    }, 20000);
     return () => clearTimeout(timeout);
-  }, [user, error, router]);
+  }, [error, router]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4">
