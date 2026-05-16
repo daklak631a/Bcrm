@@ -15,73 +15,58 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     const supabase = getSupabase();
 
-    const handleAuth = async (userId: string, userEmail: string | undefined) => {
-      // 1. Check if profile exists
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (profile && !profileError) {
-        // Profile exists
-        if ((profile as Profile).is_active === false) {
-          await supabase.auth.signOut();
-          setUser(null);
-          return;
-        }
-        setUser(profile as Profile);
+    const verifyUser = async (userId: string, userEmail: string | undefined) => {
+      if (!userEmail) {
+        console.error('[AuthProvider] No email found for user');
+        await supabase.auth.signOut();
+        setUser(null);
         return;
       }
 
-      // 2. No profile → check if email is pre-approved in allowed_emails
-      if (userEmail) {
-        const { data: allowed } = await supabase
-          .from('allowed_emails')
-          .select('*')
-          .eq('email', userEmail)
-          .eq('is_active', true)
-          .single();
-
-        if (allowed) {
-          // Auto-create profile from allowed_emails entry
-          const { data: newProfile, error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              id: userId,
-              email: userEmail,
-              full_name: allowed.full_name,
-              role: allowed.role || 'USER',
-              department_id: allowed.department_id || null,
-              is_active: true,
-            })
-            .select()
-            .single();
-
-          if (newProfile && !insertError) {
-            setUser(newProfile as Profile);
-            return;
-          }
-        }
-      }
-
-      // 3. Not approved → reject
-      if (userEmail) {
-        toast.error('Truy cập bị từ chối', {
-          description: `Tài khoản ${userEmail} chưa được cấp quyền truy cập vào hệ thống. Vui lòng liên hệ Admin.`,
+      try {
+        console.log(`[AuthProvider] Verifying user: ${userEmail}`);
+        const res = await fetch('/api/auth/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, userEmail }),
         });
+
+        const data = await res.json();
+
+        if (res.ok && data.profile) {
+          console.log('[AuthProvider] Verified successfully:', data.profile.role);
+          setUser(data.profile as Profile);
+          return;
+        }
+
+        // Rejected
+        console.warn('[AuthProvider] Verification failed:', data.error);
+        toast.error('Truy cập bị từ chối', {
+          description: data.error || `Tài khoản ${userEmail} chưa được cấp quyền.`,
+          duration: 6000,
+        });
+        await supabase.auth.signOut();
+        setUser(null);
+      } catch (err) {
+        console.error('[AuthProvider] Network error during verify:', err);
+        toast.error('Lỗi kết nối', {
+          description: 'Không thể xác thực. Vui lòng thử lại.',
+        });
+        await supabase.auth.signOut();
+        setUser(null);
       }
-      await supabase.auth.signOut();
-      setUser(null);
     };
 
     const loadSession = async () => {
       setLoading(true);
+      console.log('[AuthProvider] Loading session...');
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-        await handleAuth(session.user.id, session.user.email);
+        console.log('[AuthProvider] Session found for:', session.user.email);
+        await verifyUser(session.user.id, session.user.email);
       } else {
+        console.log('[AuthProvider] No session found');
         setUser(null);
       }
     };
@@ -91,8 +76,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     // Listen for auth state changes (Google OAuth callback)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('[AuthProvider] Auth state changed:', event);
         if (event === 'SIGNED_IN' && session?.user) {
-          await handleAuth(session.user.id, session.user.email);
+          await verifyUser(session.user.id, session.user.email);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
         }
@@ -112,7 +98,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
       if (!user && !isPublic) {
         router.push('/login');
-      } else if (user && pathname === '/login') {
+      } else if (user && (pathname === '/login' || pathname.startsWith('/auth/callback'))) {
         router.push('/dashboard');
       }
     }

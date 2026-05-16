@@ -1,0 +1,111 @@
+import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
+
+/**
+ * POST /api/auth/verify
+ * Server-side auth verification using SERVICE_ROLE_KEY to bypass RLS.
+ * Called by AuthProvider after Google OAuth sign-in.
+ * 
+ * Body: { userId: string, userEmail: string }
+ * Returns: { profile: Profile } or { error: string }
+ */
+export async function POST(request: Request) {
+  try {
+    const { userId, userEmail } = await request.json();
+
+    if (!userId || !userEmail) {
+      return NextResponse.json(
+        { error: 'Missing userId or userEmail' },
+        { status: 400 }
+      );
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    // If no service role key, fall back to anon key (less secure but works if RLS is open)
+    const supabaseKey = serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('[Auth Verify] Missing Supabase credentials');
+      return NextResponse.json(
+        { error: 'Server configuration error' },
+        { status: 500 }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // 1. Check if profile already exists
+    const { data: existingProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (existingProfile && !profileError) {
+      if (existingProfile.is_active === false) {
+        return NextResponse.json(
+          { error: 'Tài khoản đã bị vô hiệu hóa.' },
+          { status: 403 }
+        );
+      }
+      return NextResponse.json({ profile: existingProfile });
+    }
+
+    console.log(`[Auth Verify] No profile for ${userEmail}, checking allowed_emails...`);
+
+    // 2. Check allowed_emails
+    const { data: allowed, error: allowedError } = await supabase
+      .from('allowed_emails')
+      .select('*')
+      .eq('email', userEmail)
+      .eq('is_active', true)
+      .single();
+
+    if (allowedError) {
+      console.error('[Auth Verify] allowed_emails query error:', allowedError);
+    }
+
+    if (!allowed) {
+      console.log(`[Auth Verify] Email ${userEmail} not in allowed_emails`);
+      return NextResponse.json(
+        { error: `Tài khoản ${userEmail} chưa được cấp quyền truy cập vào hệ thống.` },
+        { status: 403 }
+      );
+    }
+
+    // 3. Auto-create profile from allowed_emails
+    console.log(`[Auth Verify] Creating profile for ${userEmail} with role ${allowed.role}`);
+    const { data: newProfile, error: insertError } = await supabase
+      .from('profiles')
+      .insert({
+        id: userId,
+        email: userEmail,
+        full_name: allowed.full_name,
+        role: allowed.role || 'USER',
+        department_id: allowed.department_id || null,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('[Auth Verify] Profile insert error:', insertError);
+      return NextResponse.json(
+        { error: `Không thể tạo hồ sơ: ${insertError.message}` },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ profile: newProfile });
+  } catch (err: any) {
+    console.error('[Auth Verify] Unexpected error:', err);
+    return NextResponse.json(
+      { error: err.message || 'Internal Server Error' },
+      { status: 500 }
+    );
+  }
+}
