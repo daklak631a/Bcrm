@@ -9,6 +9,7 @@ import { getFilteredData, formatCurrency } from "@/lib/mockData"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { DashboardSkeleton } from "@/components/skeletons"
+import { KPISummaryTable } from "@/components/ui/kpi-summary-table"
 
 import { Package, TrendingUp } from "lucide-react"
 
@@ -57,6 +58,10 @@ export default function DashboardPage() {
             <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{interactions.length}</h3>
           </div>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <KPISummaryTable />
       </div>
 
       {user?.role === 'admin_2' && (

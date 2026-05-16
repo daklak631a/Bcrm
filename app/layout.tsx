@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   description: 'Nền tảng quản lý khách hàng ngân hàng',
 }
 
+import { Toaster } from 'sonner'
+
 export default function RootLayout({
   children,
 }: {
@@ -25,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="vi" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans antialiased bg-slate-50 text-slate-900">
+        <Toaster richColors position="top-right" />
         {children}
       </body>
     </html>

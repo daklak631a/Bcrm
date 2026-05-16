@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Profile } from '@/types/models';
 import { useRouter, usePathname } from 'next/navigation';
+import { toast } from 'sonner';
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setUser, setLoading, user, isLoading } = useAuthStore();
@@ -65,6 +66,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       }
 
       // 3. Not approved → reject
+      if (userEmail) {
+        toast.error('Truy cập bị từ chối', {
+          description: `Tài khoản ${userEmail} chưa được cấp quyền truy cập vào hệ thống. Vui lòng liên hệ Admin.`,
+        });
+      }
       await supabase.auth.signOut();
       setUser(null);
     };
