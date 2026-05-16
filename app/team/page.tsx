@@ -1,0 +1,399 @@
+"use client"
+
+import { DashboardLayout } from "@/components/layout/DashboardLayout"
+import { useAuthStore } from "@/store/useAuthStore"
+import { getSupabase } from "@/lib/supabase/client"
+import { Profile, UserRole } from "@/types/models"
+import { useState, useEffect, useCallback } from "react"
+import { Users, UserPlus, Search, Pencil, Trash2, X, Check, Shield, ShieldCheck, UserCircle, Loader2 } from "lucide-react"
+import { TableSkeleton } from "@/components/skeletons"
+
+type DialogMode = 'add' | 'edit' | null
+
+interface FormData {
+  email: string
+  full_name: string
+  role: UserRole
+  department_id: string
+}
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  'ADMIN_LEVEL_1': 'Admin Cấp 1',
+  'ADMIN_LEVEL_2': 'Admin Cấp 2',
+  'USER': 'Chuyên Viên',
+}
+
+const ROLE_ICONS: Record<UserRole, typeof Shield> = {
+  'ADMIN_LEVEL_1': ShieldCheck,
+  'ADMIN_LEVEL_2': Shield,
+  'USER': UserCircle,
+}
+
+const EMPTY_FORM: FormData = { email: '', full_name: '', role: 'USER', department_id: '' }
+
+export default function TeamPage() {
+  const { user } = useAuthStore()
+  const [mounted, setMounted] = useState(false)
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [dialogMode, setDialogMode] = useState<DialogMode>(null)
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null)
+  const [formData, setFormData] = useState<FormData>(EMPTY_FORM)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
+  useEffect(() => { setMounted(true) }, [])
+
+  const fetchProfiles = useCallback(async () => {
+    setLoading(true)
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (data && !error) {
+      setProfiles(data as Profile[])
+    }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (mounted) fetchProfiles()
+  }, [mounted, fetchProfiles])
+
+  if (!mounted) return <TableSkeleton title="Quản Lý Nhân Sự" />
+
+  if (user?.role !== 'admin_1') {
+    return (
+      <DashboardLayout title="Quản Lý Nhân Sự">
+        <div className="flex items-center justify-center h-[50vh] text-slate-500">
+          Bạn không có quyền truy cập trang này. Chỉ Admin Cấp 1 được phép.
+        </div>
+      </DashboardLayout>
+    )
+  }
+
+  const filtered = profiles.filter(p => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return p.full_name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q) || p.role.toLowerCase().includes(q)
+  })
+
+  const activeCount = profiles.filter(p => p.is_active !== false).length
+
+  const openAdd = () => {
+    setFormData(EMPTY_FORM)
+    setEditingProfile(null)
+    setDialogMode('add')
+    setError(null)
+  }
+
+  const openEdit = (profile: Profile) => {
+    setFormData({
+      email: profile.email,
+      full_name: profile.full_name,
+      role: profile.role,
+      department_id: profile.department_id || '',
+    })
+    setEditingProfile(profile)
+    setDialogMode('edit')
+    setError(null)
+  }
+
+  const closeDialog = () => {
+    setDialogMode(null)
+    setEditingProfile(null)
+    setError(null)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    const supabase = getSupabase()
+
+    if (!formData.email.trim() || !formData.full_name.trim()) {
+      setError('Email và Họ tên không được để trống.')
+      setSaving(false)
+      return
+    }
+
+    if (dialogMode === 'add') {
+      // Insert new profile — Admin creates the profile entry
+      // The user will login via Google with this email
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert({
+          id: crypto.randomUUID(),
+          email: formData.email.trim(),
+          full_name: formData.full_name.trim(),
+          role: formData.role,
+          department_id: formData.department_id.trim() || null,
+          is_active: true,
+        })
+
+      if (insertError) {
+        setError(insertError.message.includes('duplicate') ? 'Email đã tồn tại trong hệ thống.' : `Lỗi: ${insertError.message}`)
+        setSaving(false)
+        return
+      }
+    } else if (dialogMode === 'edit' && editingProfile) {
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          full_name: formData.full_name.trim(),
+          role: formData.role,
+          department_id: formData.department_id.trim() || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingProfile.id)
+
+      if (updateError) {
+        setError(`Lỗi: ${updateError.message}`)
+        setSaving(false)
+        return
+      }
+    }
+
+    await fetchProfiles()
+    closeDialog()
+    setSaving(false)
+  }
+
+  const handleToggleActive = async (profile: Profile) => {
+    const supabase = getSupabase()
+    const newStatus = profile.is_active === false ? true : false
+    await supabase
+      .from('profiles')
+      .update({ is_active: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', profile.id)
+    await fetchProfiles()
+    setDeleteConfirm(null)
+  }
+
+  const handleDelete = async (profileId: string) => {
+    const supabase = getSupabase()
+    await supabase.from('profiles').delete().eq('id', profileId)
+    await fetchProfiles()
+    setDeleteConfirm(null)
+  }
+
+  return (
+    <DashboardLayout title="Quản Lý Nhân Sự">
+      <div className="flex flex-col gap-6">
+        {/* KPI */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white p-5 rounded-2xl ring-1 ring-slate-900/5">
+            <p className="text-sm font-medium text-slate-500 mb-1">Tổng Nhân Sự</p>
+            <h3 className="text-2xl font-bold text-slate-800">{profiles.length}</h3>
+          </div>
+          <div className="bg-white p-5 rounded-2xl ring-1 ring-slate-900/5">
+            <p className="text-sm font-medium text-slate-500 mb-1">Đang Hoạt Động</p>
+            <h3 className="text-2xl font-bold text-emerald-600">{activeCount}</h3>
+          </div>
+          <div className="bg-white p-5 rounded-2xl ring-1 ring-slate-900/5">
+            <p className="text-sm font-medium text-slate-500 mb-1">Admin Cấp 2</p>
+            <h3 className="text-2xl font-bold text-slate-800">{profiles.filter(p => p.role === 'ADMIN_LEVEL_2').length}</h3>
+          </div>
+          <div className="bg-white p-5 rounded-2xl ring-1 ring-slate-900/5">
+            <p className="text-sm font-medium text-slate-500 mb-1">Chuyên Viên</p>
+            <h3 className="text-2xl font-bold text-slate-800">{profiles.filter(p => p.role === 'USER').length}</h3>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="relative w-full sm:w-96">
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Tìm kiếm theo tên, email..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 w-full outline-none"
+            />
+          </div>
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shrink-0 shadow-sm"
+          >
+            <UserPlus className="w-4 h-4" /> Thêm Nhân Sự
+          </button>
+        </div>
+
+        {/* Table */}
+        <div className="bg-white rounded-2xl ring-1 ring-slate-900/5 shadow-[0_1px_3px_rgb(0_0_0_/_2%)] overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
+              <span className="ml-3 text-slate-500">Đang tải dữ liệu...</span>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[800px]">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr className="text-sm text-slate-600 font-medium">
+                    <th className="py-3 px-4 font-semibold">Nhân Sự</th>
+                    <th className="py-3 px-4 font-semibold">Email</th>
+                    <th className="py-3 px-4 font-semibold">Vai Trò</th>
+                    <th className="py-3 px-4 font-semibold">Phòng Ban</th>
+                    <th className="py-3 px-4 font-semibold">Trạng Thái</th>
+                    <th className="py-3 px-4 font-semibold text-right">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.map(profile => {
+                    const RoleIcon = ROLE_ICONS[profile.role]
+                    const isActive = profile.is_active !== false
+                    return (
+                      <tr key={profile.id} className={`hover:bg-slate-50 transition-colors ${!isActive ? 'opacity-50' : ''}`}>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-sm shrink-0">
+                              {profile.full_name.charAt(0)}
+                            </div>
+                            <span className="font-medium text-slate-800 text-sm">{profile.full_name}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-slate-600">{profile.email}</td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+                            <RoleIcon className="w-3.5 h-3.5" />
+                            {ROLE_LABELS[profile.role]}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-sm text-slate-600">{profile.department_id || '—'}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
+                            {isActive ? 'Hoạt động' : 'Vô hiệu'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => openEdit(profile)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors" title="Sửa">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleToggleActive(profile)} className={`p-1.5 rounded-md transition-colors ${isActive ? 'text-slate-400 hover:text-amber-600 hover:bg-amber-50' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`} title={isActive ? 'Vô hiệu hóa' : 'Kích hoạt lại'}>
+                              {isActive ? <X className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                            </button>
+                            {deleteConfirm === profile.id ? (
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => handleDelete(profile.id)} className="p-1.5 text-rose-600 bg-rose-50 rounded-md text-xs font-medium">Xóa</button>
+                                <button onClick={() => setDeleteConfirm(null)} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-md">Hủy</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setDeleteConfirm(profile.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors" title="Xóa vĩnh viễn">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-500">
+                        {searchQuery ? 'Không tìm thấy nhân sự phù hợp.' : 'Chưa có nhân sự nào.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Add/Edit Dialog */}
+      {dialogMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={closeDialog}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-slate-800">
+                {dialogMode === 'add' ? 'Thêm Nhân Sự Mới' : 'Chỉnh Sửa Nhân Sự'}
+              </h3>
+              <button onClick={closeDialog} className="p-1 text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
+                  disabled={dialogMode === 'edit'}
+                  placeholder="example@gmail.com"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none disabled:bg-slate-100 disabled:text-slate-500"
+                />
+                {dialogMode === 'add' && (
+                  <p className="text-xs text-slate-400 mt-1">User sẽ đăng nhập bằng Google với email này.</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Họ và Tên</label>
+                <input
+                  type="text"
+                  value={formData.full_name}
+                  onChange={e => setFormData(p => ({ ...p, full_name: e.target.value }))}
+                  placeholder="Nguyễn Văn A"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Vai Trò</label>
+                <select
+                  value={formData.role}
+                  onChange={e => setFormData(p => ({ ...p, role: e.target.value as UserRole }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                >
+                  <option value="USER">Chuyên Viên</option>
+                  <option value="ADMIN_LEVEL_2">Admin Cấp 2 (Trưởng Chi Nhánh)</option>
+                  <option value="ADMIN_LEVEL_1">Admin Cấp 1 (Giám Đốc)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Mã Phòng Ban / Chi Nhánh</label>
+                <input
+                  type="text"
+                  value={formData.department_id}
+                  onChange={e => setFormData(p => ({ ...p, department_id: e.target.value }))}
+                  placeholder="VD: chi-nhanh-1"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                />
+              </div>
+
+              {error && (
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-700">
+                  {error}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={closeDialog} className="px-4 py-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                Hủy
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-70 flex items-center gap-2"
+              >
+                {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {dialogMode === 'add' ? 'Thêm Nhân Sự' : 'Cập Nhật'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </DashboardLayout>
+  )
+}
