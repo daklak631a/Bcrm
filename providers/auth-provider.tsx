@@ -14,31 +14,67 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     const supabase = getSupabase();
 
+    const handleAuth = async (userId: string, userEmail: string | undefined) => {
+      // 1. Check if profile exists
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (profile && !profileError) {
+        // Profile exists
+        if ((profile as Profile).is_active === false) {
+          await supabase.auth.signOut();
+          setUser(null);
+          return;
+        }
+        setUser(profile as Profile);
+        return;
+      }
+
+      // 2. No profile → check if email is pre-approved in allowed_emails
+      if (userEmail) {
+        const { data: allowed } = await supabase
+          .from('allowed_emails')
+          .select('*')
+          .eq('email', userEmail)
+          .eq('is_active', true)
+          .single();
+
+        if (allowed) {
+          // Auto-create profile from allowed_emails entry
+          const { data: newProfile, error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: userId,
+              email: userEmail,
+              full_name: allowed.full_name,
+              role: allowed.role || 'USER',
+              department_id: allowed.department_id || null,
+              is_active: true,
+            })
+            .select()
+            .single();
+
+          if (newProfile && !insertError) {
+            setUser(newProfile as Profile);
+            return;
+          }
+        }
+      }
+
+      // 3. Not approved → reject
+      await supabase.auth.signOut();
+      setUser(null);
+    };
+
     const loadSession = async () => {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        if (data && !error) {
-          const profile = data as Profile;
-          if (profile.is_active === false) {
-            // Tài khoản bị vô hiệu hóa
-            await supabase.auth.signOut();
-            setUser(null);
-            return;
-          }
-          setUser(profile);
-        } else {
-          // Google login nhưng chưa có profile → chặn
-          await supabase.auth.signOut();
-          setUser(null);
-        }
+        await handleAuth(session.user.id, session.user.email);
       } else {
         setUser(null);
       }
@@ -50,25 +86,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_IN' && session?.user) {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          if (data && !error) {
-            const profile = data as Profile;
-            if (profile.is_active === false) {
-              await supabase.auth.signOut();
-              setUser(null);
-              return;
-            }
-            setUser(profile);
-          } else {
-            // Không có profile → từ chối đăng nhập
-            await supabase.auth.signOut();
-            setUser(null);
-          }
+          await handleAuth(session.user.id, session.user.email);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
         }
