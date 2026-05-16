@@ -19,7 +19,7 @@ export default function AuthCallbackPage() {
 
     const processCallback = async () => {
       try {
-        // Check for error from Supabase/Google in the URL
+        // Check for error in URL (hash or query)
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const urlParams = new URLSearchParams(window.location.search);
 
@@ -31,52 +31,41 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        // PKCE flow: exchange code for session
-        const code = urlParams.get('code');
-        if (code) {
-          console.log('[Callback] Found auth code, exchanging for session...');
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeError) {
-            console.error('[Callback] Code exchange failed:', exchangeError);
-            setError(`Lỗi xác thực: ${exchangeError.message}`);
-            setTimeout(() => router.push('/login'), 3000);
-            return;
-          }
-          console.log('[Callback] Code exchange successful');
-          // Session is now established. AuthProvider's onAuthStateChange will handle the rest.
-          return;
-        }
-
-        // Implicit flow: tokens in hash fragment
+        // Implicit flow: tokens arrive in hash fragment (#access_token=...&refresh_token=...)
         const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+
         if (accessToken) {
-          console.log('[Callback] Found access token in hash, setting session...');
-          const refreshToken = hashParams.get('refresh_token') || '';
+          console.log('[Callback] Found tokens in hash, setting session...');
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
-            refresh_token: refreshToken,
+            refresh_token: refreshToken || '',
           });
+
           if (sessionError) {
-            console.error('[Callback] Set session failed:', sessionError);
+            console.error('[Callback] setSession failed:', sessionError.message);
             setError(`Lỗi xác thực: ${sessionError.message}`);
             setTimeout(() => router.push('/login'), 3000);
             return;
           }
-          console.log('[Callback] Session set successfully');
+
+          console.log('[Callback] Session established successfully');
+          // Clear hash from URL for cleanliness
+          window.history.replaceState(null, '', window.location.pathname);
+          // AuthProvider's onAuthStateChange will pick up the SIGNED_IN event
           return;
         }
 
-        // No code and no tokens - check if session already exists
-        console.log('[Callback] No code/token in URL, checking existing session...');
+        // Fallback: maybe session already exists (e.g. page refresh)
+        console.log('[Callback] No tokens in URL, checking existing session...');
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           console.log('[Callback] Existing session found for:', session.user.email);
-          // AuthProvider will handle verification
           return;
         }
 
-        // Nothing worked
-        console.warn('[Callback] No auth data found, redirecting to login');
+        // Nothing found
+        console.warn('[Callback] No auth data found');
         setError('Không tìm thấy thông tin đăng nhập. Vui lòng thử lại.');
         setTimeout(() => router.push('/login'), 3000);
 
@@ -98,7 +87,7 @@ export default function AuthCallbackPage() {
     }
   }, [user, router]);
 
-  // Timeout - if stuck for more than 15 seconds, show error
+  // Timeout safety net
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (!user && !error) {

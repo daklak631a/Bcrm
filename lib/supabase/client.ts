@@ -10,7 +10,6 @@ export const getSupabase = () => {
 
     if (!supabaseUrl || !supabaseAnonKey) {
        console.warn("Supabase credentials missing. CRM will not function properly without NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY defined.");
-       // Initialize with dummy values so the app doesn't crash, but it will fail on API calls.
        return createClient('https://dummy.supabase.co', 'dummy-key');
     }
     
@@ -19,7 +18,7 @@ export const getSupabase = () => {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
-        flowType: 'pkce',
+        flowType: 'implicit',
       },
     });
   }
