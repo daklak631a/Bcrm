@@ -14,7 +14,14 @@ export const getSupabase = () => {
        return createClient('https://dummy.supabase.co', 'dummy-key');
     }
     
-    supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+      },
+    });
   }
   return supabaseClient;
 };
