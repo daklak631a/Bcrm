@@ -13,6 +13,42 @@ export function getCustomerFullName(customer: any): string {
   return `${customer.last_name || ''} ${customer.first_name || ''}`.trim() || '—'
 }
 
+export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT'
+export type EntityType = 'CUSTOMER' | 'LOAN' | 'DEPOSIT' | 'INTERACTION' | 'PRODUCT' | 'CROSS_SALE' | 'AUTH' | 'USER'
+
+export interface AuditLogPayload {
+  action: AuditAction
+  entityType: EntityType
+  entityId: string
+  beforeValue?: any
+  afterValue?: any
+}
+
+export async function logAudit(payload: AuditLogPayload) {
+  try {
+    const supabase = getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { error } = await supabase
+      .from('audit_logs')
+      .insert({
+        user_id: user.id,
+        action: payload.action,
+        entity_type: payload.entityType,
+        entity_id: payload.entityId,
+        before_value: payload.beforeValue,
+        after_value: payload.afterValue
+      })
+      
+    if (error) {
+      console.error('Failed to write audit log:', error)
+    }
+  } catch (error) {
+    console.error('Audit log exception:', error)
+  }
+}
+
 // ==========================================
 // PROFILES
 // ==========================================
@@ -81,6 +117,14 @@ export async function createCustomer(customer: {
     .select()
     .single()
   if (error) throw error
+
+  await logAudit({
+    action: 'CREATE',
+    entityType: 'CUSTOMER',
+    entityId: data.id,
+    afterValue: customer
+  })
+
   return data
 }
 
@@ -101,6 +145,14 @@ export async function updateCustomer(id: string, updates: Partial<{
     .select()
     .single()
   if (error) throw error
+
+  await logAudit({
+    action: 'UPDATE',
+    entityType: 'CUSTOMER',
+    entityId: id,
+    afterValue: updates
+  })
+
   return data
 }
 
@@ -147,6 +199,14 @@ export async function createLoan(loan: {
     .select()
     .single()
   if (error) throw error
+
+  await logAudit({
+    action: 'CREATE',
+    entityType: 'LOAN',
+    entityId: data.id,
+    afterValue: loan
+  })
+
   return data
 }
 
@@ -159,6 +219,14 @@ export async function updateLoan(id: string, updates: Record<string, any>) {
     .select()
     .single()
   if (error) throw error
+
+  await logAudit({
+    action: 'UPDATE',
+    entityType: 'LOAN',
+    entityId: id,
+    afterValue: updates
+  })
+
   return data
 }
 
@@ -205,6 +273,14 @@ export async function createDeposit(deposit: {
     .select()
     .single()
   if (error) throw error
+
+  await logAudit({
+    action: 'CREATE',
+    entityType: 'DEPOSIT',
+    entityId: data.id,
+    afterValue: deposit
+  })
+
   return data
 }
 
@@ -217,6 +293,14 @@ export async function updateDeposit(id: string, updates: Record<string, any>) {
     .select()
     .single()
   if (error) throw error
+
+  await logAudit({
+    action: 'UPDATE',
+    entityType: 'DEPOSIT',
+    entityId: id,
+    afterValue: updates
+  })
+
   return data
 }
 
@@ -263,6 +347,14 @@ export async function createInteraction(interaction: {
     .select()
     .single()
   if (error) throw error
+
+  await logAudit({
+    action: 'CREATE',
+    entityType: 'INTERACTION',
+    entityId: data.id,
+    afterValue: interaction
+  })
+
   return data
 }
 
@@ -275,6 +367,14 @@ export async function updateInteraction(id: string, updates: Record<string, any>
     .select()
     .single()
   if (error) throw error
+
+  await logAudit({
+    action: 'UPDATE',
+    entityType: 'INTERACTION',
+    entityId: id,
+    afterValue: updates
+  })
+
   return data
 }
 
