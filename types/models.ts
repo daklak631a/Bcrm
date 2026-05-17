@@ -27,6 +27,10 @@ export interface Customer {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  customer_type?: string;
+  business_name?: string | null;
+  tax_code?: string | null;
+  representative_name?: string | null;
 }
 
 export interface Loan {
@@ -42,6 +46,12 @@ export interface Loan {
   warning_level: string | null;
   created_at: string;
   updated_at: string;
+  business_sector?: string | null;
+  disbursement_purpose?: string | null;
+  collateral_assets?: string | null;
+  credit_limit?: number | null;
+  loan_method?: string | null;
+  term_type?: string | null;
 }
 
 export interface Deposit {

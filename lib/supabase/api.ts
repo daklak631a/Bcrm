@@ -10,6 +10,9 @@ export function formatCurrency(value: number): string {
 
 export function getCustomerFullName(customer: any): string {
   if (!customer) return '—'
+  if (customer.customer_type === 'ENTERPRISE' && customer.business_name) {
+    return customer.business_name
+  }
   return `${customer.last_name || ''} ${customer.first_name || ''}`.trim() || '—'
 }
 
@@ -151,6 +154,10 @@ export async function fetchCustomerById(id: string) {
 }
 
 export async function createCustomer(customer: {
+  customer_type?: string
+  business_name?: string
+  tax_code?: string
+  representative_name?: string
   first_name: string
   last_name: string
   phone?: string
@@ -160,9 +167,33 @@ export async function createCustomer(customer: {
   assigned_manager_id: string
 }) {
   const supabase = getSupabase()
+  
+  // Normalization logic
+  let { customer_type, business_name, first_name, last_name, representative_name, phone } = customer
+  
+  // 1. Phone Normalization (strip all non-digits)
+  if (phone) {
+    phone = phone.replace(/\D/g, '')
+  }
+  
+  // 2. Representative name defaulting for Enterprise: "tên doanh nghiệp là được"
+  if (customer_type === 'ENTERPRISE' && business_name) {
+    representative_name = business_name
+    first_name = business_name
+    last_name = ''
+  }
+
+  const customerToInsert = {
+    ...customer,
+    phone,
+    first_name,
+    last_name,
+    representative_name
+  }
+
   const { data, error } = await supabase
     .from('customers')
-    .insert(customer)
+    .insert(customerToInsert)
     .select()
     .single()
   if (error) throw error
@@ -171,13 +202,17 @@ export async function createCustomer(customer: {
     action: 'CREATE',
     entityType: 'CUSTOMER',
     entityId: data.id,
-    afterValue: customer
+    afterValue: customerToInsert
   })
 
   return data
 }
 
 export async function updateCustomer(id: string, updates: Partial<{
+  customer_type: string
+  business_name: string
+  tax_code: string
+  representative_name: string
   first_name: string
   last_name: string
   phone: string
@@ -187,9 +222,24 @@ export async function updateCustomer(id: string, updates: Partial<{
   assigned_manager_id: string
 }>) {
   const supabase = getSupabase()
+  
+  const customerToUpdate = { ...updates }
+  
+  // 1. Phone Normalization
+  if (customerToUpdate.phone) {
+    customerToUpdate.phone = customerToUpdate.phone.replace(/\D/g, '')
+  }
+  
+  // 2. Business representative name default
+  if (customerToUpdate.customer_type === 'ENTERPRISE' && customerToUpdate.business_name) {
+    customerToUpdate.representative_name = customerToUpdate.business_name
+    customerToUpdate.first_name = customerToUpdate.business_name
+    customerToUpdate.last_name = ''
+  }
+
   const { data, error } = await supabase
     .from('customers')
-    .update({ ...updates, updated_at: new Date().toISOString() })
+    .update({ ...customerToUpdate, updated_at: new Date().toISOString() })
     .eq('id', id)
     .select()
     .single()
@@ -199,7 +249,7 @@ export async function updateCustomer(id: string, updates: Partial<{
     action: 'UPDATE',
     entityType: 'CUSTOMER',
     entityId: id,
-    afterValue: updates
+    afterValue: customerToUpdate
   })
 
   return data
@@ -240,6 +290,12 @@ export async function createLoan(loan: {
   start_date: string
   due_date: string
   status?: string
+  business_sector?: string
+  disbursement_purpose?: string
+  collateral_assets?: string
+  credit_limit?: number
+  loan_method?: string
+  term_type?: string
 }) {
   const supabase = getSupabase()
   const { data, error } = await supabase
@@ -527,6 +583,17 @@ export async function fetchProductSales() {
   const { data, error } = await supabase
     .from('cross_sell_records')
     .select('*, cross_sell_products(id, name, type), customers(id, first_name, last_name), profiles:agent_id(id, full_name)')
+    .order('sale_date', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function fetchProductSalesByCustomer(customerId: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('cross_sell_records')
+    .select('*, cross_sell_products(id, name, type), profiles:agent_id(id, full_name)')
+    .eq('customer_id', customerId)
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []

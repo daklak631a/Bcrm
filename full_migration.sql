@@ -270,9 +270,23 @@ ALTER TABLE daily_manager_snapshots ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE FUNCTION public.get_current_user_role()
 RETURNS user_role AS $$
   SELECT role FROM public.profiles WHERE id = auth.uid() LIMIT 1;
-$$ LANGUAGE sql SECURITY DEFINER;
+$$ LANGUAGE sql SECURITY DEFINER SET search_path = public;
 
--- Drop existing policies first then recreate (idempotent)
+-- Drop ALL existing policies in public schema to prevent legacy conflicts and infinite recursion
+DO $$ 
+DECLARE
+  pol record;
+BEGIN
+  FOR pol IN 
+    SELECT schemaname, tablename, policyname 
+    FROM pg_policies 
+    WHERE schemaname = 'public' 
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', pol.policyname, pol.schemaname, pol.tablename);
+  END LOOP;
+END $$;
+
+-- Recreate policies (idempotent since we just dropped them all)
 
 -- PROFILES
 DROP POLICY IF EXISTS "Authenticated users can read profiles" ON profiles;

@@ -182,9 +182,13 @@ export default function DashboardPage() {
               <div className="relative z-10">
                 <span className={clsx(
                   "text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full inline-block mb-2",
-                  sale.status === 'Success' ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                  sale.status === 'COMPLETED' ? "bg-emerald-100 text-emerald-700" : 
+                  sale.status === 'INTERESTED' ? "bg-purple-100 text-purple-700" : 
+                  "bg-amber-100 text-amber-700"
                 )}>
-                  {sale.status === 'Success' ? 'Thành công' : 'Đang xử lý'}
+                  {sale.status === 'COMPLETED' ? 'Thành công' : 
+                   sale.status === 'INTERESTED' ? 'Quan tâm' : 
+                   'Đang xử lý'}
                 </span>
                 <h4 className="font-medium text-slate-800 text-sm mb-1">{sale.cross_sell_products?.name || '—'}</h4>
                 <p className="text-xs text-slate-500 mb-2">KH: {sale.customers ? getCustomerFullName(sale.customers) : '—'}</p>

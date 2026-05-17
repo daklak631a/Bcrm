@@ -5,9 +5,10 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Search, Plus, PiggyBank, TrendingUp, CalendarClock, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useMemo, useCallback } from "react"
-import { fetchDeposits, createDeposit, fetchCustomers, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
+import { fetchDeposits, createDeposit, fetchCustomers, formatCurrency, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
+import { Check } from "lucide-react"
 
 const ITEMS_PER_PAGE = 10
 
@@ -21,6 +22,20 @@ export default function DepositsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [showAddModal, setShowAddModal] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
+
+  // Customer Search & Quick Add State
+  const [selectedCustomerId, setSelectedCustomerId] = useState("")
+  const [customerSearch, setCustomerSearch] = useState("")
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const [showQuickAddCustomer, setShowQuickAddCustomer] = useState(false)
+  const [quickAddLoading, setQuickAddLoading] = useState(false)
+  const [customerType, setCustomerType] = useState("INDIVIDUAL")
+
+  const filteredCustomers = useMemo(() => {
+    if (!customerSearch.trim()) return customers
+    const q = customerSearch.toLowerCase()
+    return customers.filter(c => getCustomerFullName(c).toLowerCase().includes(q))
+  }, [customers, customerSearch])
 
   const loadData = useCallback(async () => {
     try {
@@ -58,11 +73,15 @@ export default function DepositsPage() {
 
   const handleAddDeposit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!selectedCustomerId) {
+      toast.error('Vui lòng chọn khách hàng')
+      return
+    }
     const form = new FormData(e.currentTarget)
     try {
       setFormLoading(true)
       await createDeposit({
-        customer_id: form.get('customer_id') as string,
+        customer_id: selectedCustomerId,
         account_number: form.get('account_number') as string || `DP${Date.now()}`,
         amount: Number(form.get('amount')),
         interest_rate: Number(form.get('interest_rate')) || 0,
@@ -88,6 +107,32 @@ export default function DepositsPage() {
       case 'MATURED': return { label: 'Đến hạn', color: 'bg-blue-100 text-blue-700' }
       case 'CLOSED': return { label: 'Đã tất toán', color: 'bg-slate-100 text-slate-700' }
       default: return { label: status, color: 'bg-slate-100 text-slate-700' }
+    }
+  }
+
+  const handleQuickAddCustomer = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const form = new FormData(e.currentTarget)
+    try {
+      setQuickAddLoading(true)
+      const newCustomer = await createCustomer({
+        customer_type: customerType,
+        first_name: form.get('first_name') as string || '',
+        last_name: form.get('last_name') as string || '',
+        business_name: form.get('business_name') as string || '',
+        tax_code: form.get('tax_code') as string || '',
+        phone: form.get('phone') as string || '',
+        assigned_manager_id: user!.id,
+      })
+      toast.success('Thêm khách hàng thành công!')
+      setCustomers(prev => [newCustomer, ...prev])
+      setSelectedCustomerId(newCustomer.id)
+      setCustomerSearch(getCustomerFullName(newCustomer))
+      setShowQuickAddCustomer(false)
+    } catch (err: any) {
+      toast.error('Lỗi thêm KH: ' + err.message)
+    } finally {
+      setQuickAddLoading(false)
     }
   }
 
@@ -187,12 +232,59 @@ export default function DepositsPage() {
       {/* Add Deposit Modal */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Mở Sổ Tiền Gửi Mới">
         <form onSubmit={handleAddDeposit} className="space-y-4">
-          <FormField label="Khách hàng" required>
-            <FormSelect name="customer_id" required>
-              <option value="">-- Chọn khách hàng --</option>
-              {customers.map((c: any) => (<option key={c.id} value={c.id}>{getCustomerFullName(c)}</option>))}
-            </FormSelect>
-          </FormField>
+          <div className="space-y-1 relative">
+            <label className="text-sm font-medium text-slate-700">Khách hàng <span className="text-rose-500">*</span></label>
+            <div className="relative">
+              <input 
+                type="text" 
+                value={customerSearch}
+                onChange={(e) => {
+                  setCustomerSearch(e.target.value)
+                  setShowCustomerDropdown(true)
+                  if (selectedCustomerId) setSelectedCustomerId("")
+                }}
+                onFocus={() => setShowCustomerDropdown(true)}
+                placeholder="Tìm kiếm tên hoặc SĐT..." 
+                className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+              {showCustomerDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {filteredCustomers.length > 0 ? (
+                    filteredCustomers.map(c => (
+                      <div 
+                        key={c.id} 
+                        className={clsx("px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 flex items-center justify-between", selectedCustomerId === c.id && "bg-emerald-50 text-emerald-700")}
+                        onClick={() => {
+                          setSelectedCustomerId(c.id)
+                          setCustomerSearch(getCustomerFullName(c))
+                          setShowCustomerDropdown(false)
+                        }}
+                      >
+                        <span>{getCustomerFullName(c)} {c.phone ? `- ${c.phone}` : ''}</span>
+                        {selectedCustomerId === c.id && <Check className="w-4 h-4" />}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="px-3 py-4 text-sm text-center text-slate-500 flex flex-col items-center gap-2">
+                      <p>Không tìm thấy khách hàng.</p>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setShowCustomerDropdown(false)
+                          setShowQuickAddCustomer(true)
+                        }}
+                        className="text-emerald-600 font-medium hover:underline flex items-center gap-1"
+                      >
+                        <Plus className="w-4 h-4" /> Thêm nhanh KH mới
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* Overlay to close dropdown */}
+            {showCustomerDropdown && <div className="fixed inset-0 z-0" onClick={() => setShowCustomerDropdown(false)}></div>}
+          </div>
           <FormField label="Số tài khoản">
             <FormInput name="account_number" placeholder="Để trống sẽ tự sinh" />
           </FormField>
@@ -221,6 +313,52 @@ export default function DepositsPage() {
             </FormField>
           </div>
           <SubmitButton loading={formLoading}>Mở Sổ Tiền Gửi</SubmitButton>
+        </form>
+      </Modal>
+
+      {/* Quick Add Customer Modal */}
+      <Modal isOpen={showQuickAddCustomer} onClose={() => setShowQuickAddCustomer(false)} title="Thêm Nhanh Khách Hàng">
+        <form onSubmit={handleQuickAddCustomer} className="space-y-4">
+          <FormField label="Loại Khách Hàng">
+            <FormSelect value={customerType} onChange={(e) => setCustomerType(e.target.value)}>
+              <option value="INDIVIDUAL">Cá Nhân</option>
+              <option value="ENTERPRISE">Doanh Nghiệp (B2B)</option>
+            </FormSelect>
+          </FormField>
+
+          {customerType === 'ENTERPRISE' ? (
+            <>
+              <FormField label="Tên Doanh Nghiệp" required>
+                <FormInput name="business_name" required placeholder="VD: Công ty TNHH ABC" />
+              </FormField>
+              <FormField label="Mã Số Thuế">
+                <FormInput name="tax_code" placeholder="Mã số thuế" />
+              </FormField>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Họ người đại diện" required>
+                  <FormInput name="last_name" required />
+                </FormField>
+                <FormField label="Tên người đại diện" required>
+                  <FormInput name="first_name" required />
+                </FormField>
+              </div>
+            </>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label="Họ" required>
+                <FormInput name="last_name" required />
+              </FormField>
+              <FormField label="Tên" required>
+                <FormInput name="first_name" required />
+              </FormField>
+            </div>
+          )}
+
+          <FormField label="Số điện thoại" required>
+            <FormInput name="phone" required placeholder="09xxxxxxx" />
+          </FormField>
+          
+          <SubmitButton loading={quickAddLoading}>Thêm Khách Hàng</SubmitButton>
         </form>
       </Modal>
     </DashboardLayout>
