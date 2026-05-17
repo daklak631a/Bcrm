@@ -1,7 +1,10 @@
-import { Bell, Search, Menu, LogOut } from "lucide-react"
+'use client'
+
+import { Bell, Search, Menu, LogOut, X, Check, Loader2 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { fetchNotifications, markNotificationRead, markAllNotificationsRead } from "@/lib/supabase/api"
 
 interface HeaderProps {
   title?: string;
@@ -12,15 +15,74 @@ export function Header({ title = "Trang Tổng Quan CRM", onMenuClick }: HeaderP
   const { user, logout } = useAuthStore()
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [notifLoading, setNotifLoading] = useState(false)
+  const notifRef = useRef<HTMLDivElement>(null)
 
-  // Avoid hydration mismatch for Zustand
+  useEffect(() => { setMounted(true) }, [])
+
+  // Close on outside click
   useEffect(() => {
-    setMounted(true)
-  }, [])
+    const handleClick = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifications(false)
+      }
+    }
+    if (showNotifications) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showNotifications])
+
+  const loadNotifications = useCallback(async () => {
+    if (!user?.id) return
+    try {
+      setNotifLoading(true)
+      const data = await fetchNotifications(user.id)
+      setNotifications(data)
+    } catch (err) {
+      console.error('Failed to load notifications:', err)
+    } finally {
+      setNotifLoading(false)
+    }
+  }, [user?.id])
+
+  const handleBellClick = () => {
+    setShowNotifications(!showNotifications)
+    if (!showNotifications) loadNotifications()
+  }
+
+  const handleMarkRead = async (id: string) => {
+    try {
+      await markNotificationRead(id)
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+    } catch (err) {
+      console.error('Failed to mark read:', err)
+    }
+  }
+
+  const handleMarkAllRead = async () => {
+    if (!user?.id) return
+    try {
+      await markAllNotificationsRead(user.id)
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+    } catch (err) {
+      console.error('Failed to mark all read:', err)
+    }
+  }
+
+  const unreadCount = notifications.filter(n => !n.is_read).length
 
   const handleLogout = () => {
     logout()
     router.push('/login')
+  }
+
+  const getRoleName = (role?: string) => {
+    switch (role) {
+      case 'ADMIN_LEVEL_1': return 'Hội Sở Chính'
+      case 'ADMIN_LEVEL_2': return 'Quản lý Chi Nhánh'
+      default: return 'Chuyên viên'
+    }
   }
 
   return (
@@ -32,28 +94,70 @@ export function Header({ title = "Trang Tổng Quan CRM", onMenuClick }: HeaderP
         <h1 className="text-lg md:text-xl font-semibold text-slate-800 truncate">{title}</h1>
       </div>
       <div className="flex items-center gap-2 md:gap-4 shrink-0">
-        <div className="relative hidden md:block">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input type="text" placeholder="Tìm kiếm khách hàng..." className="pl-9 pr-4 py-2 bg-slate-100 rounded-md text-sm border-none focus:ring-2 focus:ring-emerald-500 w-64" />
+        {/* Notification Bell */}
+        <div className="relative" ref={notifRef}>
+          <button
+            onClick={handleBellClick}
+            className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors"
+          >
+            <Bell className="w-5 h-5" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 w-4 h-4 bg-rose-500 rounded-full text-[10px] text-white font-bold flex items-center justify-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Notification Dropdown */}
+          {showNotifications && (
+            <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                <h3 className="text-sm font-semibold text-slate-800">Thông báo</h3>
+                {unreadCount > 0 && (
+                  <button onClick={handleMarkAllRead} className="text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Đánh dấu tất cả đã đọc
+                  </button>
+                )}
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {notifLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 text-sm">
+                    <Bell className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                    Không có thông báo
+                  </div>
+                ) : (
+                  notifications.map((notif: any) => (
+                    <button
+                      key={notif.id}
+                      onClick={() => {
+                        if (!notif.is_read) handleMarkRead(notif.id)
+                        if (notif.link_url) router.push(notif.link_url)
+                      }}
+                      className={`w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors ${!notif.is_read ? 'bg-emerald-50/50' : ''}`}
+                    >
+                      <p className={`text-sm ${!notif.is_read ? 'font-semibold text-slate-800' : 'text-slate-600'}`}>{notif.title}</p>
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{notif.message}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">{new Date(notif.created_at).toLocaleString('vi-VN')}</p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </div>
-        <button className="md:hidden p-2 text-slate-400 hover:text-slate-600 transition-colors">
-          <Search className="w-5 h-5" />
-        </button>
-        
-        <button className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full"></span>
-        </button>
+
+        {/* User info */}
         <div className="flex items-center gap-2 md:gap-3 pl-2 md:pl-4 border-l border-slate-200">
           <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm shrink-0">
-            {mounted && user ? user.name.charAt(0) : 'U'}
+            {mounted && user ? (user.name || user.email || 'U').charAt(0).toUpperCase() : 'U'}
           </div>
           <div className="hidden md:block">
-            <p className="text-sm font-medium text-slate-700">{mounted && user ? user.name : 'Đang tải...'}</p>
-            <p className="text-xs text-slate-500">
-              {mounted && user?.role === 'admin_1' ? 'Hội Sở Chính' : 
-               mounted && user?.role === 'admin_2' ? 'Quản lý Chi Nhánh 1' : 'Chi Nhánh 1'}
-            </p>
+            <p className="text-sm font-medium text-slate-700">{mounted && user ? (user.name || user.email) : 'Đang tải...'}</p>
+            <p className="text-xs text-slate-500">{mounted ? getRoleName(user?.role) : ''}</p>
           </div>
           <button onClick={handleLogout} className="p-2 ml-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors" title="Đăng xuất">
             <LogOut className="w-5 h-5" />

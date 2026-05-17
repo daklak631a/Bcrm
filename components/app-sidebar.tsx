@@ -72,7 +72,7 @@ export function AppSidebar() {
   ];
 
   // Admin-only nav
-  const adminItems = user?.role === 'admin_1'
+  const adminItems = user?.role === 'ADMIN_LEVEL_1'
     ? [{ name: 'Quản Lý Nhân Sự', href: '/team', icon: UserCog }]
     : [];
 

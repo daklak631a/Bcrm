@@ -32,7 +32,7 @@ export function Sidebar({ onClose }: SidebarProps) {
     { href: "/interactions", label: "Tương Tác", icon: MessageSquare },
   ]
 
-  if (user?.role === 'admin_1') {
+  if (user?.role === 'ADMIN_LEVEL_1') {
     links.push({ href: "/team", label: "Phân Bổ Nhân Sự", icon: Users })
   }
 

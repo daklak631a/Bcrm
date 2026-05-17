@@ -78,7 +78,7 @@ export default function TeamPage() {
 
   if (!mounted) return <TableSkeleton title="Quản Lý Nhân Sự" />
 
-  if (user?.role !== 'admin_1') {
+  if (user?.role !== 'ADMIN_LEVEL_1') {
     return (
       <DashboardLayout title="Quản Lý Nhân Sự">
         <div className="flex items-center justify-center h-[50vh] text-slate-500">
