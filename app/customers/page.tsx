@@ -23,6 +23,7 @@ export default function CustomersPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [showAddModal, setShowAddModal] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
+  const [customerType, setCustomerType] = useState<'INDIVIDUAL' | 'ENTERPRISE'>('INDIVIDUAL')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadData = useCallback(async () => {
@@ -76,9 +77,17 @@ export default function CustomersPage() {
     const form = new FormData(e.currentTarget)
     try {
       setFormLoading(true)
+      const isEnt = customerType === 'ENTERPRISE'
+      const bName = (form.get('business_name') as string || '').trim()
+      const repName = (form.get('representative_name') as string || '').trim()
+      const fName = isEnt ? bName : (form.get('full_name') as string || '').trim()
+
       await createCustomer({
-        first_name: form.get('first_name') as string,
-        last_name: form.get('last_name') as string,
+        customer_type: customerType,
+        full_name: fName,
+        business_name: isEnt ? bName : '',
+        tax_code: isEnt ? (form.get('tax_code') as string || '') : '',
+        representative_name: isEnt ? repName : '',
         phone: form.get('phone') as string || undefined,
         email: form.get('email') as string || undefined,
         address: form.get('address') as string || undefined,
@@ -98,8 +107,10 @@ export default function CustomersPage() {
   const handleExportData = () => {
     const exportData = filteredCustomers.map((c: any) => ({
       "Mã KH": c.id,
-      "Họ": c.last_name,
-      "Tên": c.first_name,
+      "Loại KH": c.customer_type === 'ENTERPRISE' ? 'Doanh nghiệp' : 'Cá nhân',
+      "Tên Khách Hàng / Doanh Nghiệp": getCustomerFullName(c),
+      "Mã Số Thuế": c.tax_code || '',
+      "Người Đại Diện": c.representative_name || '',
       "Số điện thoại": c.phone || '',
       "Email": c.email || '',
       "Địa chỉ": c.address || '',
@@ -113,7 +124,15 @@ export default function CustomersPage() {
   }
 
   const handleDownloadSample = () => {
-    const sampleData = [{ "Họ": "Nguyễn Văn", "Tên": "An", "Số điện thoại": "0901234567", "Email": "an@email.com", "Địa chỉ": "123 ABC" }]
+    const sampleData = [{ 
+      "Loại KH (INDIVIDUAL/ENTERPRISE)": "INDIVIDUAL", 
+      "Tên KH / Doanh Nghiệp": "Nguyễn Văn An", 
+      "Người Đại Diện (nếu là Doanh nghiệp)": "",
+      "Mã Số Thuế": "",
+      "Số điện thoại": "0901234567", 
+      "Email": "an@email.com", 
+      "Địa chỉ": "123 ABC" 
+    }]
     const worksheet = XLSX.utils.json_to_sheet(sampleData)
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, "KhachHang")
@@ -134,9 +153,17 @@ export default function CustomersPage() {
       let successCount = 0
       for (const item of data) {
         try {
+          const type = (item["Loại KH (INDIVIDUAL/ENTERPRISE)"] || "INDIVIDUAL").trim().toUpperCase()
+          const name = item["Tên KH / Doanh Nghiệp"] || item.full_name || item.business_name || "N/A"
+          const rep = item["Người Đại Diện (nếu là Doanh nghiệp)"] || item.representative_name || ""
+          const tax = item["Mã Số Thuế"] || item.tax_code || ""
+
           await createCustomer({
-            first_name: item["Tên"] || item.first_name || "N/A",
-            last_name: item["Họ"] || item.last_name || "N/A",
+            customer_type: type,
+            full_name: name,
+            business_name: type === 'ENTERPRISE' ? name : '',
+            representative_name: type === 'ENTERPRISE' ? rep : '',
+            tax_code: type === 'ENTERPRISE' ? tax : '',
             phone: item["Số điện thoại"] || item.phone || undefined,
             email: item["Email"] || item.email || undefined,
             address: item["Địa chỉ"] || item.address || undefined,
@@ -230,7 +257,16 @@ export default function CustomersPage() {
                     {paginatedCustomers.map((customer: any) => (
                       <tr key={customer.id} className="hover:bg-slate-50 transition-colors group">
                         <td className="py-3 px-4">
-                          <p className="text-sm font-medium text-slate-800">{getCustomerFullName(customer)}</p>
+                          <div className="flex items-center gap-2">
+                            <Link href={`/customers/${customer.id}`} className="text-sm font-medium text-slate-800 hover:text-emerald-600 transition-colors">
+                              {getCustomerFullName(customer)}
+                            </Link>
+                            {customer.customer_type === 'ENTERPRISE' ? (
+                              <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-600 border border-blue-100 rounded">B2B</span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100 rounded">B2C</span>
+                            )}
+                          </div>
                           {customer.note && <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{customer.note}</p>}
                         </td>
                         <td className="py-3 px-4">
@@ -289,14 +325,33 @@ export default function CustomersPage() {
       {/* Add Customer Modal */}
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Thêm Khách Hàng Mới">
         <form onSubmit={handleAddCustomer} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <FormField label="Họ" required>
-              <FormInput name="last_name" required placeholder="Nguyễn Văn" />
+          <FormField label="Phân Loại Khách Hàng" required>
+            <FormSelect 
+              value={customerType} 
+              onChange={(e) => setCustomerType(e.target.value as any)}
+            >
+              <option value="INDIVIDUAL">Cá Nhân (B2C)</option>
+              <option value="ENTERPRISE">Doanh Nghiệp (B2B)</option>
+            </FormSelect>
+          </FormField>
+
+          {customerType === 'ENTERPRISE' ? (
+            <>
+              <FormField label="Tên Doanh Nghiệp" required>
+                <FormInput name="business_name" required placeholder="VD: Công ty TNHH ABC" />
+              </FormField>
+              <FormField label="Mã Số Thuế">
+                <FormInput name="tax_code" placeholder="Mã số thuế" />
+              </FormField>
+              <FormField label="Người đại diện" required>
+                <FormInput name="representative_name" required placeholder="Họ và tên người đại diện" />
+              </FormField>
+            </>
+          ) : (
+            <FormField label="Họ và Tên" required>
+              <FormInput name="full_name" required placeholder="Nguyễn Văn An" />
             </FormField>
-            <FormField label="Tên" required>
-              <FormInput name="first_name" required placeholder="An" />
-            </FormField>
-          </div>
+          )}
           <FormField label="Số điện thoại">
             <FormInput name="phone" type="tel" placeholder="0901234567" />
           </FormField>

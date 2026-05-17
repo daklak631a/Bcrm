@@ -137,12 +137,17 @@ export default function InteractionsPage() {
     const form = new FormData(e.currentTarget)
     try {
       setQuickAddLoading(true)
+      const isEnt = customerType === 'ENTERPRISE'
+      const bName = (form.get('business_name') as string || '').trim()
+      const repName = (form.get('representative_name') as string || '').trim()
+      const fName = isEnt ? bName : (form.get('full_name') as string || '').trim()
+
       const newCustomer = await createCustomer({
         customer_type: customerType,
-        first_name: form.get('first_name') as string || '',
-        last_name: form.get('last_name') as string || '',
-        business_name: form.get('business_name') as string || '',
-        tax_code: form.get('tax_code') as string || '',
+        full_name: fName,
+        business_name: isEnt ? bName : '',
+        tax_code: isEnt ? (form.get('tax_code') as string || '') : '',
+        representative_name: isEnt ? repName : '',
         phone: form.get('phone') as string || '',
         assigned_manager_id: user!.id,
       })
@@ -364,24 +369,14 @@ export default function InteractionsPage() {
               <FormField label="Mã Số Thuế">
                 <FormInput name="tax_code" placeholder="Mã số thuế" />
               </FormField>
-              <div className="grid grid-cols-2 gap-4">
-                <FormField label="Họ người đại diện" required>
-                  <FormInput name="last_name" required />
-                </FormField>
-                <FormField label="Tên người đại diện" required>
-                  <FormInput name="first_name" required />
-                </FormField>
-              </div>
+              <FormField label="Người đại diện" required>
+                <FormInput name="representative_name" required placeholder="Họ và tên người đại diện" />
+              </FormField>
             </>
           ) : (
-            <div className="grid grid-cols-2 gap-4">
-              <FormField label="Họ" required>
-                <FormInput name="last_name" required />
-              </FormField>
-              <FormField label="Tên" required>
-                <FormInput name="first_name" required />
-              </FormField>
-            </div>
+            <FormField label="Tên KH" required>
+              <FormInput name="full_name" required placeholder="Nguyễn Văn An" />
+            </FormField>
           )}
 
           <FormField label="Số điện thoại" required>

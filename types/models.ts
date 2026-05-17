@@ -17,8 +17,7 @@ export interface Profile {
 
 export interface Customer {
   id: string;
-  first_name: string;
-  last_name: string;
+  full_name: string;
   phone: string | null;
   email: string | null;
   address: string | null;
@@ -31,6 +30,44 @@ export interface Customer {
   business_name?: string | null;
   tax_code?: string | null;
   representative_name?: string | null;
+  
+  // Financial indicators
+  loan_short_term?: number;
+  loan_mid_long_term?: number;
+  hdv_dau_ky?: number;
+  hdv_phat_sinh?: number;
+  hdv_tang_rong?: number;
+  limit_approval_count?: number;
+  
+  // Cross-sell products
+  cif_moi?: boolean;
+  smart_banking?: boolean;
+  bao_hiem_nhan_tho?: boolean;
+  bao_hiem_khoan_vay?: boolean;
+  the_tin_dung?: boolean;
+  chuyen_tien_ngoai?: boolean;
+  merchant_qr?: boolean;
+  sp_khac?: string | null;
+  
+  profiles?: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
+}
+
+export interface ManagerTransferRequest {
+  id: string;
+  customer_id: string;
+  requester_id: string;
+  target_manager_id: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason: string | null;
+  created_at: string;
+  updated_at: string;
+  customer?: Customer;
+  requester?: Profile;
+  target_manager?: Profile;
 }
 
 export interface Loan {

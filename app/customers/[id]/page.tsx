@@ -57,9 +57,13 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const handleSave = async () => {
     try {
       setSaving(true)
+      const isEnt = editForm.customer_type === 'ENTERPRISE'
       await updateCustomer(customerId, {
-        first_name: editForm.first_name,
-        last_name: editForm.last_name,
+        customer_type: editForm.customer_type,
+        business_name: isEnt ? editForm.business_name : '',
+        tax_code: isEnt ? editForm.tax_code : '',
+        representative_name: isEnt ? editForm.representative_name : '',
+        full_name: isEnt ? editForm.business_name : editForm.full_name,
         phone: editForm.phone,
         email: editForm.email,
         address: editForm.address,
@@ -134,7 +138,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-slate-100 flex flex-col items-center text-center">
                   <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl font-bold mb-4 shadow-sm border border-emerald-200">
-                    {customer.last_name?.charAt(0)}{customer.first_name?.charAt(0)}
+                    {customer.customer_type === 'ENTERPRISE'
+                      ? (customer.business_name?.substring(0, 2).toUpperCase() || 'DN')
+                      : (customer.full_name?.split(' ').pop()?.substring(0, 2).toUpperCase() || 'KH')}
                   </div>
                   <h2 className="text-xl font-bold text-slate-800">{getCustomerFullName(customer)}</h2>
                   <p className="text-sm text-slate-500 mt-1">Cán bộ QL: {customer.profiles?.full_name || 'Chưa phân bổ'}</p>
@@ -152,24 +158,47 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 <div className="p-6 flex flex-col gap-4">
                   {isEditing ? (
                     <div className="flex flex-col gap-4">
-                      <div>
-                        <label className="block text-xs font-medium text-slate-500 mb-1">Họ & Tên đệm</label>
-                        <input 
-                          type="text" 
-                          value={editForm.last_name || ''} 
-                          onChange={e => setEditForm({...editForm, last_name: e.target.value})}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" 
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-500 mb-1">Tên</label>
-                        <input 
-                          type="text" 
-                          value={editForm.first_name || ''} 
-                          onChange={e => setEditForm({...editForm, first_name: e.target.value})}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" 
-                        />
-                      </div>
+                      {editForm.customer_type === 'ENTERPRISE' ? (
+                        <>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Tên Doanh Nghiệp</label>
+                            <input 
+                              type="text" 
+                              value={editForm.business_name || ''} 
+                              onChange={e => setEditForm({...editForm, business_name: e.target.value})}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Mã Số Thuế</label>
+                            <input 
+                              type="text" 
+                              value={editForm.tax_code || ''} 
+                              onChange={e => setEditForm({...editForm, tax_code: e.target.value})}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Người đại diện</label>
+                            <input 
+                              type="text" 
+                              value={editForm.representative_name || ''} 
+                              onChange={e => setEditForm({...editForm, representative_name: e.target.value})}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div>
+                          <label className="block text-xs font-medium text-slate-500 mb-1">Họ và Tên</label>
+                          <input 
+                            type="text" 
+                            value={editForm.full_name || ''} 
+                            onChange={e => setEditForm({...editForm, full_name: e.target.value})}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" 
+                          />
+                        </div>
+                      )}
                       <div>
                         <label className="block text-xs font-medium text-slate-500 mb-1">Số điện thoại</label>
                         <input 

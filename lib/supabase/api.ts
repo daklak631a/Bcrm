@@ -1,4 +1,5 @@
 import { getSupabase } from './client'
+import { Customer, ManagerTransferRequest } from '@/types/models'
 
 // ==========================================
 // UTILITY HELPERS
@@ -13,7 +14,7 @@ export function getCustomerFullName(customer: any): string {
   if (customer.customer_type === 'ENTERPRISE' && customer.business_name) {
     return customer.business_name
   }
-  return `${customer.last_name || ''} ${customer.first_name || ''}`.trim() || '—'
+  return customer.full_name || '—'
 }
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT'
@@ -158,18 +159,35 @@ export async function createCustomer(customer: {
   business_name?: string
   tax_code?: string
   representative_name?: string
-  first_name: string
-  last_name: string
+  full_name: string
   phone?: string
   email?: string
   address?: string
   note?: string
   assigned_manager_id: string
+  
+  // Financial indicators
+  loan_short_term?: number
+  loan_mid_long_term?: number
+  hdv_dau_ky?: number
+  hdv_phat_sinh?: number
+  hdv_tang_rong?: number
+  limit_approval_count?: number
+  
+  // Cross-sell products
+  cif_moi?: boolean
+  smart_banking?: boolean
+  bao_hiem_nhan_tho?: boolean
+  bao_hiem_khoan_vay?: boolean
+  the_tin_dung?: boolean
+  chuyen_tien_ngoai?: boolean
+  merchant_qr?: boolean
+  sp_khac?: string
 }) {
   const supabase = getSupabase()
   
   // Normalization logic
-  let { customer_type, business_name, first_name, last_name, representative_name, phone } = customer
+  let { customer_type, business_name, full_name, representative_name, phone } = customer
   
   // 1. Phone Normalization (strip all non-digits)
   if (phone) {
@@ -179,15 +197,13 @@ export async function createCustomer(customer: {
   // 2. Representative name defaulting for Enterprise: "tên doanh nghiệp là được"
   if (customer_type === 'ENTERPRISE' && business_name) {
     representative_name = business_name
-    first_name = business_name
-    last_name = ''
+    full_name = business_name
   }
 
   const customerToInsert = {
     ...customer,
     phone,
-    first_name,
-    last_name,
+    full_name,
     representative_name
   }
 
@@ -213,13 +229,30 @@ export async function updateCustomer(id: string, updates: Partial<{
   business_name: string
   tax_code: string
   representative_name: string
-  first_name: string
-  last_name: string
+  full_name: string
   phone: string
   email: string
   address: string
   note: string
   assigned_manager_id: string
+  
+  // Financial indicators
+  loan_short_term: number
+  loan_mid_long_term: number
+  hdv_dau_ky: number
+  hdv_phat_sinh: number
+  hdv_tang_rong: number
+  limit_approval_count: number
+  
+  // Cross-sell products
+  cif_moi: boolean
+  smart_banking: boolean
+  bao_hiem_nhan_tho: boolean
+  bao_hiem_khoan_vay: boolean
+  the_tin_dung: boolean
+  chuyen_tien_ngoai: boolean
+  merchant_qr: boolean
+  sp_khac: string
 }>) {
   const supabase = getSupabase()
   
@@ -233,8 +266,7 @@ export async function updateCustomer(id: string, updates: Partial<{
   // 2. Business representative name default
   if (customerToUpdate.customer_type === 'ENTERPRISE' && customerToUpdate.business_name) {
     customerToUpdate.representative_name = customerToUpdate.business_name
-    customerToUpdate.first_name = customerToUpdate.business_name
-    customerToUpdate.last_name = ''
+    customerToUpdate.full_name = customerToUpdate.business_name
   }
 
   const { data, error } = await supabase
@@ -263,7 +295,7 @@ export async function fetchLoans() {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('loans')
-    .select('*, customers(id, first_name, last_name)')
+    .select('*, customers(id, full_name)')
     .order('created_at', { ascending: false })
   if (error) throw error
   return data || []
@@ -343,7 +375,7 @@ export async function fetchDeposits() {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('deposits')
-    .select('*, customers(id, first_name, last_name)')
+    .select('*, customers(id, full_name)')
     .order('created_at', { ascending: false })
   if (error) throw error
   return data || []
@@ -417,7 +449,7 @@ export async function fetchInteractions() {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('interactions')
-    .select('*, customers(id, first_name, last_name), profiles:manager_id(id, full_name)')
+    .select('*, customers(id, full_name), profiles:manager_id(id, full_name)')
     .order('interaction_date', { ascending: false })
   if (error) throw error
   return data || []
@@ -582,7 +614,7 @@ export async function fetchProductSales() {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cross_sell_records')
-    .select('*, cross_sell_products(id, name, type), customers(id, first_name, last_name), profiles:agent_id(id, full_name)')
+    .select('*, cross_sell_products(id, name, type), customers(id, full_name), profiles:agent_id(id, full_name)')
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
@@ -679,4 +711,151 @@ export async function deleteAllowedEmail(id: string) {
     .delete()
     .eq('id', id)
   if (error) throw error
+}
+
+// ==========================================
+// MANAGER TRANSFER REQUESTS
+// ==========================================
+
+export async function createTransferRequest(
+  customerId: string,
+  targetManagerId: string,
+  reason: string
+) {
+  const supabase = getSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const transferRequest = {
+    customer_id: customerId,
+    requester_id: user.id,
+    target_manager_id: targetManagerId,
+    status: 'PENDING' as const,
+    reason
+  }
+
+  const { data, error } = await supabase
+    .from('manager_transfer_requests')
+    .insert(transferRequest)
+    .select()
+    .single()
+
+  if (error) throw error
+
+  // Create notification for target manager and admins
+  const { data: customer } = await supabase
+    .from('customers')
+    .select('full_name')
+    .eq('id', customerId)
+    .single()
+
+  const customerName = customer ? customer.full_name : 'khách hàng'
+
+  // Admin and Target notifications
+  const { data: admins } = await supabase
+    .from('profiles')
+    .select('id')
+    .in('role', ['ADMIN_LEVEL_1', 'ADMIN_LEVEL_2'])
+
+  const notifications = [
+    {
+      user_id: targetManagerId,
+      title: 'Đề xuất nhận bàn giao khách hàng',
+      message: `Bạn được đề xuất làm chuyên viên quản lý cho khách hàng ${customerName}.`,
+      type: 'SYSTEM',
+      link_url: `/customers/${customerId}`
+    }
+  ]
+
+  if (admins && admins.length > 0) {
+    admins.forEach(admin => {
+      if (admin.id !== targetManagerId) {
+        notifications.push({
+          user_id: admin.id,
+          title: 'Yêu cầu chuyển giao khách hàng',
+          message: `Có yêu cầu chuyển giao khách hàng ${customerName} đang chờ phê duyệt.`,
+          type: 'SYSTEM',
+          link_url: `/customers/${customerId}`
+        })
+      }
+    })
+  }
+
+  await supabase.from('notifications').insert(notifications)
+
+  return data
+}
+
+export async function fetchTransferRequests() {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('manager_transfer_requests')
+    .select(`
+      *,
+      customer:customer_id(id, full_name),
+      requester:requester_id(id, full_name, email),
+      target_manager:target_manager_id(id, full_name, email)
+    `)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return (data || []) as ManagerTransferRequest[]
+}
+
+export async function updateTransferRequestStatus(
+  requestId: string,
+  status: 'APPROVED' | 'REJECTED'
+) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('manager_transfer_requests')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', requestId)
+    .select(`
+      *,
+      customer:customer_id(id, full_name),
+      requester:requester_id(id, full_name, email),
+      target_manager:target_manager_id(id, full_name, email)
+    `)
+    .single()
+
+  if (error) throw error
+
+  const customerName = data.customer ? data.customer.full_name : 'khách hàng'
+
+  // Log interaction if approved
+  if (status === 'APPROVED') {
+    await supabase.from('interactions').insert({
+      customer_id: data.customer_id,
+      manager_id: data.target_manager_id,
+      type: 'CALL',
+      purpose: 'BÀN GIAO QUẢN LÝ',
+      notes: `Hệ thống: Khách hàng được chuyển giao quản lý từ ${data.requester.full_name} (${data.requester.email}) sang ${data.target_manager.full_name} (${data.target_manager.email}). Lý do: ${data.reason || 'Không có'}`,
+      interaction_date: new Date().toISOString().split('T')[0],
+      completion_status: true,
+      result: 'SUCCESS'
+    })
+  }
+
+  // Notify requester and target manager of result
+  const notifications = [
+    {
+      user_id: data.requester_id,
+      title: 'Kết quả yêu cầu chuyển giao',
+      message: `Yêu cầu chuyển giao khách hàng ${customerName} đã được ${status === 'APPROVED' ? 'Phê duyệt' : 'Từ chối'}.`,
+      type: 'SYSTEM',
+      link_url: `/customers/${data.customer_id}`
+    },
+    {
+      user_id: data.target_manager_id,
+      title: 'Kết quả chuyển giao khách hàng',
+      message: `Chuyển giao khách hàng ${customerName} sang cho bạn đã được ${status === 'APPROVED' ? 'Phê duyệt' : 'Từ chối'}.`,
+      type: 'SYSTEM',
+      link_url: `/customers/${data.customer_id}`
+    }
+  ]
+
+  await supabase.from('notifications').insert(notifications)
+
+  return data
 }

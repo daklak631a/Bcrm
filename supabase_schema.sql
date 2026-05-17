@@ -22,8 +22,7 @@ CREATE INDEX idx_profiles_dept ON profiles(department_id);
 -- 2. CUSTOMERS TABLE
 CREATE TABLE customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    first_name TEXT NOT NULL,
-    last_name TEXT NOT NULL,
+    full_name TEXT NOT NULL,
     phone TEXT,
     email TEXT,
     address TEXT,
@@ -34,7 +33,7 @@ CREATE TABLE customers (
     deleted_at TIMESTAMPTZ -- For soft delete
 );
 CREATE INDEX idx_customers_manager ON customers(assigned_manager_id);
-CREATE INDEX idx_customers_name ON customers(last_name, first_name);
+CREATE INDEX idx_customers_name ON customers(full_name);
 
 -- 3. LOANS TABLE
 CREATE TABLE loans (

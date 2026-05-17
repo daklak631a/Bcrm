@@ -5,3 +5,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Temporary Scratch Scripts
+check_db.js
+excel_content.txt
+read_excel_temp.js
