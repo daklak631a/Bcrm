@@ -43,10 +43,59 @@ export async function logAudit(payload: AuditLogPayload) {
       
     if (error) {
       console.error('Failed to write audit log:', error)
+    } else {
+      // Create notification for Admins
+      // Determine message
+      let msg = ''
+      switch (payload.entityType) {
+        case 'CUSTOMER': msg = 'khách hàng'; break;
+        case 'LOAN': msg = 'khoản vay'; break;
+        case 'DEPOSIT': msg = 'huy động'; break;
+        case 'INTERACTION': msg = 'tương tác'; break;
+        default: msg = 'dữ liệu';
+      }
+      
+      let actionMsg = ''
+      switch (payload.action) {
+        case 'CREATE': actionMsg = 'Thêm mới'; break;
+        case 'UPDATE': actionMsg = 'Cập nhật'; break;
+        case 'DELETE': actionMsg = 'Xóa'; break;
+      }
+
+      if (actionMsg && msg) {
+        // Fetch admins
+        const { data: admins } = await supabase
+          .from('profiles')
+          .select('id')
+          .in('role', ['ADMIN_LEVEL_1', 'ADMIN_LEVEL_2'])
+        
+        if (admins && admins.length > 0) {
+          const notifications = admins.map(admin => ({
+            user_id: admin.id,
+            title: 'Hệ thống',
+            message: `${user.email} vừa ${actionMsg.toLowerCase()} ${msg} mới.`,
+            type: 'SYSTEM',
+            link_url: '/audit-logs'
+          }))
+          
+          await supabase.from('notifications').insert(notifications)
+        }
+      }
     }
   } catch (error) {
     console.error('Audit log exception:', error)
   }
+}
+
+export async function fetchAuditLogs(limit = 100) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('audit_logs')
+    .select('*, profiles:user_id(id, full_name, email)')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data || []
 }
 
 // ==========================================

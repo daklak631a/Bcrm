@@ -34,6 +34,7 @@ export function Sidebar({ onClose }: SidebarProps) {
 
   if (user?.role === 'ADMIN_LEVEL_1') {
     links.push({ href: "/team", label: "Phân Bổ Nhân Sự", icon: Users })
+    links.push({ href: "/audit-logs", label: "Lịch Sử Hệ Thống", icon: Package })
   }
 
   return (

@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { fetchNotifications, markNotificationRead, markAllNotificationsRead } from "@/lib/supabase/api"
+import { getSupabase } from "@/lib/supabase/client"
 
 interface HeaderProps {
   title?: string;
@@ -46,9 +47,31 @@ export function Header({ title = "Trang Tổng Quan CRM", onMenuClick }: HeaderP
     }
   }, [user?.id])
 
+  useEffect(() => {
+    if (user?.id) {
+      loadNotifications()
+      
+      const supabase = getSupabase()
+      const channel = supabase
+        .channel('realtime_notifications')
+        .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        }, (payload) => {
+          setNotifications(prev => [payload.new, ...prev])
+        })
+        .subscribe()
+        
+      return () => {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [user?.id, loadNotifications])
+
   const handleBellClick = () => {
     setShowNotifications(!showNotifications)
-    if (!showNotifications) loadNotifications()
   }
 
   const handleMarkRead = async (id: string) => {
