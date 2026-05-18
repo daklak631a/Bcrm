@@ -55,9 +55,9 @@ export function getFilteredData(user: User | null, agents: Agent[] = mockAgents,
     return { customers: [], loans: [], deposits: [], interactions: [], products: [], productSales: [] }
   }
   let allowedAgentIds: string[] = []
-  if (user.role === 'admin_1') {
+  if (user.role === 'ADMIN_1' as any) {
     allowedAgentIds = agents.map(a => a.id)
-  } else if (user.role === 'admin_2') {
+  } else if (user.role === 'ADMIN_2' as any) {
     allowedAgentIds = agents.filter(a => a.branchId === user.branchId).map(a => a.id)
   } else {
     allowedAgentIds = [user.id] // user only sees themselves

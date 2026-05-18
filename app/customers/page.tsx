@@ -7,9 +7,27 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import * as XLSX from "xlsx"
 import clsx from "clsx"
-import { fetchCustomers, createCustomer, getCustomerFullName, fetchProfiles } from "@/lib/supabase/api"
+import { fetchCustomers, createCustomer, updateCustomer, getCustomerFullName, fetchProfiles } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, FormTextarea, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
+
+const PRODUCT_MAP = [
+  { key: 'cif_moi', label: 'CIF Mới', short: 'CIF' },
+  { key: 'smart_banking', label: 'Ngân Hàng Số', short: 'NHS' },
+  { key: 'bao_hiem_nhan_tho', label: 'Bảo Hiểm Nhân Thọ', short: 'BHNT' },
+  { key: 'bao_hiem_khoan_vay', label: 'Bảo Hiểm Khoản Vay', short: 'BHKV' },
+  { key: 'the_tin_dung', label: 'Thẻ Tín Dụng', short: 'TTD' },
+  { key: 'chuyen_tien_ngoai', label: 'Chuyển Tiền Ngoài', short: 'CTN' },
+  { key: 'merchant_qr', label: 'Merchant QR', short: 'QR' },
+]
+
+function slugify(text: string) {
+  return text.toString().toLowerCase()
+    .normalize('NFD') // separate accents from letters
+    .replace(/[\u0300-\u036f]/g, '') // remove all separated accents
+    .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+    .replace(/[^a-z0-9]/g, '') // remove non-alphanumeric
+}
 
 const ITEMS_PER_PAGE = 10
 
@@ -24,6 +42,7 @@ export default function CustomersPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [customerType, setCustomerType] = useState<'INDIVIDUAL' | 'ENTERPRISE'>('INDIVIDUAL')
+  const [updatingProduct, setUpdatingProduct] = useState<{customerId: string, productKey: string} | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadData = useCallback(async () => {
@@ -88,11 +107,19 @@ export default function CustomersPage() {
         business_name: isEnt ? bName : '',
         tax_code: isEnt ? (form.get('tax_code') as string || '') : '',
         representative_name: isEnt ? repName : '',
+        cif_code: form.get('cif_code') as string || undefined,
         phone: form.get('phone') as string || undefined,
         email: form.get('email') as string || undefined,
         address: form.get('address') as string || undefined,
         note: form.get('note') as string || undefined,
         assigned_manager_id: (form.get('assigned_manager_id') as string) || user!.id,
+        cif_moi: form.get('cif_moi') === 'on',
+        smart_banking: form.get('smart_banking') === 'on',
+        bao_hiem_nhan_tho: form.get('bao_hiem_nhan_tho') === 'on',
+        bao_hiem_khoan_vay: form.get('bao_hiem_khoan_vay') === 'on',
+        the_tin_dung: form.get('the_tin_dung') === 'on',
+        chuyen_tien_ngoai: form.get('chuyen_tien_ngoai') === 'on',
+        merchant_qr: form.get('merchant_qr') === 'on',
       })
       toast.success('Thêm khách hàng thành công!')
       setShowAddModal(false)
@@ -104,9 +131,23 @@ export default function CustomersPage() {
     }
   }
 
+  const handleToggleProduct = async (customer: any, productKey: string, currentValue: boolean) => {
+    try {
+      setUpdatingProduct({ customerId: customer.id, productKey })
+      await updateCustomer(customer.id, { [productKey]: !currentValue })
+      setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, [productKey]: !currentValue } : c))
+      toast.success(`Đã ${!currentValue ? 'thêm' : 'hủy'} sản phẩm cho ${getCustomerFullName(customer)}`)
+    } catch (err: any) {
+      toast.error('Lỗi: ' + err.message)
+    } finally {
+      setUpdatingProduct(null)
+    }
+  }
+
   const handleExportData = () => {
     const exportData = filteredCustomers.map((c: any) => ({
       "Mã KH": c.id,
+      "Mã CIF": c.cif_code || '',
       "Loại KH": c.customer_type === 'ENTERPRISE' ? 'Doanh nghiệp' : 'Cá nhân',
       "Tên Khách Hàng / Doanh Nghiệp": getCustomerFullName(c),
       "Mã Số Thuế": c.tax_code || '',
@@ -116,6 +157,13 @@ export default function CustomersPage() {
       "Địa chỉ": c.address || '',
       "Ghi chú": c.note || '',
       "Chuyên viên": c.profiles?.full_name || '',
+      "CIF Mới": c.cif_moi ? "1" : "0",
+      "Ngân Hàng Số": c.smart_banking ? "1" : "0",
+      "Bảo Hiểm Nhân Thọ": c.bao_hiem_nhan_tho ? "1" : "0",
+      "Bảo Hiểm Khoản Vay": c.bao_hiem_khoan_vay ? "1" : "0",
+      "Thẻ Tín Dụng": c.the_tin_dung ? "1" : "0",
+      "Chuyển Tiền Ngoài": c.chuyen_tien_ngoai ? "1" : "0",
+      "Merchant QR": c.merchant_qr ? "1" : "0",
     }))
     const worksheet = XLSX.utils.json_to_sheet(exportData)
     const workbook = XLSX.utils.book_new()
@@ -125,13 +173,22 @@ export default function CustomersPage() {
 
   const handleDownloadSample = () => {
     const sampleData = [{ 
+      "Mã CIF (Tùy chọn)": "",
       "Loại KH (INDIVIDUAL/ENTERPRISE)": "INDIVIDUAL", 
       "Tên KH / Doanh Nghiệp": "Nguyễn Văn An", 
       "Người Đại Diện (nếu là Doanh nghiệp)": "",
       "Mã Số Thuế": "",
       "Số điện thoại": "0901234567", 
       "Email": "an@email.com", 
-      "Địa chỉ": "123 ABC" 
+      "Địa chỉ": "123 ABC",
+      "Chuyên viên": "",
+      "CIF Mới": "1",
+      "Ngân Hàng Số": "1",
+      "Bảo Hiểm Nhân Thọ": "0",
+      "Bảo Hiểm Khoản Vay": "0",
+      "Thẻ Tín Dụng": "0",
+      "Chuyển Tiền Ngoài": "0",
+      "Merchant QR": "0",
     }]
     const worksheet = XLSX.utils.json_to_sheet(sampleData)
     const workbook = XLSX.utils.book_new()
@@ -157,6 +214,17 @@ export default function CustomersPage() {
           const name = item["Tên KH / Doanh Nghiệp"] || item.full_name || item.business_name || "N/A"
           const rep = item["Người Đại Diện (nếu là Doanh nghiệp)"] || item.representative_name || ""
           const tax = item["Mã Số Thuế"] || item.tax_code || ""
+          const cif = item["Mã CIF (Tùy chọn)"] || item["Mã CIF"] || item.cif_code || ""
+          
+          let managerId = user!.id
+          const managerName = item["Chuyên viên"] || item["Chuyen vien"] || item.assigned_manager_id || ""
+          if (managerName && isAdmin) {
+             const sluggedName = slugify(managerName)
+             const matchedProfile = profiles.find(p => slugify(p.full_name) === sluggedName)
+             if (matchedProfile) {
+                managerId = matchedProfile.id
+             }
+          }
 
           await createCustomer({
             customer_type: type,
@@ -164,10 +232,18 @@ export default function CustomersPage() {
             business_name: type === 'ENTERPRISE' ? name : '',
             representative_name: type === 'ENTERPRISE' ? rep : '',
             tax_code: type === 'ENTERPRISE' ? tax : '',
+            cif_code: cif || undefined,
             phone: item["Số điện thoại"] || item.phone || undefined,
             email: item["Email"] || item.email || undefined,
             address: item["Địa chỉ"] || item.address || undefined,
-            assigned_manager_id: user!.id,
+            assigned_manager_id: managerId,
+            cif_moi: Boolean(item["CIF Mới"] == "1" || String(item["CIF Mới"]).toLowerCase() === "true" || String(item["CIF Mới"]).toLowerCase() === "yes"),
+            smart_banking: Boolean(item["Ngân Hàng Số"] == "1" || String(item["Ngân Hàng Số"]).toLowerCase() === "true" || String(item["Ngân Hàng Số"]).toLowerCase() === "yes"),
+            bao_hiem_nhan_tho: Boolean(item["Bảo Hiểm Nhân Thọ"] == "1" || String(item["Bảo Hiểm Nhân Thọ"]).toLowerCase() === "true" || String(item["Bảo Hiểm Nhân Thọ"]).toLowerCase() === "yes"),
+            bao_hiem_khoan_vay: Boolean(item["Bảo Hiểm Khoản Vay"] == "1" || String(item["Bảo Hiểm Khoản Vay"]).toLowerCase() === "true" || String(item["Bảo Hiểm Khoản Vay"]).toLowerCase() === "yes"),
+            the_tin_dung: Boolean(item["Thẻ Tín Dụng"] == "1" || String(item["Thẻ Tín Dụng"]).toLowerCase() === "true" || String(item["Thẻ Tín Dụng"]).toLowerCase() === "yes"),
+            chuyen_tien_ngoai: Boolean(item["Chuyển Tiền Ngoài"] == "1" || String(item["Chuyển Tiền Ngoài"]).toLowerCase() === "true" || String(item["Chuyển Tiền Ngoài"]).toLowerCase() === "yes"),
+            merchant_qr: Boolean(item["Merchant QR"] == "1" || String(item["Merchant QR"]).toLowerCase() === "true" || String(item["Merchant QR"]).toLowerCase() === "yes"),
           })
           successCount++
         } catch (err) {
@@ -248,8 +324,8 @@ export default function CustomersPage() {
                       <th className="py-3 px-4 font-semibold">Họ Tên</th>
                       <th className="py-3 px-4 font-semibold">Liên Hệ</th>
                       <th className="py-3 px-4 font-semibold">Địa Chỉ</th>
+                      <th className="py-3 px-4 font-semibold">Sản Phẩm</th>
                       <th className="py-3 px-4 font-semibold">Chuyên Viên</th>
-                      <th className="py-3 px-4 font-semibold">Ngày Tạo</th>
                       <th className="py-3 px-4 font-semibold text-right">Thao Tác</th>
                     </tr>
                   </thead>
@@ -257,10 +333,15 @@ export default function CustomersPage() {
                     {paginatedCustomers.map((customer: any) => (
                       <tr key={customer.id} className="hover:bg-slate-50 transition-colors group">
                         <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <Link href={`/customers/${customer.id}`} className="text-sm font-medium text-slate-800 hover:text-emerald-600 transition-colors">
                               {getCustomerFullName(customer)}
                             </Link>
+                            {customer.cif_code && (
+                              <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100 rounded">
+                                CIF: {customer.cif_code}
+                              </span>
+                            )}
                             {customer.customer_type === 'ENTERPRISE' ? (
                               <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-600 border border-blue-100 rounded">B2B</span>
                             ) : (
@@ -275,9 +356,34 @@ export default function CustomersPage() {
                             <span className="text-xs text-slate-500">{customer.email || ''}</span>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-sm text-slate-600 max-w-[200px] truncate">{customer.address || '—'}</td>
+                        <td className="py-3 px-4 text-sm text-slate-600 max-w-[150px] truncate" title={customer.address}>{customer.address || '—'}</td>
+                        <td className="py-3 px-4">
+                          <div className="flex flex-wrap gap-1.5 max-w-[200px]">
+                            {PRODUCT_MAP.map(prod => {
+                              const hasProduct = !!customer[prod.key]
+                              const isUpdating = updatingProduct?.customerId === customer.id && updatingProduct?.productKey === prod.key
+                              return (
+                                <button
+                                  key={prod.key}
+                                  title={prod.label}
+                                  disabled={isUpdating}
+                                  onClick={() => handleToggleProduct(customer, prod.key, hasProduct)}
+                                  className={clsx(
+                                    "px-1.5 py-0.5 text-[10px] font-semibold border rounded transition-all flex items-center gap-1",
+                                    hasProduct 
+                                      ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300"
+                                      : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+                                    isUpdating && "opacity-50 cursor-not-allowed"
+                                  )}
+                                >
+                                  {isUpdating && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+                                  {prod.short}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </td>
                         <td className="py-3 px-4 text-sm text-slate-700">{customer.profiles?.full_name || '—'}</td>
-                        <td className="py-3 px-4 text-sm text-slate-500">{new Date(customer.created_at).toLocaleDateString('vi-VN')}</td>
                         <td className="py-3 px-4 text-right">
                           <button className="inline-flex p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors">
                             <MoreHorizontal className="w-4 h-4" />
@@ -352,6 +458,9 @@ export default function CustomersPage() {
               <FormInput name="full_name" required placeholder="Nguyễn Văn An" />
             </FormField>
           )}
+          <FormField label="Mã CIF (Tùy chọn)">
+            <FormInput name="cif_code" placeholder="Nhập mã CIF nếu có" />
+          </FormField>
           <FormField label="Số điện thoại">
             <FormInput name="phone" type="tel" placeholder="0901234567" />
           </FormField>
@@ -370,6 +479,19 @@ export default function CustomersPage() {
               </FormSelect>
             </FormField>
           )}
+          
+          <div className="space-y-3 pt-2 border-t border-slate-100">
+            <label className="block text-sm font-medium text-slate-700">Sản phẩm hiện có</label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {PRODUCT_MAP.map(prod => (
+                <label key={prod.key} className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                  <input type="checkbox" name={prod.key} className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-600" />
+                  {prod.label}
+                </label>
+              ))}
+            </div>
+          </div>
+
           <FormField label="Ghi chú">
             <FormTextarea name="note" placeholder="Ghi chú thêm về khách hàng..." />
           </FormField>

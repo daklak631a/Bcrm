@@ -165,9 +165,11 @@ export default function LoansPage() {
       const bName = (form.get('business_name') as string || '').trim()
       const repName = (form.get('representative_name') as string || '').trim()
       const fName = isEnt ? bName : (form.get('full_name') as string || '').trim()
+      const cifCode = (form.get('cif_code') as string || '').trim() || null
 
       const newCustomer = await createCustomer({
         customer_type: customerType,
+        cif_code: cifCode,
         full_name: fName,
         business_name: isEnt ? bName : '',
         tax_code: isEnt ? (form.get('tax_code') as string || '') : '',
@@ -618,6 +620,10 @@ export default function LoansPage() {
               <FormInput name="full_name" required defaultValue={preFilledSearch} placeholder="Nguyễn Văn An" />
             </FormField>
           )}
+
+          <FormField label="Mã CIF (Tùy chọn)">
+            <FormInput name="cif_code" placeholder="Nhập mã CIF nếu có" />
+          </FormField>
 
           <FormField label="Số điện thoại" required>
             <FormInput name="phone" required placeholder="09xxxxxxx" />

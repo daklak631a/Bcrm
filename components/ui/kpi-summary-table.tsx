@@ -68,7 +68,7 @@ export function KPISummaryTable() {
         <CardTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
           ĐỘNG LỰC PHÒNG NGÀY
         </CardTitle>
-        <Select value={period} onValueChange={setPeriod}>
+        <Select value={period} onValueChange={(val) => val && setPeriod(val)}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Chọn kỳ báo cáo" />
           </SelectTrigger>

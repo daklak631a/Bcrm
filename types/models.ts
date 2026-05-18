@@ -11,6 +11,7 @@ export interface Profile {
   role: UserRole;
   department_id?: string;
   is_active?: boolean;
+  full_name_slug?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +31,7 @@ export interface Customer {
   business_name?: string | null;
   tax_code?: string | null;
   representative_name?: string | null;
+  cif_code?: string | null;
   
   // Financial indicators
   loan_short_term?: number;

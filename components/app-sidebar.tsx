@@ -100,11 +100,9 @@ export function AppSidebar() {
             const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
             return (
               <SidebarMenuItem key={item.name} className="px-2">
-                <SidebarMenuButton asChild isActive={isActive} tooltip={item.name}>
-                  <Link href={item.href}>
-                    <item.icon />
-                    <span>{item.name}</span>
-                  </Link>
+                <SidebarMenuButton render={<Link href={item.href} />} isActive={isActive} tooltip={item.name}>
+                  <item.icon />
+                  <span>{item.name}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );
@@ -117,11 +115,9 @@ export function AppSidebar() {
                 const isActive = pathname === item.href;
                 return (
                   <SidebarMenuItem key={item.name} className="px-2">
-                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.name}>
-                      <Link href={item.href}>
-                        <item.icon />
-                        <span>{item.name}</span>
-                      </Link>
+                    <SidebarMenuButton render={<Link href={item.href} />} isActive={isActive} tooltip={item.name}>
+                      <item.icon />
+                      <span>{item.name}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -135,11 +131,12 @@ export function AppSidebar() {
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger render={
                 <SidebarMenuButton
                   size="lg"
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-                >
+                />
+              }>
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarFallback className="rounded-lg">{user?.full_name?.charAt(0) || 'U'}</AvatarFallback>
                   </Avatar>
@@ -147,7 +144,6 @@ export function AppSidebar() {
                     <span className="truncate font-semibold">{user?.full_name || 'User'}</span>
                     <span className="truncate text-xs text-muted-foreground">{user?.email || user?.role || 'Role'}</span>
                   </div>
-                </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg"

@@ -35,7 +35,7 @@ export async function GET(request: Request) {
         startDate = dayjs().startOf('month').format('YYYY-MM-DD')
         break
       case 'quarter':
-        startDate = dayjs().startOf('quarter').format('YYYY-MM-DD')
+        startDate = dayjs().subtract(3, 'month').format('YYYY-MM-DD')
         break
       case 'year':
         startDate = dayjs().startOf('year').format('YYYY-MM-DD')
