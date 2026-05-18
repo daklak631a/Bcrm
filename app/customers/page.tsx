@@ -7,7 +7,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import * as XLSX from "xlsx"
 import clsx from "clsx"
-import { fetchCustomers, createCustomer, updateCustomer, getCustomerFullName, fetchProfiles } from "@/lib/supabase/api"
+import { fetchCustomers, createCustomer, updateCustomer, getCustomerFullName, fetchProfiles, createLoan, createDeposit } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, FormTextarea, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 
@@ -157,6 +157,9 @@ export default function CustomersPage() {
       "Địa chỉ": c.address || '',
       "Ghi chú": c.note || '',
       "Chuyên viên": c.profiles?.full_name || '',
+      "Số tài khoản": "",
+      "Dư nợ": "",
+      "Huy động": "",
       "CIF Mới": c.cif_moi ? "1" : "0",
       "Ngân Hàng Số": c.smart_banking ? "1" : "0",
       "Bảo Hiểm Nhân Thọ": c.bao_hiem_nhan_tho ? "1" : "0",
@@ -182,6 +185,9 @@ export default function CustomersPage() {
       "Email": "an@email.com", 
       "Địa chỉ": "123 ABC",
       "Chuyên viên": "",
+      "Số tài khoản": "123456789",
+      "Dư nợ": "100000000",
+      "Huy động": "50000000",
       "CIF Mới": "1",
       "Ngân Hàng Số": "1",
       "Bảo Hiểm Nhân Thọ": "0",
@@ -226,7 +232,7 @@ export default function CustomersPage() {
              }
           }
 
-          await createCustomer({
+          const customerData = await createCustomer({
             customer_type: type,
             full_name: name,
             business_name: type === 'ENTERPRISE' ? name : '',
@@ -245,6 +251,34 @@ export default function CustomersPage() {
             chuyen_tien_ngoai: Boolean(item["Chuyển Tiền Ngoài"] == "1" || String(item["Chuyển Tiền Ngoài"]).toLowerCase() === "true" || String(item["Chuyển Tiền Ngoài"]).toLowerCase() === "yes"),
             merchant_qr: Boolean(item["Merchant QR"] == "1" || String(item["Merchant QR"]).toLowerCase() === "true" || String(item["Merchant QR"]).toLowerCase() === "yes"),
           })
+
+          const accNo = item["Số tài khoản"] ? String(item["Số tài khoản"]).trim() : ""
+          const duNo = parseFloat(item["Dư nợ"] || "0") || 0
+          const huyDong = parseFloat(item["Huy động"] || "0") || 0
+          
+          if (accNo && duNo > 0) {
+             await createLoan({
+                customer_id: customerData.id,
+                account_number: accNo,
+                loan_amount: duNo,
+                balance: duNo,
+                start_date: new Date().toISOString(),
+                due_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
+                status: 'ACTIVE'
+             })
+          }
+          
+          if (accNo && huyDong > 0) {
+             await createDeposit({
+                customer_id: customerData.id,
+                account_number: accNo,
+                amount: huyDong,
+                start_date: new Date().toISOString(),
+                maturity_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
+                status: 'ACTIVE'
+             })
+          }
+
           successCount++
         } catch (err) {
           console.error('Import error for row:', item, err)
