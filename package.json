@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint app components hooks lib providers store types --ext .js,.jsx,.ts,.tsx"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

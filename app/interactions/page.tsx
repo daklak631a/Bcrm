@@ -4,7 +4,7 @@ import clsx from "clsx"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Search, Plus, MessageSquare, PhoneCall, CalendarDays, Mail, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { Suspense, useEffect, useState, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { fetchInteractions, createInteraction, fetchCustomers, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, FormTextarea, SubmitButton } from "@/components/ui/modal"
@@ -13,7 +13,7 @@ import { Check } from "lucide-react"
 
 const ITEMS_PER_PAGE = 10
 
-export default function InteractionsPage() {
+function InteractionsPageContent() {
   const { user } = useAuthStore()
   const searchParams = useSearchParams()
   const customerIdParam = searchParams.get('customerId')
@@ -405,5 +405,13 @@ export default function InteractionsPage() {
         </form>
       </Modal>
     </DashboardLayout>
+  )
+}
+
+export default function InteractionsPage() {
+  return (
+    <Suspense fallback={null}>
+      <InteractionsPageContent />
+    </Suspense>
   )
 }

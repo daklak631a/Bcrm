@@ -3,14 +3,14 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Plus, Search, Target, TrendingUp, PackageSearch, PenSquare, Trash2, Loader2, Check, UserPlus, ShoppingCart, Building2, User, X } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { Suspense, useState, useEffect, useCallback, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import clsx from "clsx"
 import { fetchProducts, fetchProductSales, createProduct, deleteProduct, formatCurrency, fetchCustomers, createProductSale, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 
-export default function ProductsPage() {
+function ProductsPageContent() {
   const { user } = useAuthStore()
   const searchParams = useSearchParams()
   const customerIdParam = searchParams.get('customerId')
@@ -431,7 +431,7 @@ export default function ProductsPage() {
                     })
                   ) : (
                     <div className="px-4 py-5 text-sm text-center text-slate-500 flex flex-col items-center gap-2">
-                      <p className="font-medium text-slate-600">Không tìm thấy khách hàng "{customerSearch}"</p>
+                      <p className="font-medium text-slate-600">Không tìm thấy khách hàng &quot;{customerSearch}&quot;</p>
                       <button 
                         type="button" 
                         onClick={() => {
@@ -519,5 +519,13 @@ export default function ProductsPage() {
         </form>
       </Modal>
     </DashboardLayout>
+  )
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProductsPageContent />
+    </Suspense>
   )
 }

@@ -4,7 +4,7 @@ import clsx from "clsx"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Search, Plus, MoreHorizontal, ArrowUpRight, CheckCircle2, Clock, Loader2, ChevronLeft, ChevronRight, Check, Building2, User, X } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { Suspense, useEffect, useState, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { fetchLoans, createLoan, fetchCustomers, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
@@ -28,7 +28,7 @@ const INDIVIDUAL_LOAN_TYPES = [
   { value: "Vay mua ô tô", label: "Vay mua ô tô tiêu dùng / kinh doanh" }
 ]
 
-export default function LoansPage() {
+function LoansPageContent() {
   const { user } = useAuthStore()
   const searchParams = useSearchParams()
   const customerIdParam = searchParams.get('customerId')
@@ -324,7 +324,7 @@ export default function LoansPage() {
                       )
                     })}
                     {filteredLoans.length === 0 && (
-                      <tr><td colSpan={8} className="py-12 text-center text-slate-500">Chưa có khoản vay nào. Bấm "Tạo Khoản Vay" để bắt đầu.</td></tr>
+                      <tr><td colSpan={8} className="py-12 text-center text-slate-500">Chưa có khoản vay nào. Bấm &quot;Tạo Khoản Vay&quot; để bắt đầu.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -493,7 +493,7 @@ export default function LoansPage() {
                     })
                   ) : (
                     <div className="px-4 py-5 text-sm text-center text-slate-500 flex flex-col items-center gap-2">
-                      <p className="font-medium text-slate-600">Không tìm thấy khách hàng "{customerSearch}"</p>
+                      <p className="font-medium text-slate-600">Không tìm thấy khách hàng &quot;{customerSearch}&quot;</p>
                       <button 
                         type="button" 
                         onClick={() => {
@@ -645,5 +645,13 @@ export default function LoansPage() {
         </form>
       </Modal>
     </DashboardLayout>
+  )
+}
+
+export default function LoansPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoansPageContent />
+    </Suspense>
   )
 }

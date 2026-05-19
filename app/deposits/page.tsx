@@ -4,7 +4,7 @@ import clsx from "clsx"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Search, Plus, PiggyBank, TrendingUp, CalendarClock, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { Suspense, useEffect, useState, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { fetchDeposits, createDeposit, fetchCustomers, formatCurrency, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
@@ -13,7 +13,7 @@ import { Check } from "lucide-react"
 
 const ITEMS_PER_PAGE = 10
 
-export default function DepositsPage() {
+function DepositsPageContent() {
   const { user } = useAuthStore()
   const searchParams = useSearchParams()
   const customerIdParam = searchParams.get('customerId')
@@ -375,5 +375,13 @@ export default function DepositsPage() {
         </form>
       </Modal>
     </DashboardLayout>
+  )
+}
+
+export default function DepositsPage() {
+  return (
+    <Suspense fallback={null}>
+      <DepositsPageContent />
+    </Suspense>
   )
 }
