@@ -4,6 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Plus, Search, Target, TrendingUp, PackageSearch, PenSquare, Trash2, Loader2, Check, UserPlus, ShoppingCart, Building2, User, X } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useState, useEffect, useCallback, useMemo } from "react"
+import { useSearchParams } from "next/navigation"
 import clsx from "clsx"
 import { fetchProducts, fetchProductSales, createProduct, deleteProduct, formatCurrency, fetchCustomers, createProductSale, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
@@ -11,6 +12,8 @@ import { toast } from "sonner"
 
 export default function ProductsPage() {
   const { user } = useAuthStore()
+  const searchParams = useSearchParams()
+  const customerIdParam = searchParams.get('customerId')
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [products, setProducts] = useState<any[]>([])
@@ -69,6 +72,14 @@ export default function ProductsPage() {
   }, [])
 
   useEffect(() => { setMounted(true); loadData() }, [loadData])
+
+  useEffect(() => {
+    if (!customerIdParam || customers.length === 0) return
+    const customer = customers.find(c => c.id === customerIdParam)
+    if (!customer) return
+    setSelectedCustomerId(customer.id)
+    setCustomerSearch(getCustomerFullName(customer))
+  }, [customerIdParam, customers])
 
   if (!mounted) return null
 

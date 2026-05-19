@@ -16,6 +16,39 @@ export interface Profile {
   updated_at: string;
 }
 
+export interface Plan {
+  id: string;
+  title: string;
+  description?: string | null;
+  target_date: string;
+  created_by?: string | null;
+  created_at: string;
+}
+
+export interface PlanAssignment {
+  id: string;
+  plan_id: string;
+  user_id: string;
+  target_loans_amount: number;
+  target_deposits_amount: number;
+  target_calls: number;
+  actual_loans_amount?: number;
+  actual_deposits_amount?: number;
+  actual_calls?: number;
+  target_cif_moi?: number;
+  target_bidv_direct?: number;
+  target_bh_nhan_tho?: number;
+  target_bh_khoan_vay?: number;
+  target_huy_dong_tang_rong?: number;
+  target_du_no_ngan_han_tang_rong?: number;
+  target_du_no_trung_han_tang_rong?: number;
+  target_cap_moi_hmtd?: number;
+  created_at: string;
+  updated_at: string;
+  profiles?: Profile;
+  plans?: Plan;
+}
+
 export interface Customer {
   id: string;
   full_name: string;

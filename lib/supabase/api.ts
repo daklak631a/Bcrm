@@ -1,5 +1,5 @@
 import { getSupabase } from './client'
-import { Customer, ManagerTransferRequest } from '@/types/models'
+import { Customer, ManagerTransferRequest, Plan, PlanAssignment } from '@/types/models'
 
 // ==========================================
 // UTILITY HELPERS
@@ -18,7 +18,7 @@ export function getCustomerFullName(customer: any): string {
 }
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT'
-export type EntityType = 'CUSTOMER' | 'LOAN' | 'DEPOSIT' | 'INTERACTION' | 'PRODUCT' | 'CROSS_SALE' | 'AUTH' | 'USER'
+export type EntityType = 'CUSTOMER' | 'LOAN' | 'DEPOSIT' | 'INTERACTION' | 'PRODUCT' | 'CROSS_SALE' | 'AUTH' | 'USER' | 'PLAN'
 
 export interface AuditLogPayload {
   action: AuditAction
@@ -56,6 +56,7 @@ export async function logAudit(payload: AuditLogPayload) {
         case 'LOAN': msg = 'khoản vay'; break;
         case 'DEPOSIT': msg = 'huy động'; break;
         case 'INTERACTION': msg = 'tương tác'; break;
+        case 'PLAN': msg = 'chỉ tiêu KPI'; break;
         default: msg = 'dữ liệu';
       }
       
@@ -126,6 +127,101 @@ export async function fetchProfileById(id: string) {
     .single()
   if (error) throw error
   return data
+}
+
+export async function fetchPlans() {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('plans')
+    .select('*')
+    .order('target_date', { ascending: false })
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data || []) as Plan[]
+}
+
+export async function createPlan(plan: {
+  title: string
+  description?: string | null
+  target_date: string
+}) {
+  const supabase = getSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  const payload = {
+    ...plan,
+    created_by: user?.id || null,
+  }
+  const { data, error } = await supabase
+    .from('plans')
+    .insert(payload)
+    .select()
+    .single()
+  if (error) throw error
+
+  await logAudit({
+    action: 'CREATE',
+    entityType: 'PLAN',
+    entityId: data.id,
+    afterValue: payload,
+  })
+
+  return data as Plan
+}
+
+export async function fetchPlanAssignments(planId?: string) {
+  const supabase = getSupabase()
+  let query = supabase
+    .from('plan_assignments')
+    .select('*, profiles:user_id(*), plans:plan_id(*)')
+    .order('updated_at', { ascending: false })
+
+  if (planId) {
+    query = query.eq('plan_id', planId)
+  }
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data || []) as PlanAssignment[]
+}
+
+export async function upsertPlanAssignment(assignment: {
+  id?: string
+  plan_id: string
+  user_id: string
+  target_loans_amount: number
+  target_deposits_amount: number
+  target_calls: number
+  target_cif_moi?: number
+  target_bidv_direct?: number
+  target_bh_nhan_tho?: number
+  target_bh_khoan_vay?: number
+  target_huy_dong_tang_rong?: number
+  target_du_no_ngan_han_tang_rong?: number
+  target_du_no_trung_han_tang_rong?: number
+  target_cap_moi_hmtd?: number
+}) {
+  const supabase = getSupabase()
+  const payload = {
+    ...assignment,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await supabase
+    .from('plan_assignments')
+    .upsert(payload, { onConflict: 'plan_id,user_id' })
+    .select('*, profiles:user_id(*), plans:plan_id(*)')
+    .single()
+
+  if (error) throw error
+
+  await logAudit({
+    action: 'UPDATE',
+    entityType: 'PLAN',
+    entityId: data.id || `${assignment.plan_id}:${assignment.user_id}`,
+    afterValue: payload,
+  })
+
+  return data as PlanAssignment
 }
 
 // ==========================================

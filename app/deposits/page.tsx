@@ -5,6 +5,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Search, Plus, PiggyBank, TrendingUp, CalendarClock, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useMemo, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { fetchDeposits, createDeposit, fetchCustomers, formatCurrency, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
@@ -14,6 +15,8 @@ const ITEMS_PER_PAGE = 10
 
 export default function DepositsPage() {
   const { user } = useAuthStore()
+  const searchParams = useSearchParams()
+  const customerIdParam = searchParams.get('customerId')
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [deposits, setDeposits] = useState<any[]>([])
@@ -51,6 +54,15 @@ export default function DepositsPage() {
   }, [])
 
   useEffect(() => { setMounted(true); loadData() }, [loadData])
+
+  useEffect(() => {
+    if (!customerIdParam || customers.length === 0) return
+    const customer = customers.find(c => c.id === customerIdParam)
+    if (!customer) return
+    setSelectedCustomerId(customer.id)
+    setCustomerSearch(getCustomerFullName(customer))
+    setSearchQuery(getCustomerFullName(customer))
+  }, [customerIdParam, customers])
 
   const filteredDeposits = useMemo(() => {
     if (!searchQuery.trim()) return deposits

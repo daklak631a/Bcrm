@@ -5,6 +5,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Search, Plus, MoreHorizontal, ArrowUpRight, CheckCircle2, Clock, Loader2, ChevronLeft, ChevronRight, Check, Building2, User, X } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useMemo, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
 import { fetchLoans, createLoan, fetchCustomers, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
@@ -29,6 +30,8 @@ const INDIVIDUAL_LOAN_TYPES = [
 
 export default function LoansPage() {
   const { user } = useAuthStore()
+  const searchParams = useSearchParams()
+  const customerIdParam = searchParams.get('customerId')
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loans, setLoans] = useState<any[]>([])
@@ -86,6 +89,15 @@ export default function LoansPage() {
     setMounted(true)
     loadData()
   }, [loadData])
+
+  useEffect(() => {
+    if (!customerIdParam || customers.length === 0) return
+    const customer = customers.find(c => c.id === customerIdParam)
+    if (!customer) return
+    setSelectedCustomerId(customer.id)
+    setCustomerSearch(getCustomerFullName(customer))
+    setSearchQuery(getCustomerFullName(customer))
+  }, [customerIdParam, customers])
 
   const filteredLoans = useMemo(() => {
     if (!searchQuery.trim()) return loans

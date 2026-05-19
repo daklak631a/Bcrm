@@ -9,6 +9,7 @@ import {
   PieChart,
   MessageSquare,
   Package,
+  Target,
   X
 } from "lucide-react"
 
@@ -35,6 +36,10 @@ export function Sidebar({ onClose }: SidebarProps) {
   if (user?.role === 'ADMIN_LEVEL_1') {
     links.push({ href: "/team", label: "Phân Bổ Nhân Sự", icon: Users })
     links.push({ href: "/audit-logs", label: "Lịch Sử Hệ Thống", icon: Package })
+  }
+
+  if (user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADMIN_LEVEL_2') {
+    links.push({ href: "/kpi-targets", label: "KPI Mục Tiêu", icon: Target })
   }
 
   return (

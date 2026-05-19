@@ -3,9 +3,33 @@
 // Sử dụng PropertiesService để lưu Spreadsheet ID
 // =============================================
 
-/**
- * Lấy spreadsheet ID từ PropertiesService hoặc biến cứng
- */
+var BCRM_TABLES = [
+  {
+    name: 'Khách hàng',
+    headers: ['ID', 'Mã KH (CIF)', 'Tên khách hàng', 'SĐT', 'Email', 'CCCD/CMND', 'Ngày sinh', 'Địa chỉ', 'Nhóm KH', 'Người quản lý', 'Số TK', 'Dư nợ', 'Huy động', 'CIF Mới', 'Ngân Hàng Số', 'Bảo Hiểm Nhân Thọ', 'Bảo Hiểm Khoản Vay', 'Thẻ Tín Dụng', 'Chuyển Tiền Ngoài', 'Merchant QR', 'Ngày tạo', 'Cập nhật lần cuối']
+  },
+  {
+    name: 'Tài khoản (Vay & HĐV)',
+    headers: ['ID', 'Mã KH (CIF)', 'Số Tài Khoản', 'Loại (VAY/HUYDONG)', 'Số tiền', 'Lãi suất', 'Kỳ hạn', 'Ngày mở', 'Ngày đến hạn', 'Trạng thái', 'Ghi chú']
+  },
+  {
+    name: 'Tương tác',
+    headers: ['ID', 'Mã KH (CIF)', 'Loại tương tác', 'Nội dung', 'Kết quả', 'Người thực hiện', 'Ngày thực hiện', 'Kế hoạch tiếp theo']
+  },
+  {
+    name: 'Sản phẩm',
+    headers: ['ID', 'Tên sản phẩm', 'Loại sản phẩm', 'Mục tiêu', 'Trạng thái', 'Ngày tạo']
+  },
+  {
+    name: 'Bán chéo',
+    headers: ['ID', 'Mã KH (CIF)', 'ID Sản phẩm', 'Tên sản phẩm', 'Trạng thái', 'Người bán', 'Ngày bán', 'Ghi chú']
+  },
+  {
+    name: 'Cấu hình User',
+    headers: ['Email', 'Họ Tên', 'Role', 'Chi nhánh', 'Ngày tạo']
+  }
+];
+
 function getSpreadsheet() {
   var props = PropertiesService.getScriptProperties();
   var id = props.getProperty('SPREADSHEET_ID');
@@ -73,40 +97,48 @@ function initDatabase(ss) {
   if (!ss) ss = getSpreadsheet();
   if (!ss) return { success: false, error: 'Không tìm thấy spreadsheet' };
 
-  var sheetsConfig = [
-    {
-      name: 'Khách hàng',
-      headers: ['ID', 'Mã KH (CIF)', 'Tên khách hàng', 'SĐT', 'Email', 'CCCD/CMND', 'Ngày sinh', 'Địa chỉ', 'Nhóm KH', 'Người quản lý', 'Số TK', 'Dư nợ', 'Huy động', 'Ngày tạo', 'Cập nhật lần cuối']
-    },
-    {
-      name: 'Tài khoản (Vay & HĐV)',
-      headers: ['ID', 'Mã KH (CIF)', 'Số Tài Khoản', 'Loại (VAY/HUYDONG)', 'Số tiền', 'Lãi suất', 'Kỳ hạn', 'Ngày mở', 'Ngày đến hạn', 'Ghi chú']
-    },
-    {
-      name: 'Tương tác',
-      headers: ['ID', 'Mã KH (CIF)', 'Loại tương tác', 'Nội dung', 'Kết quả', 'Người thực hiện', 'Ngày thực hiện', 'Kế hoạch tiếp theo']
-    },
-    {
-      name: 'Cấu hình User',
-      headers: ['Email', 'Họ Tên', 'Role', 'Chi nhánh', 'Ngày tạo']
-    }
-  ];
-
-  for (var i = 0; i < sheetsConfig.length; i++) {
-    var config = sheetsConfig[i];
-    var sheet = ss.getSheetByName(config.name);
-    if (!sheet) {
-      sheet = ss.insertSheet(config.name);
-      sheet.appendRow(config.headers);
-      sheet.getRange(1, 1, 1, config.headers.length)
-        .setFontWeight('bold')
-        .setBackground('#1a73e8')
-        .setFontColor('#ffffff');
-      sheet.setFrozenRows(1);
-    }
+  for (var i = 0; i < BCRM_TABLES.length; i++) {
+    ensureTable(ss, BCRM_TABLES[i]);
   }
 
   return { success: true };
+}
+
+function ensureTable(ss, config) {
+  var sheet = ss.getSheetByName(config.name);
+  if (!sheet) {
+    sheet = ss.insertSheet(config.name);
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(config.headers);
+  } else {
+    var currentHeaders = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0];
+    for (var i = 0; i < config.headers.length; i++) {
+      if (currentHeaders.indexOf(config.headers[i]) === -1) {
+        sheet.getRange(1, sheet.getLastColumn() + 1).setValue(config.headers[i]);
+        currentHeaders.push(config.headers[i]);
+      }
+    }
+  }
+
+  var headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
+  headerRange
+    .setFontWeight('bold')
+    .setBackground('#1a73e8')
+    .setFontColor('#ffffff');
+  sheet.setFrozenRows(1);
+  if (sheet.getFilter()) {
+    sheet.getFilter().remove();
+  }
+  sheet.getRange(1, 1, Math.max(sheet.getLastRow(), 1), sheet.getLastColumn()).createFilter();
+  sheet.autoResizeColumns(1, sheet.getLastColumn());
+}
+
+function setupDatabaseTables() {
+  var ss = getSpreadsheet();
+  if (!ss) return { success: false, error: 'Chưa kết nối Google Sheet' };
+  return initDatabase(ss);
 }
 
 /**
@@ -194,44 +226,70 @@ function generateId() {
   return 'KH' + new Date().getTime().toString(36).toUpperCase();
 }
 
+function getSheetHeaders(sheet) {
+  if (!sheet || sheet.getLastColumn() === 0) return [];
+  return sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+}
+
+function buildCustomerRow(data, id, createdAt, updatedAt) {
+  var map = {
+    'ID': id,
+    'Mã KH (CIF)': data['Mã KH (CIF)'] || data.cif || '',
+    'Tên khách hàng': data['Tên khách hàng'] || data.name || '',
+    'SĐT': data['SĐT'] || data.phone || '',
+    'Email': data['Email'] || data.email || '',
+    'CCCD/CMND': data['CCCD/CMND'] || data.cccd || '',
+    'Ngày sinh': data['Ngày sinh'] || data.dob || '',
+    'Địa chỉ': data['Địa chỉ'] || data.address || '',
+    'Nhóm KH': data['Nhóm KH'] || data.group || '',
+    'Người quản lý': data['Người quản lý'] || data.manager || '',
+    'Số TK': data['Số TK'] || data.accountNo || '',
+    'Dư nợ': Number(data['Dư nợ'] || data.loan || 0) || 0,
+    'Huy động': Number(data['Huy động'] || data.deposit || 0) || 0,
+    'CIF Mới': data['CIF Mới'] || data.cifMoi || '',
+    'Ngân Hàng Số': data['Ngân Hàng Số'] || data.digitalBanking || '',
+    'Bảo Hiểm Nhân Thọ': data['Bảo Hiểm Nhân Thọ'] || data.lifeInsurance || '',
+    'Bảo Hiểm Khoản Vay': data['Bảo Hiểm Khoản Vay'] || data.loanInsurance || '',
+    'Thẻ Tín Dụng': data['Thẻ Tín Dụng'] || data.creditCard || '',
+    'Chuyển Tiền Ngoài': data['Chuyển Tiền Ngoài'] || data.externalTransfer || '',
+    'Merchant QR': data['Merchant QR'] || data.merchantQr || '',
+    'Ngày tạo': createdAt,
+    'Cập nhật lần cuối': updatedAt
+  };
+  var headers = BCRM_TABLES[0].headers;
+  return headers.map(function(header) {
+    return map[header] !== undefined ? map[header] : '';
+  });
+}
+
 /**
  * Lưu hoặc cập nhật khách hàng
  */
 function saveCustomer(data) {
   var ss = getSpreadsheet();
   if (!ss) return { success: false, error: 'Chưa kết nối Google Sheet' };
+  initDatabase(ss);
   var sheet = ss.getSheetByName('Khách hàng');
   if (!sheet) return { success: false, error: 'Không tìm thấy sheet Khách hàng' };
 
   var now = new Date().toLocaleDateString('vi-VN');
+  var headers = getSheetHeaders(sheet);
 
   if (data.id) {
-    // Update
     var values = sheet.getDataRange().getValues();
     for (var i = 1; i < values.length; i++) {
       if (values[i][0] === data.id) {
         var row = i + 1;
-        sheet.getRange(row, 1, 1, 15).setValues([[
-          data.id, data['Mã KH (CIF)'] || '', data['Tên khách hàng'] || '',
-          data['SĐT'] || '', data['Email'] || '', data['CCCD/CMND'] || '',
-          data['Ngày sinh'] || '', data['Địa chỉ'] || '', data['Nhóm KH'] || '',
-          data['Người quản lý'] || '', data['Số TK'] || '', data['Dư nợ'] || 0,
-          data['Huy động'] || 0, values[i][13] || now, now
-        ]]);
+        var createdAtIndex = headers.indexOf('Ngày tạo');
+        var createdAt = createdAtIndex >= 0 ? values[i][createdAtIndex] : now;
+        sheet.getRange(row, 1, 1, headers.length).setValues([buildCustomerRow(data, data.id, createdAt || now, now)]);
         return { success: true, message: 'Cập nhật thành công!' };
       }
     }
     return { success: false, error: 'Không tìm thấy bản ghi' };
   } else {
-    // Insert
     var newId = generateId();
-    sheet.appendRow([
-      newId, data['Mã KH (CIF)'] || '', data['Tên khách hàng'] || '',
-      data['SĐT'] || '', data['Email'] || '', data['CCCD/CMND'] || '',
-      data['Ngày sinh'] || '', data['Địa chỉ'] || '', data['Nhóm KH'] || '',
-      data['Người quản lý'] || '', data['Số TK'] || '', data['Dư nợ'] || 0,
-      data['Huy động'] || 0, now, now
-    ]);
+    sheet.appendRow(buildCustomerRow(data, newId, now, now));
     return { success: true, id: newId, message: 'Thêm khách hàng thành công!' };
   }
 }
@@ -281,21 +339,21 @@ function saveInteraction(data) {
 function processCustomerUpload(uploadData) {
   var ss = getSpreadsheet();
   if (!ss) return { success: false, error: 'Chưa kết nối Google Sheet' };
+  initDatabase(ss);
   var sheet = ss.getSheetByName('Khách hàng');
   if (!sheet) return { success: false, error: 'Không tìm thấy sheet' };
 
   var now = new Date().toLocaleDateString('vi-VN');
   var count = 0;
+  var rows = [];
   for (var i = 0; i < uploadData.length; i++) {
     var d = uploadData[i];
     var newId = generateId() + '_' + i;
-    sheet.appendRow([
-      newId, d.cif || '', d.name || '', d.phone || '', d.email || '',
-      d.cccd || '', d.dob || '', d.address || '', d.group || '',
-      d.manager || '', d.accountNo || '', d.loan || 0, d.deposit || 0,
-      now, now
-    ]);
+    rows.push(buildCustomerRow(d, newId, now, now));
     count++;
+  }
+  if (rows.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, BCRM_TABLES[0].headers.length).setValues(rows);
   }
   return { success: true, message: 'Đã import ' + count + ' bản ghi!' };
 }

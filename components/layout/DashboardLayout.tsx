@@ -5,7 +5,6 @@ import { Sidebar } from "./Sidebar"
 import { Header } from "./Header"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/store/useAuthStore"
-import { useRouter } from "next/navigation"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -14,18 +13,14 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, title }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const { user } = useAuthStore()
-  const router = useRouter()
+  const { user, isLoading } = useAuthStore()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-    if (!useAuthStore.getState().user) {
-      router.push('/login')
-    }
-  }, [router])
+  }, [])
 
-  if (!mounted || !user) {
+  if (!mounted || isLoading || !user) {
     return null
   }
 

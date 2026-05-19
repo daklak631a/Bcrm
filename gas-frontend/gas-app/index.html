@@ -280,8 +280,20 @@ function renderSettings() {
     '<p style="margin-bottom:12px"><b>User:</b> ' + esc(APP.user.email) + '</p>' +
     '<p style="margin-bottom:12px"><b>Role:</b> ' + esc(APP.user.role) + '</p>' +
     '<p style="margin-bottom:20px"><b>Tổng KH:</b> ' + APP.customers.length + '</p>' +
-    '<button class="btn btn-p" onclick="refreshData()">🔄 Tải lại dữ liệu</button>' +
+    '<button class="btn btn-p" onclick="refreshData()">🔄 Tải lại dữ liệu</button> ' +
+    '<button class="btn btn-g" onclick="setupTables()">🧱 Tạo/Cập nhật bảng</button>' +
   '</div>';
+}
+
+function setupTables() {
+  toast('Đang tạo/cập nhật bảng...','ok');
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (r.success) { toast('Đã tạo/cập nhật bảng thành công!','ok'); refreshData(); }
+      else toast(r.error,'err');
+    })
+    .withFailureHandler(function(e){ toast(e.message||e,'err'); })
+    .setupDatabaseTables();
 }
 
 // ============ MODALS ============

@@ -31,6 +31,17 @@ function slugify(text: string) {
 
 const ITEMS_PER_PAGE = 10
 
+function parseBooleanCell(value: any) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return ['1', 'true', 'yes', 'y', 'x', 'có', 'co'].includes(normalized)
+}
+
+function parseNumberCell(value: any) {
+  if (value === null || value === undefined || value === '') return 0
+  const normalized = String(value).replace(/[^\d.-]/g, '')
+  return Number(normalized) || 0
+}
+
 export default function CustomersPage() {
   const { user } = useAuthStore()
   const [mounted, setMounted] = useState(false)
@@ -43,6 +54,7 @@ export default function CustomersPage() {
   const [formLoading, setFormLoading] = useState(false)
   const [customerType, setCustomerType] = useState<'INDIVIDUAL' | 'ENTERPRISE'>('INDIVIDUAL')
   const [updatingProduct, setUpdatingProduct] = useState<{customerId: string, productKey: string} | null>(null)
+  const [importing, setImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadData = useCallback(async () => {
@@ -205,88 +217,125 @@ export default function CustomersPage() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (importing) return
     const reader = new FileReader()
     reader.onload = async (evt) => {
-      const bstr = evt.target?.result
-      if (!bstr) return
-      const workbook = XLSX.read(bstr, { type: 'binary' })
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-      const data = XLSX.utils.sheet_to_json(worksheet) as any[]
-      
-      let successCount = 0
-      for (const item of data) {
-        try {
-          const type = (item["Loại KH (INDIVIDUAL/ENTERPRISE)"] || "INDIVIDUAL").trim().toUpperCase()
-          const name = item["Tên KH / Doanh Nghiệp"] || item.full_name || item.business_name || "N/A"
-          const rep = item["Người Đại Diện (nếu là Doanh nghiệp)"] || item.representative_name || ""
-          const tax = item["Mã Số Thuế"] || item.tax_code || ""
-          const cif = item["Mã CIF (Tùy chọn)"] || item["Mã CIF"] || item.cif_code || ""
-          
-          let managerId = user!.id
-          const managerName = item["Chuyên viên"] || item["Chuyen vien"] || item.assigned_manager_id || ""
-          if (managerName && isAdmin) {
-             const sluggedName = slugify(managerName)
-             const matchedProfile = profiles.find(p => slugify(p.full_name) === sluggedName)
-             if (matchedProfile) {
-                managerId = matchedProfile.id
-             }
-          }
-
-          const customerData = await createCustomer({
-            customer_type: type,
-            full_name: name,
-            business_name: type === 'ENTERPRISE' ? name : '',
-            representative_name: type === 'ENTERPRISE' ? rep : '',
-            tax_code: type === 'ENTERPRISE' ? tax : '',
-            cif_code: cif || undefined,
-            phone: item["Số điện thoại"] || item.phone || undefined,
-            email: item["Email"] || item.email || undefined,
-            address: item["Địa chỉ"] || item.address || undefined,
-            assigned_manager_id: managerId,
-            cif_moi: Boolean(item["CIF Mới"] == "1" || String(item["CIF Mới"]).toLowerCase() === "true" || String(item["CIF Mới"]).toLowerCase() === "yes"),
-            smart_banking: Boolean(item["Ngân Hàng Số"] == "1" || String(item["Ngân Hàng Số"]).toLowerCase() === "true" || String(item["Ngân Hàng Số"]).toLowerCase() === "yes"),
-            bao_hiem_nhan_tho: Boolean(item["Bảo Hiểm Nhân Thọ"] == "1" || String(item["Bảo Hiểm Nhân Thọ"]).toLowerCase() === "true" || String(item["Bảo Hiểm Nhân Thọ"]).toLowerCase() === "yes"),
-            bao_hiem_khoan_vay: Boolean(item["Bảo Hiểm Khoản Vay"] == "1" || String(item["Bảo Hiểm Khoản Vay"]).toLowerCase() === "true" || String(item["Bảo Hiểm Khoản Vay"]).toLowerCase() === "yes"),
-            the_tin_dung: Boolean(item["Thẻ Tín Dụng"] == "1" || String(item["Thẻ Tín Dụng"]).toLowerCase() === "true" || String(item["Thẻ Tín Dụng"]).toLowerCase() === "yes"),
-            chuyen_tien_ngoai: Boolean(item["Chuyển Tiền Ngoài"] == "1" || String(item["Chuyển Tiền Ngoài"]).toLowerCase() === "true" || String(item["Chuyển Tiền Ngoài"]).toLowerCase() === "yes"),
-            merchant_qr: Boolean(item["Merchant QR"] == "1" || String(item["Merchant QR"]).toLowerCase() === "true" || String(item["Merchant QR"]).toLowerCase() === "yes"),
-          })
-
-          const accNo = item["Số tài khoản"] ? String(item["Số tài khoản"]).trim() : ""
-          const duNo = parseFloat(item["Dư nợ"] || "0") || 0
-          const huyDong = parseFloat(item["Huy động"] || "0") || 0
-          
-          if (accNo && duNo > 0) {
-             await createLoan({
-                customer_id: customerData.id,
-                account_number: accNo,
-                loan_amount: duNo,
-                balance: duNo,
-                start_date: new Date().toISOString(),
-                due_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
-                status: 'ACTIVE'
-             })
-          }
-          
-          if (accNo && huyDong > 0) {
-             await createDeposit({
-                customer_id: customerData.id,
-                account_number: accNo,
-                amount: huyDong,
-                start_date: new Date().toISOString(),
-                maturity_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
-                status: 'ACTIVE'
-             })
-          }
-
-          successCount++
-        } catch (err) {
-          console.error('Import error for row:', item, err)
+      try {
+        setImporting(true)
+        const bstr = evt.target?.result
+        if (!bstr) return
+        const workbook = XLSX.read(bstr, { type: 'binary' })
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+        const data = XLSX.utils.sheet_to_json(worksheet) as any[]
+        
+        if (data.length === 0) {
+          toast.error('File không có dữ liệu để nhập')
+          return
         }
+
+        let successCount = 0
+        const failedRows: string[] = []
+        const seenCifs = new Set<string>()
+        for (let index = 0; index < data.length; index++) {
+          const item = data[index]
+          const rowNumber = index + 2
+          try {
+            const type = String(item["Loại KH (INDIVIDUAL/ENTERPRISE)"] || "INDIVIDUAL").trim().toUpperCase()
+            const name = String(item["Tên KH / Doanh Nghiệp"] || item.full_name || item.business_name || "").trim()
+            const rep = String(item["Người Đại Diện (nếu là Doanh nghiệp)"] || item.representative_name || "").trim()
+            const tax = String(item["Mã Số Thuế"] || item.tax_code || "").trim()
+            const cif = String(item["Mã CIF (Tùy chọn)"] || item["Mã CIF"] || item.cif_code || "").trim()
+            
+            if (!['INDIVIDUAL', 'ENTERPRISE'].includes(type)) {
+              throw new Error('Loại KH không hợp lệ')
+            }
+            if (!name) {
+              throw new Error('Thiếu tên khách hàng/doanh nghiệp')
+            }
+            if (cif) {
+              const normalizedCif = cif.toLowerCase()
+              if (seenCifs.has(normalizedCif)) {
+                throw new Error('Trùng mã CIF trong file')
+              }
+              seenCifs.add(normalizedCif)
+            }
+
+            let managerId = user!.id
+            const managerName = String(item["Chuyên viên"] || item["Chuyen vien"] || item.assigned_manager_id || "").trim()
+            if (managerName && isAdmin) {
+               const sluggedName = slugify(managerName)
+               const matchedProfile = profiles.find(p => slugify(p.full_name) === sluggedName)
+               if (matchedProfile) {
+                  managerId = matchedProfile.id
+               }
+            }
+
+            const customerData = await createCustomer({
+              customer_type: type,
+              full_name: name,
+              business_name: type === 'ENTERPRISE' ? name : '',
+              representative_name: type === 'ENTERPRISE' ? rep : '',
+              tax_code: type === 'ENTERPRISE' ? tax : '',
+              cif_code: cif || undefined,
+              phone: item["Số điện thoại"] || item.phone || undefined,
+              email: item["Email"] || item.email || undefined,
+              address: item["Địa chỉ"] || item.address || undefined,
+              assigned_manager_id: managerId,
+              cif_moi: parseBooleanCell(item["CIF Mới"]),
+              smart_banking: parseBooleanCell(item["Ngân Hàng Số"]),
+              bao_hiem_nhan_tho: parseBooleanCell(item["Bảo Hiểm Nhân Thọ"]),
+              bao_hiem_khoan_vay: parseBooleanCell(item["Bảo Hiểm Khoản Vay"]),
+              the_tin_dung: parseBooleanCell(item["Thẻ Tín Dụng"]),
+              chuyen_tien_ngoai: parseBooleanCell(item["Chuyển Tiền Ngoài"]),
+              merchant_qr: parseBooleanCell(item["Merchant QR"]),
+            })
+
+            const accNo = item["Số tài khoản"] ? String(item["Số tài khoản"]).trim() : ""
+            const duNo = parseNumberCell(item["Dư nợ"])
+            const huyDong = parseNumberCell(item["Huy động"])
+            
+            if (accNo && duNo > 0) {
+               await createLoan({
+                  customer_id: customerData.id,
+                  account_number: accNo,
+                  loan_amount: duNo,
+                  balance: duNo,
+                  start_date: new Date().toISOString(),
+                  due_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
+                  status: 'ACTIVE'
+               })
+            }
+            
+            if (accNo && huyDong > 0) {
+               await createDeposit({
+                  customer_id: customerData.id,
+                  account_number: accNo,
+                  amount: huyDong,
+                  start_date: new Date().toISOString(),
+                  maturity_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
+                  status: 'ACTIVE'
+               })
+            }
+
+            successCount++
+          } catch (err: any) {
+            failedRows.push(`Dòng ${rowNumber}: ${err.message || 'Không rõ lỗi'}`)
+            console.error('Import error for row:', item, err)
+          }
+        }
+        if (failedRows.length > 0) {
+          toast.error(`Đã nhập ${successCount}/${data.length}. ${failedRows.length} dòng lỗi. Xem console để biết chi tiết.`)
+          console.table(failedRows)
+        } else {
+          toast.success(`Đã nhập ${successCount}/${data.length} khách hàng!`)
+        }
+        loadData()
+      } catch (err: any) {
+        toast.error('Lỗi đọc file: ' + (err.message || 'Không rõ lỗi'))
+      } finally {
+        setImporting(false)
+        if (fileInputRef.current) fileInputRef.current.value = ''
       }
-      toast.success(`Đã nhập ${successCount}/${data.length} khách hàng!`)
-      loadData()
-      if (fileInputRef.current) fileInputRef.current.value = ''
     }
     reader.readAsBinaryString(file)
   }
@@ -315,8 +364,8 @@ export default function CustomersPage() {
               <>
                 <input type="file" accept=".xlsx,.xls" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
                 <div className="flex bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden divide-x divide-slate-200 text-slate-700">
-                  <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors text-sm font-medium" title="Upload dữ liệu">
-                    <Upload className="w-4 h-4" /> Nhập
+                  <button disabled={importing} onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed" title="Upload dữ liệu">
+                    {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Nhập
                   </button>
                   <button onClick={handleExportData} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors text-sm font-medium" title="Xuất Excel">
                     <Download className="w-4 h-4" /> Xuất
