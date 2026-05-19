@@ -11,6 +11,33 @@ interface DashboardLayoutProps {
   title: string
 }
 
+function DashboardLayoutShell({
+  title,
+  description,
+}: {
+  title: string
+  description: string
+}) {
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <div className="mx-auto flex min-h-screen w-full max-w-3xl items-center justify-center px-4 py-10">
+        <div className="w-full rounded-[28px] border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+          </div>
+          <h2 className="mt-5 text-xl font-semibold tracking-tight text-slate-900">{title}</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+          <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="h-24 rounded-2xl bg-slate-100" />
+            <div className="h-24 rounded-2xl bg-slate-100" />
+            <div className="h-24 rounded-2xl bg-slate-100" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function DashboardLayout({ children, title }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { user, isLoading } = useAuthStore()
@@ -20,8 +47,12 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
     setMounted(true)
   }, [])
 
-  if (!mounted || isLoading || !user) {
-    return null
+  if (!mounted || isLoading) {
+    return <DashboardLayoutShell title="Đang tải không gian làm việc" description="Hệ thống đang xác thực phiên đăng nhập và chuẩn bị dữ liệu hiển thị cho bạn." />
+  }
+
+  if (!user) {
+    return <DashboardLayoutShell title="Đang chuyển đến trang đăng nhập" description="Bạn chưa có phiên truy cập hợp lệ hoặc phiên đã hết hạn. Hệ thống đang chuyển hướng an toàn." />
   }
 
   return (

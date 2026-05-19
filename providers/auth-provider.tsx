@@ -101,9 +101,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       const isPublic = publicPaths.some(p => pathname.startsWith(p));
 
       if (!user && !isPublic) {
-        router.push('/login');
+        router.replace('/login');
       } else if (user && (pathname === '/login' || pathname.startsWith('/auth/callback'))) {
-        router.push('/dashboard');
+        router.replace('/dashboard');
       }
     }
   }, [user, isLoading, pathname, router]);
