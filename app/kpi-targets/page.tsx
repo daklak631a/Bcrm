@@ -6,7 +6,7 @@ import { TableSkeleton } from "@/components/skeletons"
 import { createPlan, fetchPlanAssignments, fetchPlans, fetchProfiles, upsertPlanAssignment } from "@/lib/supabase/api"
 import { useAuthStore } from "@/store/useAuthStore"
 import { Plan, PlanAssignment, Profile } from "@/types/models"
-import { BarChart3, Building2, CalendarDays, CheckCircle2, Layers3, LineChart, Loader2, Plus, Save, Search, Sparkles, Target, TrendingUp, Users2 } from "lucide-react"
+import { BarChart3, Building2, CalendarDays, CheckCircle2, Layers3, Loader2, Plus, Save, Search, Sparkles, Target, Users2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
@@ -65,10 +65,43 @@ const PRODUCT_FIELDS: Array<{ key: keyof AssignmentDraft; label: string; unit: s
 ]
 
 const GROWTH_FIELDS: Array<{ key: keyof AssignmentDraft; label: string; unit: string; step?: string }> = [
-  { key: "target_huy_dong_tang_rong", label: "HĐ tăng ròng", unit: "VNĐ", step: "0.01" },
-  { key: "target_du_no_ngan_han_tang_rong", label: "DN ngắn hạn", unit: "VNĐ", step: "0.01" },
-  { key: "target_du_no_trung_han_tang_rong", label: "DN trung dài hạn", unit: "VNĐ", step: "0.01" },
+  { key: "target_huy_dong_tang_rong", label: "Huy động tăng ròng", unit: "VNĐ", step: "0.01" },
+  { key: "target_du_no_ngan_han_tang_rong", label: "Dư nợ ngắn hạn tăng ròng", unit: "VNĐ", step: "0.01" },
+  { key: "target_du_no_trung_han_tang_rong", label: "Dư nợ trung dài hạn tăng ròng", unit: "VNĐ", step: "0.01" },
 ]
+
+const ALL_ASSIGNMENT_FIELDS: Array<{ key: keyof AssignmentDraft; label: string; unit: string; step?: string }> = [...CORE_FIELDS, ...PRODUCT_FIELDS, ...GROWTH_FIELDS]
+
+const CORE_FIELD_KEYS = new Set<keyof AssignmentDraft>(CORE_FIELDS.map((field) => field.key))
+const PRODUCT_FIELD_KEYS = new Set<keyof AssignmentDraft>(PRODUCT_FIELDS.map((field) => field.key))
+const GROWTH_FIELD_KEYS = new Set<keyof AssignmentDraft>(GROWTH_FIELDS.map((field) => field.key))
+
+function getFieldGroup(key: keyof AssignmentDraft) {
+  if (CORE_FIELD_KEYS.has(key)) return "core"
+  if (PRODUCT_FIELD_KEYS.has(key)) return "product"
+  return "growth"
+}
+
+function getFieldHeaderClass(key: keyof AssignmentDraft) {
+  const group = getFieldGroup(key)
+  if (group === "core") return "bg-emerald-50 text-emerald-900"
+  if (group === "product") return "bg-violet-50 text-violet-900"
+  return "bg-amber-50 text-amber-900"
+}
+
+function getFieldInputTone(key: keyof AssignmentDraft) {
+  const group = getFieldGroup(key)
+  if (group === "core") return "border-emerald-200 bg-emerald-50/60 group-hover:border-emerald-300"
+  if (group === "product") return "border-violet-200 bg-violet-50/55 group-hover:border-violet-300"
+  return "border-amber-200 bg-amber-50/60 group-hover:border-amber-300"
+}
+
+function getFieldChipClass(key: keyof AssignmentDraft) {
+  const group = getFieldGroup(key)
+  if (group === "core") return "bg-emerald-100 text-emerald-700"
+  if (group === "product") return "bg-violet-100 text-violet-700"
+  return "bg-amber-100 text-amber-700"
+}
 
 function buildDraft(assignment?: Partial<PlanAssignment> | null): AssignmentDraft {
   return {
@@ -106,45 +139,24 @@ function countConfiguredTargets(draft?: AssignmentDraft) {
   return Object.values(current).filter((value) => Number(value) > 0).length
 }
 
-function MetricSection({
-  title,
-  icon,
-  fields,
-  draft,
-  onChange,
-}: {
-  title: string
-  icon: React.ReactNode
-  fields: Array<{ key: keyof AssignmentDraft; label: string; unit: string; step?: string }>
-  draft: AssignmentDraft
-  onChange: (key: keyof AssignmentDraft, value: number) => void
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 backdrop-blur-sm">
-      <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-800">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm ring-1 ring-slate-200">{icon}</span>
-        {title}
-      </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {fields.map((field) => (
-          <label key={field.key} className="flex flex-col gap-1 rounded-xl bg-white/90 p-3 ring-1 ring-slate-200/70">
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-400">{field.label}</span>
-            <div className="flex items-end justify-between gap-3">
-              <input
-                type="number"
-                min="0"
-                step={field.step || "1"}
-                value={draft[field.key]}
-                onChange={(event) => onChange(field.key, Number(event.target.value) || 0)}
-                className="w-full border-0 bg-transparent p-0 text-lg font-semibold text-slate-900 outline-none focus:ring-0"
-              />
-              <span className="whitespace-nowrap text-xs font-medium text-slate-400">{field.unit}</span>
-            </div>
-          </label>
-        ))}
-      </div>
-    </div>
-  )
+function parseNumericCell(value: string) {
+  const raw = value.trim()
+  if (!raw) return 0
+
+  let normalized = raw.replace(/\s+/g, "")
+
+  if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(normalized)) {
+    normalized = normalized.replace(/\./g, "").replace(",", ".")
+  } else if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(normalized)) {
+    normalized = normalized.replace(/,/g, "")
+  } else if (normalized.includes(",") && normalized.includes(".")) {
+    normalized = normalized.lastIndexOf(",") > normalized.lastIndexOf(".") ? normalized.replace(/\./g, "").replace(",", ".") : normalized.replace(/,/g, "")
+  } else if (normalized.includes(",")) {
+    normalized = /^\d+,\d+$/.test(normalized) ? normalized.replace(",", ".") : normalized.replace(/,/g, "")
+  }
+
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 export default function KpiTargetsPage() {
@@ -162,6 +174,9 @@ export default function KpiTargetsPage() {
   const [savingAll, setSavingAll] = useState(false)
   const [planForm, setPlanForm] = useState<CreatePlanForm>(EMPTY_PLAN_FORM)
   const [drafts, setDrafts] = useState<Record<string, AssignmentDraft>>({})
+  const [copySourceUserId, setCopySourceUserId] = useState("")
+  const [copyTargetUserIds, setCopyTargetUserIds] = useState<string[]>([])
+  const [pasteMatrix, setPasteMatrix] = useState("")
 
   useEffect(() => {
     setMounted(true)
@@ -194,6 +209,8 @@ export default function KpiTargetsPage() {
       return profile.full_name.toLowerCase().includes(query) || profile.email.toLowerCase().includes(query) || (profile.department_id || "").toLowerCase().includes(query)
     })
   }, [searchQuery, visibleUsers])
+
+  const filteredUserIds = useMemo(() => filteredUsers.map((profile) => profile.id), [filteredUsers])
 
   const dirtyUserIds = useMemo(() => {
     return visibleUsers
@@ -250,6 +267,14 @@ export default function KpiTargetsPage() {
     setDrafts(nextDrafts)
   }, [assignmentMap, visibleUsers, selectedPlanId])
 
+  useEffect(() => {
+    const nextSourceUserId = filteredUserIds.includes(copySourceUserId) ? copySourceUserId : filteredUserIds[0] || ""
+    if (nextSourceUserId !== copySourceUserId) {
+      setCopySourceUserId(nextSourceUserId)
+    }
+    setCopyTargetUserIds((prev) => prev.filter((userId) => filteredUserIds.includes(userId) && userId !== nextSourceUserId))
+  }, [copySourceUserId, filteredUserIds])
+
   const handleDraftChange = (userId: string, key: keyof AssignmentDraft, value: number) => {
     setDrafts((prev) => ({
       ...prev,
@@ -258,6 +283,97 @@ export default function KpiTargetsPage() {
         [key]: value,
       },
     }))
+  }
+
+  const handleToggleCopyTarget = (userId: string) => {
+    setCopyTargetUserIds((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]))
+  }
+
+  const handleSelectAllCopyTargets = () => {
+    setCopyTargetUserIds(filteredUserIds.filter((userId) => userId !== copySourceUserId))
+  }
+
+  const handleApplyCopyTargets = () => {
+    if (!copySourceUserId) {
+      toast.error("Vui lòng chọn nhân sự nguồn để sao chép KPI")
+      return
+    }
+    if (copyTargetUserIds.length === 0) {
+      toast.error("Vui lòng chọn ít nhất một nhân sự nhận KPI")
+      return
+    }
+
+    const sourceDraft = { ...(drafts[copySourceUserId] || buildDraft(assignmentMap[copySourceUserId])) }
+    setDrafts((prev) => {
+      const nextDrafts = { ...prev }
+      copyTargetUserIds.forEach((userId) => {
+        nextDrafts[userId] = { ...sourceDraft }
+      })
+      return nextDrafts
+    })
+    toast.success(`Đã sao chép KPI cho ${copyTargetUserIds.length} nhân sự`)
+  }
+
+  const handleApplyPasteMatrix = () => {
+    if (!pasteMatrix.trim()) {
+      toast.error("Vui lòng dán dữ liệu từ Excel trước khi áp dụng")
+      return
+    }
+    if (filteredUsers.length === 0) {
+      toast.error("Không có nhân sự hiển thị để áp dụng dữ liệu dán")
+      return
+    }
+
+    const rows = pasteMatrix
+      .trim()
+      .split(/\r?\n/)
+      .map((row) => row.split("\t").map((cell) => cell.trim()))
+      .filter((cells) => cells.some((cell) => cell.length > 0))
+      .map((cells) => (cells.length > ALL_ASSIGNMENT_FIELDS.length ? cells.slice(-ALL_ASSIGNMENT_FIELDS.length) : cells))
+      .filter((cells) => cells.some((cell) => parseNumericCell(cell) !== null && cell !== ""))
+
+    if (rows.length === 0) {
+      toast.error("Không đọc được dữ liệu số hợp lệ từ nội dung đã dán")
+      return
+    }
+
+    let appliedUsers = 0
+    let appliedCells = 0
+
+    setDrafts((prev) => {
+      const nextDrafts = { ...prev }
+      rows.slice(0, filteredUsers.length).forEach((cells, rowIndex) => {
+        const profile = filteredUsers[rowIndex]
+        if (!profile) return
+
+        const nextDraft = { ...(prev[profile.id] || DEFAULT_DRAFT) }
+        let rowTouched = false
+
+        ALL_ASSIGNMENT_FIELDS.forEach((field, columnIndex) => {
+          const cell = cells[columnIndex]
+          if (cell === undefined || cell === "") return
+          const parsed = parseNumericCell(cell)
+          if (parsed === null) return
+          nextDraft[field.key] = parsed
+          rowTouched = true
+          appliedCells += 1
+        })
+
+        if (rowTouched) {
+          nextDrafts[profile.id] = nextDraft
+          appliedUsers += 1
+        }
+      })
+      return nextDrafts
+    })
+
+    if (appliedUsers === 0) {
+      toast.error("Dữ liệu dán không khớp với ma trận hiện tại")
+      return
+    }
+
+    setPasteMatrix("")
+    toast.success(`Đã áp dụng ${appliedCells} ô KPI cho ${appliedUsers} nhân sự`)
   }
 
   const handleCreatePlan = async () => {
@@ -365,9 +481,9 @@ export default function KpiTargetsPage() {
                 Admin KPI orchestration
               </div>
               <div className="space-y-2">
-                <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Phân bổ chỉ tiêu KPI theo người, sản phẩm và tăng ròng</h1>
+                <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Phân bổ KPI hàng loạt theo ma trận nhân sự x chỉ tiêu</h1>
                 <p className="max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
-                  Giao mục tiêu cho từng chuyên viên theo kỳ KPI, bám đúng dữ liệu mà báo cáo GAS đang sử dụng. Nếu bạn mới mở rộng schema, hãy chạy migration target mới trước khi lưu.
+                  Nhập trực tiếp trên bảng ma trận để giao chỉ tiêu nhanh cho nhiều chuyên viên trong một lần thao tác, bao gồm cả chỉ tiêu sản phẩm, dư nợ tăng ròng và huy động tăng ròng.
                 </p>
               </div>
             </div>
@@ -515,98 +631,296 @@ export default function KpiTargetsPage() {
           </section>
         )}
 
-        <section className="grid grid-cols-1 gap-5 2xl:grid-cols-2">
-          {filteredUsers.map((profile) => {
-            const draft = drafts[profile.id] || DEFAULT_DRAFT
-            const saving = savingUserId === profile.id
-            const currentAssignment = assignmentMap[profile.id]
-            const dirty = !draftsEqual(draft, buildDraft(currentAssignment))
-            return (
-              <article key={profile.id} className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-                <div className="border-b border-slate-200/80 bg-[linear-gradient(180deg,_rgba(248,250,252,0.95),_rgba(255,255,255,0.88))] p-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-lg font-semibold text-white shadow-lg">
-                        {profile.full_name.charAt(0)}
-                      </div>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-semibold tracking-tight text-slate-900">{profile.full_name}</h3>
-                          <span className={clsx("rounded-full px-2.5 py-1 text-[11px] font-semibold", dirty ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>
-                            {dirty ? "Chưa lưu" : "Đã đồng bộ"}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm text-slate-500">{profile.email}</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                            <Building2 className="h-3.5 w-3.5" />
-                            {profile.department_id || "Chưa có phòng ban"}
-                          </span>
-                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                            <Target className="h-3.5 w-3.5" />
-                            {countConfiguredTargets(draft)} chỉ tiêu đã nhập
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-200/70">
-                      <div>
-                        <p className="text-[11px] uppercase tracking-wide text-slate-400">Vay thực tế</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-900">{formatCompact(Number(currentAssignment?.actual_loans_amount || 0))}</p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] uppercase tracking-wide text-slate-400">Gửi thực tế</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-900">{formatCompact(Number(currentAssignment?.actual_deposits_amount || 0))}</p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] uppercase tracking-wide text-slate-400">Gọi thực tế</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-900">{formatCompact(Number(currentAssignment?.actual_calls || 0))}</p>
-                      </div>
-                    </div>
-                  </div>
+        {filteredUsers.length > 0 && (
+          <section className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-[30px] border border-slate-200/80 bg-white p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-violet-50 p-2.5 text-violet-700">
+                  <Target className="h-5 w-5" />
                 </div>
-
-                <div className="space-y-4 p-5">
-                  <MetricSection
-                    title="Chỉ tiêu trọng tâm"
-                    icon={<LineChart className="h-4 w-4" />}
-                    fields={CORE_FIELDS}
-                    draft={draft}
-                    onChange={(key, value) => handleDraftChange(profile.id, key, value)}
-                  />
-                  <MetricSection
-                    title="Sản phẩm / dịch vụ"
-                    icon={<Sparkles className="h-4 w-4" />}
-                    fields={PRODUCT_FIELDS}
-                    draft={draft}
-                    onChange={(key, value) => handleDraftChange(profile.id, key, value)}
-                  />
-                  <MetricSection
-                    title="Chỉ tiêu tăng ròng"
-                    icon={<TrendingUp className="h-4 w-4" />}
-                    fields={GROWTH_FIELDS}
-                    draft={draft}
-                    onChange={(key, value) => handleDraftChange(profile.id, key, value)}
-                  />
+                <div>
+                  <h3 className="text-lg font-semibold tracking-tight text-slate-900">Sao chép KPI từ 1 người sang nhiều người</h3>
+                  <p className="mt-1 text-sm text-slate-500">Chọn chuyên viên nguồn, đánh dấu các nhân sự nhận và áp dụng toàn bộ bộ KPI hiện tại chỉ với một thao tác.</p>
                 </div>
+              </div>
 
-                <div className="flex flex-col gap-3 border-t border-slate-200/80 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-sm text-slate-500">
-                    {selectedPlan ? `Đang giao cho kỳ ${selectedPlan.title}` : "Chưa chọn kỳ KPI"}
-                  </div>
-                  <button
-                    onClick={() => handleSaveUser(profile)}
-                    disabled={saving || !selectedPlanId}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+              <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[260px_1fr]">
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-slate-700">Nhân sự nguồn</span>
+                  <select
+                    value={copySourceUserId}
+                    onChange={(event) => setCopySourceUserId(event.target.value)}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
                   >
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    Lưu cho {profile.full_name.split(" ").slice(-1)[0]}
+                    {filteredUsers.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div>
+                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-sm font-medium text-slate-700">Nhân sự nhận</span>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllCopyTargets}
+                        className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                      >
+                        Chọn tất cả đang lọc
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCopyTargetUserIds([])}
+                        className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                      >
+                        Bỏ chọn
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-56 overflow-auto rounded-[24px] border border-slate-200 bg-slate-50 p-3">
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                      {filteredUsers
+                        .filter((profile) => profile.id !== copySourceUserId)
+                        .map((profile) => {
+                          const checked = copyTargetUserIds.includes(profile.id)
+                          return (
+                            <label key={profile.id} className={clsx("flex items-start gap-3 rounded-2xl border px-3 py-3 transition", checked ? "border-violet-200 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300") }>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => handleToggleCopyTarget(profile.id)}
+                                className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                              />
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-slate-900">{profile.full_name}</p>
+                                <p className="truncate text-xs text-slate-500">{profile.department_id || "Chưa có phòng ban"}</p>
+                              </div>
+                            </label>
+                          )
+                        })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-500">Đang chọn {copyTargetUserIds.length} nhân sự nhận bộ KPI từ nguồn hiện tại.</p>
+                <button
+                  type="button"
+                  onClick={handleApplyCopyTargets}
+                  className="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-700"
+                >
+                  Sao chép KPI hàng loạt
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-[30px] border border-slate-200/80 bg-white p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
+              <div className="flex items-start gap-3">
+                <div className="rounded-2xl bg-emerald-50 p-2.5 text-emerald-700">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold tracking-tight text-slate-900">Dán nhanh từ Excel / Google Sheets</h3>
+                  <p className="mt-1 text-sm text-slate-500">Dán block dữ liệu KPI dạng tab/newline. Hệ thống sẽ áp dụng lần lượt theo thứ tự nhân sự đang hiển thị trên màn hình.</p>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                <textarea
+                  rows={8}
+                  value={pasteMatrix}
+                  onChange={(event) => setPasteMatrix(event.target.value)}
+                  placeholder={"Mỗi dòng tương ứng 1 chuyên viên đang lọc. Mỗi cột tương ứng 1 chỉ tiêu KPI theo đúng thứ tự hiển thị. Bạn có thể dán riêng 11 cột KPI hoặc dán cả hàng, hệ thống sẽ lấy block KPI ở cuối dòng."}
+                  className="w-full rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
+                />
+
+                <div className="flex flex-wrap gap-2 rounded-[24px] border border-slate-200 bg-slate-50 p-3">
+                  {ALL_ASSIGNMENT_FIELDS.map((field) => (
+                    <span key={field.key} className={clsx("inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold", getFieldChipClass(field.key))}>
+                      {field.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-500">Áp dụng tối đa cho {filteredUsers.length} nhân sự đang lọc. Nếu ít dòng hơn, hệ thống chỉ cập nhật các dòng đầu tiên.</p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPasteMatrix("")}
+                    className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                  >
+                    Xóa nội dung dán
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyPasteMatrix}
+                    className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                  >
+                    Áp dụng dữ liệu dán
                   </button>
                 </div>
-              </article>
-            )
-          })}
-        </section>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {filteredUsers.length > 0 && (
+          <section className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
+            <div className="flex flex-col gap-4 border-b border-slate-200/80 p-5 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h3 className="text-lg font-semibold tracking-tight text-slate-900">Bảng ma trận giao KPI</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Mỗi hàng là một chuyên viên, mỗi cột là một chỉ tiêu. Header được ghim khi cuộn dọc, cột nhân sự và tác vụ được ghim khi cuộn ngang để bạn nhập KPI liên tục.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{filteredUsers.length} nhân sự</span>
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{CORE_FIELDS.length} cột trọng tâm</span>
+                <span className="inline-flex items-center rounded-full bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">{PRODUCT_FIELDS.length} cột sản phẩm</span>
+                <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">{GROWTH_FIELDS.length} cột tăng ròng</span>
+              </div>
+            </div>
+
+            <div className="max-h-[72vh] overflow-auto">
+              <table className="min-w-[2650px] w-full border-separate border-spacing-0">
+                <thead>
+                  <tr>
+                    <th rowSpan={2} className="sticky left-0 top-0 z-50 min-w-[320px] border-b border-r border-slate-800 bg-slate-900 px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-white">
+                      Nhân sự
+                    </th>
+                    <th colSpan={3} className="sticky top-0 z-40 border-b border-r border-slate-800 bg-slate-900 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-slate-100">
+                      Kết quả thực tế
+                    </th>
+                    <th colSpan={CORE_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-emerald-900 bg-emerald-900 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-emerald-50">
+                      Chỉ tiêu trọng tâm
+                    </th>
+                    <th colSpan={PRODUCT_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-violet-900 bg-violet-900 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-violet-50">
+                      Chỉ tiêu sản phẩm
+                    </th>
+                    <th colSpan={GROWTH_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-amber-700 bg-amber-600 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-amber-50">
+                      Chỉ tiêu tăng ròng
+                    </th>
+                    <th rowSpan={2} className="sticky right-0 top-0 z-50 min-w-[180px] border-b border-l border-slate-800 bg-slate-900 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-white">
+                      Tác vụ
+                    </th>
+                  </tr>
+                  <tr>
+                    <th className="sticky top-[52px] z-40 min-w-[120px] border-b border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-xs font-semibold text-slate-600">Vay thực tế</th>
+                    <th className="sticky top-[52px] z-40 min-w-[120px] border-b border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-xs font-semibold text-slate-600">Gửi thực tế</th>
+                    <th className="sticky top-[52px] z-40 min-w-[120px] border-b border-r border-slate-200 bg-slate-50 px-3 py-3 text-left text-xs font-semibold text-slate-600">Gọi thực tế</th>
+                    {ALL_ASSIGNMENT_FIELDS.map((field, index) => (
+                      <th
+                        key={field.key}
+                        className={clsx(
+                          "sticky top-[52px] z-40 min-w-[150px] border-b border-slate-200 px-3 py-3 text-left align-top text-xs font-semibold",
+                          getFieldHeaderClass(field.key),
+                          index === CORE_FIELDS.length - 1 || index === ALL_ASSIGNMENT_FIELDS.length - 1 ? "border-r" : "border-r border-slate-200"
+                        )}
+                      >
+                        <div className="flex min-h-[52px] flex-col justify-between gap-2">
+                          <span>{field.label}</span>
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-slate-400">{field.unit}</span>
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredUsers.map((profile, index) => {
+                    const draft = drafts[profile.id] || DEFAULT_DRAFT
+                    const saving = savingUserId === profile.id
+                    const currentAssignment = assignmentMap[profile.id]
+                    const dirty = !draftsEqual(draft, buildDraft(currentAssignment))
+                    const rowBackground = index % 2 === 0 ? "bg-white" : "bg-slate-50/70"
+
+                    return (
+                      <tr key={profile.id} className="group">
+                        <td className={clsx("sticky left-0 z-20 border-b border-r border-slate-200 px-4 py-4 align-top", rowBackground)}>
+                          <div className="flex items-start gap-3">
+                            <div className={clsx("mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold text-white shadow-sm", dirty ? "bg-amber-500" : "bg-slate-900")}>
+                              {profile.full_name.charAt(0)}
+                            </div>
+                            <div className="min-w-0 space-y-2">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-semibold text-slate-900">{profile.full_name}</p>
+                                  <span className={clsx("rounded-full px-2.5 py-1 text-[11px] font-semibold", dirty ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>
+                                    {dirty ? "Chưa lưu" : "Đã đồng bộ"}
+                                  </span>
+                                </div>
+                                <p className="mt-1 truncate text-xs text-slate-500">{profile.email}</p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                                  <Building2 className="h-3.5 w-3.5" />
+                                  {profile.department_id || "Chưa có phòng ban"}
+                                </span>
+                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                                  <Target className="h-3.5 w-3.5" />
+                                  {countConfiguredTargets(draft)} chỉ tiêu
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className={clsx("border-b border-r border-slate-200 px-3 py-4 text-sm font-semibold text-slate-900", rowBackground)}>
+                          {formatCompact(Number(currentAssignment?.actual_loans_amount || 0))}
+                        </td>
+                        <td className={clsx("border-b border-r border-slate-200 px-3 py-4 text-sm font-semibold text-slate-900", rowBackground)}>
+                          {formatCompact(Number(currentAssignment?.actual_deposits_amount || 0))}
+                        </td>
+                        <td className={clsx("border-b border-r border-slate-200 px-3 py-4 text-sm font-semibold text-slate-900", rowBackground)}>
+                          {formatCompact(Number(currentAssignment?.actual_calls || 0))}
+                        </td>
+
+                        {ALL_ASSIGNMENT_FIELDS.map((field) => (
+                          <td key={field.key} className={clsx("border-b border-r border-slate-200 px-2 py-3 align-top", rowBackground)}>
+                            <div className={clsx("min-w-[145px] rounded-xl border px-3 py-2 shadow-sm transition", getFieldInputTone(field.key))}>
+                              <input
+                                type="number"
+                                min="0"
+                                step={field.step || "1"}
+                                value={draft[field.key]}
+                                onChange={(event) => handleDraftChange(profile.id, field.key, Number(event.target.value) || 0)}
+                                aria-label={`${profile.full_name} - ${field.label}`}
+                                className="h-8 w-full border-0 bg-transparent p-0 text-sm font-semibold text-slate-900 outline-none focus:ring-0"
+                              />
+                              <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">{field.unit}</div>
+                            </div>
+                          </td>
+                        ))}
+
+                        <td className={clsx("sticky right-0 z-20 border-b border-l border-slate-200 px-4 py-4 align-top", rowBackground)}>
+                          <div className="flex min-w-[150px] flex-col gap-2">
+                            <span className={clsx("inline-flex items-center justify-center rounded-full px-2.5 py-1 text-[11px] font-semibold", dirty ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>
+                              {dirty ? "Chưa lưu" : "Đã đồng bộ"}
+                            </span>
+                            <button
+                              onClick={() => handleSaveUser(profile)}
+                              disabled={saving || !selectedPlanId}
+                              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                              Lưu dòng
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         {filteredUsers.length === 0 && (
           <div className="rounded-[28px] border border-dashed border-slate-300 bg-white px-6 py-16 text-center text-slate-500">
