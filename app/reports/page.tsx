@@ -3,6 +3,7 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { Calendar, Download, Loader2 } from "lucide-react"
+import { formatMetricNumber, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
 import { fetchProfiles, fetchSalesRecords } from "@/lib/supabase/api"
 import * as XLSX from 'xlsx'
 
@@ -78,14 +79,15 @@ export default function ReportsPage() {
 
     filteredSales.forEach((sale: any) => {
       const label = sale.title || sale.category || 'Khác'
-      const key = `${sale.source_type}:${label}`
+      const unit = getRecordUnitLabel(sale)
+      const key = `${sale.source_type}:${label}:${unit}`
 
       if (!rowMap.has(key)) {
         rowMap.set(key, {
           key,
           sourceType: sale.source_type,
           label,
-          unit: sale.source_type === 'PRODUCT' ? 'SL' : 'VNĐ',
+          unit,
         })
       }
     })
@@ -100,17 +102,17 @@ export default function ReportsPage() {
   const getMetricValue = (row: { sourceType: string; label: string; unit: string }, agentId: string) => {
     return filteredSales.reduce((sum: number, sale: any) => {
       const saleLabel = sale.title || sale.category || 'Khác'
-      if (sale.agent_id !== agentId || sale.source_type !== row.sourceType || saleLabel !== row.label) {
+      if (sale.agent_id !== agentId || sale.source_type !== row.sourceType || saleLabel !== row.label || getRecordUnitLabel(sale) !== row.unit) {
         return sum
       }
 
-      return sum + (row.unit === 'SL' ? Number(sale.quantity || 1) : Number(sale.amount || 0))
+      return sum + getRecordMetricValue(sale)
     }, 0)
   }
 
   const formatMetric = (value: number) => {
     if (!value) return '-'
-    return new Intl.NumberFormat('vi-VN').format(value)
+    return formatMetricNumber(value)
   }
 
   const handleExportExcel = () => {
@@ -175,7 +177,7 @@ export default function ReportsPage() {
         <div className="bg-white rounded-2xl ring-1 ring-slate-900/5 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100 bg-slate-50/50">
             <h2 className="text-lg font-semibold text-slate-800 tracking-tight">Thống Kê Bán Hàng Theo Cán Bộ</h2>
-            <p className="text-xs text-slate-500 mt-1">Khoản vay và tiền gửi tính theo VNĐ, sản phẩm khác tính theo số lượng.</p>
+            <p className="text-xs text-slate-500 mt-1">Khoản vay và tiền gửi tính theo VNĐ, sản phẩm khác tính theo đơn vị của từng loại.</p>
           </div>
 
           {loading ? (

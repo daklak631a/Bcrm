@@ -7,6 +7,7 @@ import { Briefcase, Filter, Loader2, Package, PiggyBank, Plus, Search } from "lu
 import { toast } from "sonner"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
+import { formatMetricValue, getProductMetricDefinition, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
 import { createSalesRecord, fetchCustomers, fetchProducts, fetchSalesRecords, fetchSalesRecordsByCustomer, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
 import { useAuthStore } from "@/store/useAuthStore"
 import { SalesRecord } from "@/types/models"
@@ -130,6 +131,14 @@ function SalesPageContent() {
     })
   }, [customers, customerSearch])
 
+  const selectedProduct = useMemo(() => {
+    return products.find((product) => product.id === selectedProductId) || null
+  }, [products, selectedProductId])
+
+  const selectedProductMetric = useMemo(() => {
+    return getProductMetricDefinition(selectedProduct)
+  }, [selectedProduct])
+
   const filteredRecords = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
     return records.filter((record) => {
@@ -156,13 +165,13 @@ function SalesPageContent() {
   const stats = useMemo(() => {
     const loans = records.filter((record) => record.source_type === "LOAN")
     const deposits = records.filter((record) => record.source_type === "DEPOSIT")
-    const productsCount = records.filter((record) => record.source_type === "PRODUCT").length
+    const productTransactions = records.filter((record) => record.source_type === "PRODUCT").length
 
     return {
       totalCount: records.length,
       loanAmount: loans.reduce((sum, record) => sum + Number(record.amount || 0), 0),
       depositAmount: deposits.reduce((sum, record) => sum + Number(record.amount || 0), 0),
-      productsCount,
+      productTransactions,
     }
   }, [records])
 
@@ -216,6 +225,12 @@ function SalesPageContent() {
     }
 
     const form = new FormData(e.currentTarget)
+    const resultValue = Number(form.get("result_value") || 0)
+
+    if (saleType === "PRODUCT" && resultValue <= 0) {
+      toast.error(`Vui lòng nhập kết quả (${selectedProductMetric.unitLabel})`)
+      return
+    }
 
     try {
       setFormLoading(true)
@@ -225,6 +240,7 @@ function SalesPageContent() {
         agent_id: user?.id || "",
         title: saleType === "PRODUCT" ? undefined : (form.get("title") as string),
         amount: saleType === "PRODUCT" ? 0 : Number(form.get("amount") || 0),
+        result_value: saleType === "PRODUCT" ? resultValue : undefined,
         account_number: (form.get("account_number") as string) || undefined,
         sale_date: form.get("sale_date") as string,
         due_date: saleType === "LOAN" ? (form.get("due_date") as string) : undefined,
@@ -261,8 +277,8 @@ function SalesPageContent() {
             <h3 className="text-2xl font-bold font-mono tracking-tight text-slate-800 truncate" title={formatCurrency(stats.depositAmount)}>{formatCurrency(stats.depositAmount)}</h3>
           </div>
           <div className="bg-white p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500 mb-1">Sản phẩm đã bán</p>
-            <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{stats.productsCount}</h3>
+            <p className="text-sm font-medium text-slate-500 mb-1">Giao dịch sản phẩm</p>
+            <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{stats.productTransactions}</h3>
           </div>
         </div>
 
@@ -324,6 +340,8 @@ function SalesPageContent() {
                     {paginatedRecords.map((record) => {
                       const sourceMeta = getSourceMeta(record.source_type)
                       const Icon = sourceMeta.icon
+                      const metricValue = getRecordMetricValue(record)
+                      const unitLabel = getRecordUnitLabel(record)
                       return (
                         <tr key={record.id} className="hover:bg-slate-50 transition-colors">
                           <td className="py-3 px-4 text-sm text-slate-600">{new Date(record.sale_date).toLocaleDateString("vi-VN")}</td>
@@ -335,10 +353,12 @@ function SalesPageContent() {
                           </td>
                           <td className="py-3 px-4 text-sm text-slate-700">
                             <div className="font-medium text-slate-800">{record.title}</div>
-                            <div className="text-[11px] text-slate-500 mt-0.5">{record.category}{record.account_number ? ` • ${record.account_number}` : ""}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">{record.category}{record.account_number ? ` • ${record.account_number}` : ""}{record.source_type === "PRODUCT" ? ` • ${unitLabel}` : ""}</div>
                           </td>
                           <td className="py-3 px-4 text-sm font-medium text-slate-800">
-                            {record.source_type === "PRODUCT" ? "1 sản phẩm" : formatCurrency(Number(record.amount || 0))}
+                            {record.source_type === "PRODUCT"
+                              ? formatMetricValue(metricValue, unitLabel)
+                              : formatCurrency(Number(record.amount || 0))}
                           </td>
                           <td className="py-3 px-4 text-sm text-slate-600">{getStatusLabel(record)}</td>
                         </tr>
@@ -426,14 +446,26 @@ function SalesPageContent() {
           </div>
 
           {saleType === "PRODUCT" ? (
-            <FormField label="Sản phẩm" required>
-              <FormSelect name="product_id" required value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)}>
-                <option value="">Chọn sản phẩm</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>{product.name}</option>
-                ))}
-              </FormSelect>
-            </FormField>
+            <>
+              <FormField label="Sản phẩm" required>
+                <FormSelect name="product_id" required value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)}>
+                  <option value="">Chọn sản phẩm</option>
+                  {products.map((product) => (
+                    <option key={product.id} value={product.id}>{product.name}</option>
+                  ))}
+                </FormSelect>
+              </FormField>
+              {selectedProduct && (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label={`Kết quả (${selectedProductMetric.unitLabel})`} required>
+                    <FormInput name="result_value" type="number" step="0.01" min="0" required placeholder={selectedProductMetric.metricType === "AMOUNT" ? "50" : "1"} defaultValue={selectedProductMetric.metricType === "QUANTITY" ? "1" : undefined} />
+                  </FormField>
+                  <FormField label="Kiểu ghi nhận">
+                    <FormInput value={selectedProductMetric.metricType === "AMOUNT" ? "Theo giá trị" : "Theo số lượng"} disabled readOnly />
+                  </FormField>
+                </div>
+              )}
+            </>
           ) : (
             <>
               <FormField label={saleType === "LOAN" ? "Loại khoản vay" : "Loại tiền gửi"} required>

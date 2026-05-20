@@ -157,6 +157,8 @@ CREATE TABLE IF NOT EXISTS cross_sell_products (
     type TEXT NOT NULL DEFAULT 'Dịch vụ',
     description TEXT,
     target DECIMAL(15, 2) DEFAULT 0,
+    metric_type TEXT NOT NULL DEFAULT 'QUANTITY',
+    unit_label TEXT NOT NULL DEFAULT 'SL',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -170,6 +172,7 @@ CREATE TABLE IF NOT EXISTS cross_sell_records (
     status TEXT NOT NULL DEFAULT 'Pending',
     sale_date DATE NOT NULL DEFAULT CURRENT_DATE,
     note TEXT,
+    result_value DECIMAL(15, 2) NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

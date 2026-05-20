@@ -7,9 +7,11 @@ import { Suspense, useState, useEffect, useCallback, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import clsx from "clsx"
-import { fetchProducts, fetchProductSales, createProduct, deleteProduct, formatCurrency, fetchCustomers, createProductSale, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
+import { formatMetricValue, getProductMetricDefinition, getProductMetricValue } from "@/lib/product-metrics"
+import { fetchProducts, fetchProductSales, createProduct, deleteProduct, fetchCustomers, createProductSale, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
+import { ProductMetricType } from "@/types/models"
 
 function ProductsPageContent() {
   const { user } = useAuthStore()
@@ -36,6 +38,11 @@ function ProductsPageContent() {
   const [quickAddLoading, setQuickAddLoading] = useState(false)
   const [customerType, setCustomerType] = useState("INDIVIDUAL")
   const [preFilledSearch, setPreFilledSearch] = useState("")
+  const [newProductName, setNewProductName] = useState("")
+  const [newProductType, setNewProductType] = useState("Thẻ")
+  const [newProductMetricType, setNewProductMetricType] = useState<ProductMetricType>("QUANTITY")
+  const [newProductUnitLabel, setNewProductUnitLabel] = useState("SL")
+  const [productMetricTouched, setProductMetricTouched] = useState(false)
 
   const filteredCustomers = useMemo(() => {
     if (!customerSearch.trim()) return customers
@@ -57,6 +64,10 @@ function ProductsPageContent() {
   const selectedCustomer = useMemo(() => {
     return customers.find(c => c.id === selectedCustomerId)
   }, [customers, selectedCustomerId])
+
+  const selectedProductMetric = useMemo(() => {
+    return getProductMetricDefinition(selectedProduct)
+  }, [selectedProduct])
 
   const loadData = useCallback(async () => {
     try {
@@ -82,19 +93,66 @@ function ProductsPageContent() {
     setCustomerSearch(getCustomerFullName(customer))
   }, [customerIdParam, customers])
 
+  useEffect(() => {
+    if (productMetricTouched) return
+    const defaults = getProductMetricDefinition({ name: newProductName, type: newProductType })
+    setNewProductMetricType(defaults.metricType)
+    setNewProductUnitLabel(defaults.unitLabel)
+  }, [newProductName, newProductType, productMetricTouched])
+
+  const productPerformanceMap = useMemo(() => {
+    const performanceMap = new Map<string, { metricValue: number; completedCount: number }>()
+
+    sales.forEach((sale: any) => {
+      if (!sale.product_id || String(sale.status || '').toUpperCase() !== 'COMPLETED') return
+
+      const current = performanceMap.get(sale.product_id) || { metricValue: 0, completedCount: 0 }
+      current.metricValue += getProductMetricValue(sale, sale.cross_sell_products)
+      current.completedCount += 1
+      performanceMap.set(sale.product_id, current)
+    })
+
+    return performanceMap
+  }, [sales])
+
   if (!mounted) return null
 
   const isAdmin = user?.role === 'ADMIN_LEVEL_1'
 
+  const openAddProductModal = () => {
+    const defaults = getProductMetricDefinition({ name: '', type: 'Thẻ' })
+    setNewProductName('')
+    setNewProductType('Thẻ')
+    setNewProductMetricType(defaults.metricType)
+    setNewProductUnitLabel(defaults.unitLabel)
+    setProductMetricTouched(false)
+    setShowAddModal(true)
+  }
+
   const handleAddProduct = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const form = new FormData(e.currentTarget)
+    const normalizedName = newProductName.trim()
+    const normalizedUnitLabel = newProductUnitLabel.trim()
+
+    if (!normalizedName) {
+      toast.error('Vui lòng nhập tên sản phẩm')
+      return
+    }
+
+    if (!normalizedUnitLabel) {
+      toast.error('Vui lòng nhập đơn vị tính')
+      return
+    }
+
     try {
       setFormLoading(true)
       await createProduct({
-        name: form.get('name') as string,
-        type: form.get('type') as string,
+        name: normalizedName,
+        type: newProductType,
         target: Number(form.get('target')) || 0,
+        metric_type: newProductMetricType,
+        unit_label: normalizedUnitLabel,
       })
       toast.success('Thêm sản phẩm thành công!')
       setShowAddModal(false)
@@ -124,6 +182,13 @@ function ProductsPageContent() {
       return
     }
     const form = new FormData(e.currentTarget)
+    const resultValue = Number(form.get('result_value') || 0)
+
+    if (resultValue <= 0) {
+      toast.error(`Vui lòng nhập kết quả (${selectedProductMetric.unitLabel})`)
+      return
+    }
+
     try {
       setFormLoading(true)
       await createProductSale({
@@ -133,6 +198,7 @@ function ProductsPageContent() {
         status: form.get('status') as string || 'COMPLETED',
         sale_date: form.get('sale_date') as string || new Date().toISOString(),
         note: form.get('note') as string,
+        result_value: resultValue,
       })
       toast.success('Ghi nhận bán chéo thành công!')
       setShowSaleModal(false)
@@ -179,7 +245,6 @@ function ProductsPageContent() {
     ? products.filter((p: any) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : products
 
-  const getSalesCount = (productId: string) => sales.filter((s: any) => s.product_id === productId).length
   const getCreateSaleHref = (productId: string) => {
     const params = new URLSearchParams({ create: '1', type: 'PRODUCT', productId })
     if (customerIdParam) params.set('customerId', customerIdParam)
@@ -196,7 +261,7 @@ function ProductsPageContent() {
               className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 w-full outline-none" />
           </div>
           {isAdmin && (
-            <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm">
+            <button onClick={openAddProductModal} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm">
               <Plus className="w-4 h-4" /> Thêm Sản Phẩm
             </button>
           )}
@@ -215,8 +280,10 @@ function ProductsPageContent() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProducts.map((product: any) => {
-              const currentSales = getSalesCount(product.id)
-              const percent = product.target > 0 ? Math.min(Math.round((currentSales / product.target) * 100), 100) : 0
+              const metricDefinition = getProductMetricDefinition(product)
+              const performance = productPerformanceMap.get(product.id) || { metricValue: 0, completedCount: 0 }
+              const currentMetricValue = performance.metricValue
+              const percent = product.target > 0 ? Math.min(Math.round((currentMetricValue / product.target) * 100), 100) : 0
               return (
                 <div key={product.id} className="bg-white rounded-2xl ring-1 ring-slate-900/5 shadow-sm p-6 flex flex-col relative group">
                   {isAdmin && (
@@ -230,17 +297,18 @@ function ProductsPageContent() {
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><PackageSearch className="w-5 h-5" /></div>
                     <div>
                       <h3 className="font-bold text-slate-800 text-lg leading-tight">{product.name}</h3>
-                      <p className="text-xs text-slate-500 font-medium">{product.type}</p>
+                      <p className="text-xs text-slate-500 font-medium">{product.type} • {metricDefinition.unitLabel}</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                       <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><Target className="w-3 h-3" /> Mục tiêu</p>
-                      <p className="font-semibold text-slate-800">{product.target}</p>
+                      <p className="font-semibold text-slate-800">{formatMetricValue(Number(product.target || 0), metricDefinition.unitLabel)}</p>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                      <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Đã bán</p>
-                      <p className="font-semibold text-indigo-600">{currentSales}</p>
+                      <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Kết quả</p>
+                      <p className="font-semibold text-indigo-600">{formatMetricValue(currentMetricValue, metricDefinition.unitLabel)}</p>
+                      <p className="text-[11px] text-slate-500 mt-1">{performance.completedCount} giao dịch thành công</p>
                     </div>
                   </div>
                   <div className="mt-auto pt-4 border-t border-slate-100">
@@ -293,10 +361,10 @@ function ProductsPageContent() {
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Thêm Sản Phẩm Bán Chéo">
         <form onSubmit={handleAddProduct} className="space-y-4">
           <FormField label="Tên sản phẩm" required>
-            <FormInput name="name" required placeholder="VD: Thẻ BIDV Chip" />
+            <FormInput value={newProductName} onChange={(e) => setNewProductName(e.target.value)} required placeholder="VD: Thẻ BIDV Chip" />
           </FormField>
           <FormField label="Loại sản phẩm" required>
-            <FormSelect name="type" required>
+            <FormSelect value={newProductType} onChange={(e) => setNewProductType(e.target.value)} required>
               <option value="Thẻ">Thẻ</option>
               <option value="Bảo hiểm">Bảo hiểm</option>
               <option value="Tài khoản">Tài khoản</option>
@@ -306,8 +374,25 @@ function ProductsPageContent() {
               <option value="Dịch vụ khác">Dịch vụ khác</option>
             </FormSelect>
           </FormField>
-          <FormField label="Mục tiêu (số lượng)" required>
-            <FormInput name="target" type="number" required placeholder="100" />
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Kiểu kết quả" required>
+              <FormSelect value={newProductMetricType} onChange={(e) => {
+                setProductMetricTouched(true)
+                setNewProductMetricType(e.target.value as ProductMetricType)
+              }} required>
+                <option value="QUANTITY">Theo số lượng</option>
+                <option value="AMOUNT">Theo giá trị</option>
+              </FormSelect>
+            </FormField>
+            <FormField label="Đơn vị tính" required>
+              <FormInput value={newProductUnitLabel} onChange={(e) => {
+                setProductMetricTouched(true)
+                setNewProductUnitLabel(e.target.value)
+              }} required placeholder="VD: KH, Triệu đồng, Tỷ đồng" />
+            </FormField>
+          </div>
+          <FormField label={`Mục tiêu (${newProductUnitLabel || 'đơn vị'})`} required>
+            <FormInput name="target" type="number" step="0.01" required placeholder="100" />
           </FormField>
           <SubmitButton loading={formLoading}>Thêm Sản Phẩm</SubmitButton>
         </form>
@@ -491,6 +576,17 @@ function ProductsPageContent() {
             {/* Overlay to close dropdown */}
             {showCustomerDropdown && <div className="fixed inset-0 z-0" onClick={() => setShowCustomerDropdown(false)}></div>}
           </div>
+
+          {selectedProduct && (
+            <div className="grid grid-cols-2 gap-4">
+              <FormField label={`Kết quả (${selectedProductMetric.unitLabel})`} required>
+                <FormInput name="result_value" type="number" step="0.01" min="0" required placeholder={selectedProductMetric.metricType === 'AMOUNT' ? '50' : '1'} defaultValue={selectedProductMetric.metricType === 'QUANTITY' ? '1' : undefined} />
+              </FormField>
+              <FormField label="Kiểu ghi nhận">
+                <FormInput value={selectedProductMetric.metricType === 'AMOUNT' ? 'Theo giá trị' : 'Theo số lượng'} disabled readOnly />
+              </FormField>
+            </div>
+          )}
           
           <FormField label="Trạng thái">
             <FormSelect name="status">

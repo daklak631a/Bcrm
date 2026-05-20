@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, use } from "react"
 import { fetchCustomerById, fetchInteractionsByCustomer, fetchSalesRecordsByCustomer, getCustomerFullName, formatCurrency, updateCustomer } from "@/lib/supabase/api"
 import { ArrowLeft, Edit, Save, X, Phone, Mail, MapPin, Calendar, FileText, Briefcase, CreditCard, ShoppingCart, Loader2, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   // Unpack params since it's a promise in newer Next.js versions
@@ -366,9 +367,11 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                               </div>
                             </div>
                             <div className="text-right flex flex-col items-end gap-1 shrink-0">
-                              {sale.source_type !== 'PRODUCT' && (
-                                <p className="font-bold text-slate-800">{formatCurrency(Number(sale.amount || 0))}</p>
-                              )}
+                              <p className="font-bold text-slate-800">
+                                {sale.source_type === 'PRODUCT'
+                                  ? formatMetricValue(getRecordMetricValue(sale), getRecordUnitLabel(sale))
+                                  : formatCurrency(Number(sale.amount || 0))}
+                              </p>
                               <div className="mt-1">{getStatusBadge(sale.status)}</div>
                               <p className="text-xs text-slate-500 mt-1">
                                 {new Date(sale.sale_date).toLocaleDateString('vi-VN')}

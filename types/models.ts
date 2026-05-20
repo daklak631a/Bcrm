@@ -140,6 +140,34 @@ export interface Deposit {
   updated_at: string;
 }
 
+export type ProductMetricType = 'QUANTITY' | 'AMOUNT';
+
+export interface Product {
+  id: string;
+  name: string;
+  type: string;
+  description?: string | null;
+  target?: number | null;
+  metric_type?: ProductMetricType | null;
+  unit_label?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ProductSale {
+  id: string;
+  product_id: string;
+  customer_id?: string | null;
+  agent_id: string;
+  status: string;
+  sale_date: string;
+  result_value?: number | null;
+  note?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  cross_sell_products?: Product | null;
+}
+
 export interface Interaction {
   id: string;
   customer_id: string;
@@ -182,6 +210,9 @@ export interface SalesRecord {
   category: string;
   amount: number;
   quantity: number;
+  metric_value: number;
+  unit_label: string;
+  metric_type?: ProductMetricType | null;
   note?: string | null;
   account_number?: string | null;
   product_id?: string | null;

@@ -6,6 +6,7 @@ import { MessageSquare, Package, TrendingUp, Loader2 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useCallback } from "react"
 import { KPISummaryTable } from "@/components/ui/kpi-summary-table"
+import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
 import { fetchCustomers, fetchInteractions, fetchProfiles, fetchSalesRecords, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
 
 export default function DashboardPage() {
@@ -198,9 +199,11 @@ export default function DashboardPage() {
                   <p className="text-xs text-slate-500 mb-2">KH: {sale.customer_name || '—'}</p>
                   <p className="text-xs text-slate-500 mb-1">Trạng thái: {sale.status}</p>
                   <p className="text-[11px] text-slate-400">{new Date(sale.sale_date).toLocaleDateString('vi-VN')}</p>
-                  {sale.source_type !== 'PRODUCT' && (
-                    <p className="text-xs font-semibold text-slate-700 mt-2">{formatCurrency(Number(sale.amount || 0))}</p>
-                  )}
+                  <p className="text-xs font-semibold text-slate-700 mt-2">
+                    {sale.source_type === 'PRODUCT'
+                      ? formatMetricValue(getRecordMetricValue(sale), getRecordUnitLabel(sale))
+                      : formatCurrency(Number(sale.amount || 0))}
+                  </p>
                 </div>
               </div>
             )

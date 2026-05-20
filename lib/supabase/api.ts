@@ -1,5 +1,6 @@
 import { getSupabase } from './client'
-import { Customer, ManagerTransferRequest, Plan, PlanAssignment, SalesRecord } from '@/types/models'
+import { getProductMetricDefinition, getProductMetricValue } from '@/lib/product-metrics'
+import { Customer, ManagerTransferRequest, Plan, PlanAssignment, ProductMetricType, SalesRecord } from '@/types/models'
 
 // ==========================================
 // UTILITY HELPERS
@@ -56,6 +57,9 @@ function mapLoanToSalesRecord(loan: any): SalesRecord {
     category: 'Khoản vay',
     amount: Number(loan.loan_amount || 0),
     quantity: 1,
+    metric_value: Number(loan.loan_amount || 0),
+    unit_label: 'VNĐ',
+    metric_type: 'AMOUNT',
     note: loan.disbursement_purpose || loan.business_sector || null,
     account_number: loan.account_number || null,
     source_href: getSalesSourceHref('LOAN', loan.customer_id ?? loan.customers?.id),
@@ -79,6 +83,9 @@ function mapDepositToSalesRecord(deposit: any): SalesRecord {
     category: 'Tiền gửi',
     amount: Number(deposit.amount || 0),
     quantity: 1,
+    metric_value: Number(deposit.amount || 0),
+    unit_label: 'VNĐ',
+    metric_type: 'AMOUNT',
     note: deposit.maturity_date ? `Đáo hạn: ${deposit.maturity_date}` : null,
     account_number: deposit.account_number || null,
     source_href: getSalesSourceHref('DEPOSIT', deposit.customer_id ?? deposit.customers?.id),
@@ -89,6 +96,13 @@ function mapDepositToSalesRecord(deposit: any): SalesRecord {
 }
 
 function mapProductSaleToSalesRecord(sale: any): SalesRecord {
+  const metricDefinition = getProductMetricDefinition(sale.cross_sell_products || sale)
+  const metricValue = getProductMetricValue({
+    ...sale,
+    metric_type: metricDefinition.metricType,
+    unit_label: metricDefinition.unitLabel,
+  }, sale.cross_sell_products || sale)
+
   return {
     id: `product:${sale.id}`,
     source_id: sale.id,
@@ -100,8 +114,11 @@ function mapProductSaleToSalesRecord(sale: any): SalesRecord {
     status: sale.status || 'PENDING',
     title: sale.cross_sell_products?.name || 'Sản phẩm khác',
     category: sale.cross_sell_products?.type || 'Sản phẩm',
-    amount: 0,
-    quantity: 1,
+    amount: metricDefinition.metricType === 'AMOUNT' ? metricValue : 0,
+    quantity: metricDefinition.metricType === 'QUANTITY' ? metricValue : 0,
+    metric_value: metricValue,
+    unit_label: metricDefinition.unitLabel,
+    metric_type: metricDefinition.metricType,
     note: sale.note || null,
     product_id: sale.product_id || sale.cross_sell_products?.id || null,
     source_href: getSalesSourceHref('PRODUCT', sale.customer_id ?? sale.customers?.id),
@@ -798,6 +815,8 @@ export async function createProduct(product: {
   type: string
   description?: string
   target?: number
+  metric_type?: ProductMetricType
+  unit_label?: string
 }) {
   const supabase = getSupabase()
   const { data, error } = await supabase
@@ -826,7 +845,7 @@ export async function fetchProductSales() {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cross_sell_records')
-    .select('*, cross_sell_products(id, name, type), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
+    .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
@@ -836,7 +855,7 @@ export async function fetchProductSalesByCustomer(customerId: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cross_sell_records')
-    .select('*, cross_sell_products(id, name, type), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
+    .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
     .eq('customer_id', customerId)
     .order('sale_date', { ascending: false })
   if (error) throw error
@@ -850,10 +869,12 @@ export async function createProductSale(sale: {
   status?: string
   sale_date?: string
   note?: string
+  result_value?: number
 }) {
   const supabase = getSupabase()
   const payload = {
     ...sale,
+    result_value: Number(sale.result_value || 0),
     sale_date: extractDateOnly(sale.sale_date) || extractDateOnly(new Date().toISOString()) || new Date().toISOString().slice(0, 10),
   }
   const { data, error } = await supabase
@@ -917,6 +938,7 @@ export async function createSalesRecord(record: {
   agent_id: string
   title?: string
   amount?: number
+  result_value?: number
   account_number?: string
   sale_date?: string
   due_date?: string
@@ -981,6 +1003,7 @@ export async function createSalesRecord(record: {
     status: record.status || 'COMPLETED',
     sale_date: extractDateOnly(record.sale_date) || new Date().toISOString().slice(0, 10),
     note: record.note,
+    result_value: Number(record.result_value || 0),
   })
 }
 
