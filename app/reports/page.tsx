@@ -1,27 +1,35 @@
 "use client"
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
-import { useAuthStore } from "@/store/useAuthStore"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Calendar, Download, Loader2 } from "lucide-react"
-import { fetchProducts, fetchProductSales, fetchProfiles, getCustomerFullName } from "@/lib/supabase/api"
+import { fetchProfiles, fetchSalesRecords } from "@/lib/supabase/api"
 import * as XLSX from 'xlsx'
 
+const SOURCE_LABELS: Record<string, string> = {
+  LOAN: 'Khoản vay',
+  DEPOSIT: 'Tiền gửi',
+  PRODUCT: 'Sản phẩm',
+}
+
+const SOURCE_SORT: Record<string, number> = {
+  LOAN: 1,
+  DEPOSIT: 2,
+  PRODUCT: 3,
+}
+
 export default function ReportsPage() {
-  const { user } = useAuthStore()
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [products, setProducts] = useState<any[]>([])
-  const [productSales, setProductSales] = useState<any[]>([])
+  const [salesRecords, setSalesRecords] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
   const [timeRange, setTimeRange] = useState("month")
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [p, ps, pr] = await Promise.all([fetchProducts(), fetchProductSales(), fetchProfiles()])
-      setProducts(p)
-      setProductSales(ps)
+      const [sales, pr] = await Promise.all([fetchSalesRecords(), fetchProfiles()])
+      setSalesRecords(sales)
       setProfiles(pr)
     } catch (err) {
       console.error('Reports load error:', err)
@@ -32,59 +40,109 @@ export default function ReportsPage() {
 
   useEffect(() => { setMounted(true); loadData() }, [loadData])
 
-  if (!mounted) return null
+  const filteredSales = useMemo(() => {
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
 
-  const getSalesCount = (productId: string, agentId: string) => {
-    return productSales.filter((s: any) => s.product_id === productId && s.agent_id === agentId && s.status === 'Success').length
+    const startOfWeek = new Date(startOfToday)
+    startOfWeek.setDate(startOfWeek.getDate() - 6)
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const startOfQuarter = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
+    const startOfYear = new Date(now.getFullYear(), 0, 1)
+
+    return salesRecords.filter((sale: any) => {
+      const saleDate = new Date(sale.sale_date)
+      if (Number.isNaN(saleDate.getTime())) return false
+
+      switch (timeRange) {
+        case 'today':
+          return saleDate >= startOfToday && saleDate <= endOfToday
+        case 'week':
+          return saleDate >= startOfWeek && saleDate <= endOfToday
+        case 'month':
+          return saleDate >= startOfMonth && saleDate <= endOfToday
+        case 'quarter':
+          return saleDate >= startOfQuarter && saleDate <= endOfToday
+        case 'year':
+          return saleDate >= startOfYear && saleDate <= endOfToday
+        default:
+          return true
+      }
+    })
+  }, [salesRecords, timeRange])
+
+  const reportRows = useMemo(() => {
+    const rowMap = new Map<string, { key: string; sourceType: string; label: string; unit: string }>()
+
+    filteredSales.forEach((sale: any) => {
+      const label = sale.title || sale.category || 'Khác'
+      const key = `${sale.source_type}:${label}`
+
+      if (!rowMap.has(key)) {
+        rowMap.set(key, {
+          key,
+          sourceType: sale.source_type,
+          label,
+          unit: sale.source_type === 'PRODUCT' ? 'SL' : 'VNĐ',
+        })
+      }
+    })
+
+    return Array.from(rowMap.values()).sort((a, b) => {
+      const sourceSort = (SOURCE_SORT[a.sourceType] || 99) - (SOURCE_SORT[b.sourceType] || 99)
+      if (sourceSort !== 0) return sourceSort
+      return a.label.localeCompare(b.label, 'vi')
+    })
+  }, [filteredSales])
+
+  const getMetricValue = (row: { sourceType: string; label: string; unit: string }, agentId: string) => {
+    return filteredSales.reduce((sum: number, sale: any) => {
+      const saleLabel = sale.title || sale.category || 'Khác'
+      if (sale.agent_id !== agentId || sale.source_type !== row.sourceType || saleLabel !== row.label) {
+        return sum
+      }
+
+      return sum + (row.unit === 'SL' ? Number(sale.quantity || 1) : Number(sale.amount || 0))
+    }, 0)
+  }
+
+  const formatMetric = (value: number) => {
+    if (!value) return '-'
+    return new Intl.NumberFormat('vi-VN').format(value)
   }
 
   const handleExportExcel = () => {
-    // Chuẩn bị dữ liệu header
     const agentNames = profiles.map(p => p.full_name)
-    const headers = ['Sản phẩm', 'Loại', ...agentNames, 'Tổng cộng']
+    const headers = ['Danh mục', 'Nhóm', 'Đơn vị', ...agentNames, 'Tổng cộng']
 
-    // Chuẩn bị các dòng dữ liệu
-    const exportData = products.map((product) => {
-      const row: any = {
-        'Sản phẩm': product.name,
-        'Loại': product.type
+    const exportData = reportRows.map((reportRow) => {
+      const exportRow: any = {
+        'Danh mục': SOURCE_LABELS[reportRow.sourceType] || reportRow.sourceType,
+        'Nhóm': reportRow.label,
+        'Đơn vị': reportRow.unit,
       }
       
       let rowTotal = 0
       profiles.forEach((agent) => {
-        const count = getSalesCount(product.id, agent.id)
-        row[agent.full_name] = count
-        rowTotal += count
+        const value = getMetricValue(reportRow, agent.id)
+        exportRow[agent.full_name] = value
+        rowTotal += value
       })
       
-      row['Tổng cộng'] = rowTotal
-      return row
+      exportRow['Tổng cộng'] = rowTotal
+      return exportRow
     })
 
-    // Dòng tổng cộng tất cả
-    const totalRow: any = {
-      'Sản phẩm': 'Tổng tất cả',
-      'Loại': ''
-    }
-    
-    let grandTotal = 0
-    profiles.forEach((agent) => {
-      const totalAgent = products.reduce((acc, p) => acc + getSalesCount(p.id, agent.id), 0)
-      totalRow[agent.full_name] = totalAgent
-      grandTotal += totalAgent
-    })
-    totalRow['Tổng cộng'] = grandTotal
-    
-    exportData.push(totalRow)
-
-    // Tạo file Excel
     const worksheet = XLSX.utils.json_to_sheet(exportData, { header: headers })
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "BaoCaoDongLuc")
+    XLSX.utils.book_append_sheet(workbook, worksheet, "BaoCaoBanHang")
     
-    // Tải xuống
-    XLSX.writeFile(workbook, `BaoCao_DongLuc_${timeRange}_${new Date().toISOString().slice(0,10)}.xlsx`)
+    XLSX.writeFile(workbook, `BaoCao_BanHang_${timeRange}_${new Date().toISOString().slice(0,10)}.xlsx`)
   }
+
+  if (!mounted) return null
 
   return (
     <DashboardLayout title="Báo Cáo Tổng Hợp">
@@ -116,7 +174,8 @@ export default function ReportsPage() {
 
         <div className="bg-white rounded-2xl ring-1 ring-slate-900/5 shadow-sm overflow-hidden">
           <div className="p-5 border-b border-slate-100 bg-slate-50/50">
-            <h2 className="text-lg font-semibold text-slate-800 tracking-tight">Thống Kê Bán Chéo Theo Cán Bộ</h2>
+            <h2 className="text-lg font-semibold text-slate-800 tracking-tight">Thống Kê Bán Hàng Theo Cán Bộ</h2>
+            <p className="text-xs text-slate-500 mt-1">Khoản vay và tiền gửi tính theo VNĐ, sản phẩm khác tính theo số lượng.</p>
           </div>
 
           {loading ? (
@@ -126,11 +185,17 @@ export default function ReportsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[800px]">
+              <table className="w-full text-left border-collapse min-w-[980px]">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="py-4 px-4 font-semibold text-slate-700 text-sm border-r border-slate-200 sticky left-0 bg-slate-50 z-10 w-64">
-                      Danh mục sản phẩm
+                    <th className="py-4 px-4 font-semibold text-slate-700 text-sm border-r border-slate-200 sticky left-0 bg-slate-50 z-10 w-44">
+                      Danh mục
+                    </th>
+                    <th className="py-4 px-4 font-semibold text-slate-700 text-sm border-r border-slate-200 sticky left-[176px] bg-slate-50 z-10 w-64">
+                      Nhóm bán hàng
+                    </th>
+                    <th className="py-4 px-4 font-semibold text-slate-700 text-sm text-center min-w-[80px] border-r border-slate-200">
+                      Đơn vị
                     </th>
                     {profiles.map((agent: any) => (
                       <th key={agent.id} className="py-4 px-4 font-semibold text-slate-700 text-sm text-center min-w-[140px]">
@@ -151,55 +216,40 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {products.map((product: any) => {
+                  {reportRows.map((row) => {
                     let rowTotal = 0
                     return (
-                      <tr key={product.id} className="border-b last:border-0 hover:bg-slate-50/50 transition-colors">
+                      <tr key={row.key} className="border-b last:border-0 hover:bg-slate-50/50 transition-colors">
                         <td className="py-4 px-4 text-sm font-medium text-slate-800 border-r border-slate-100 sticky left-0 bg-white shadow-[1px_0_0_0_#f1f5f9]">
-                          <div className="flex flex-col">
-                            <span>{product.name}</span>
-                            <span className="text-xs text-slate-400 font-normal">{product.type}</span>
-                          </div>
+                          {SOURCE_LABELS[row.sourceType] || row.sourceType}
+                        </td>
+                        <td className="py-4 px-4 text-sm font-medium text-slate-800 border-r border-slate-100 sticky left-[176px] bg-white shadow-[1px_0_0_0_#f1f5f9]">
+                          {row.label}
+                        </td>
+                        <td className="py-4 px-4 text-center text-xs font-semibold text-slate-500 bg-slate-50 border-r border-slate-100">
+                          {row.unit}
                         </td>
                         {profiles.map((agent: any) => {
-                          const count = getSalesCount(product.id, agent.id)
-                          rowTotal += count
+                          const value = getMetricValue(row, agent.id)
+                          rowTotal += value
                           return (
                             <td key={agent.id} className="py-4 px-4 text-center">
-                              <span className={count > 0 ? "inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 font-semibold" : "text-slate-300 font-medium"}>
-                                {count > 0 ? count : "-"}
+                              <span className={value > 0 ? "inline-flex items-center justify-center min-w-8 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold" : "text-slate-300 font-medium"}>
+                                {formatMetric(value)}
                               </span>
                             </td>
                           )
                         })}
                         <td className="py-4 px-4 text-center bg-slate-50/30">
-                          <span className="font-bold text-slate-800">{rowTotal}</span>
+                          <span className="font-bold text-slate-800">{formatMetric(rowTotal)}</span>
                         </td>
                       </tr>
                     )
                   })}
-                  {products.length === 0 && (
-                    <tr><td colSpan={profiles.length + 2} className="py-12 text-center text-slate-500">Chưa có sản phẩm nào.</td></tr>
+                  {reportRows.length === 0 && (
+                    <tr><td colSpan={profiles.length + 4} className="py-12 text-center text-slate-500">Chưa có dữ liệu bán hàng trong khoảng thời gian này.</td></tr>
                   )}
                 </tbody>
-                <tfoot className="bg-slate-50 border-t border-slate-200">
-                  <tr>
-                    <td className="py-4 px-4 font-bold text-slate-800 sticky left-0 bg-slate-50 text-right">
-                      Tổng tất cả:
-                    </td>
-                    {profiles.map((agent: any) => {
-                      const totalAgent = products.reduce((acc: number, p: any) => acc + getSalesCount(p.id, agent.id), 0)
-                      return (
-                        <td key={agent.id} className="py-4 px-4 text-center font-bold text-slate-800">
-                          {totalAgent}
-                        </td>
-                      )
-                    })}
-                    <td className="py-4 px-4 text-center font-bold text-emerald-600 text-lg">
-                      {products.reduce((acc: number, p: any) => acc + profiles.reduce((sum: number, a: any) => sum + getSalesCount(p.id, a.id), 0), 0)}
-                    </td>
-                  </tr>
-                </tfoot>
               </table>
             </div>
           )}

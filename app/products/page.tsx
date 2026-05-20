@@ -5,6 +5,7 @@ import { Plus, Search, Target, TrendingUp, PackageSearch, PenSquare, Trash2, Loa
 import { useAuthStore } from "@/store/useAuthStore"
 import { Suspense, useState, useEffect, useCallback, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
+import Link from "next/link"
 import clsx from "clsx"
 import { fetchProducts, fetchProductSales, createProduct, deleteProduct, formatCurrency, fetchCustomers, createProductSale, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
@@ -179,9 +180,14 @@ function ProductsPageContent() {
     : products
 
   const getSalesCount = (productId: string) => sales.filter((s: any) => s.product_id === productId).length
+  const getCreateSaleHref = (productId: string) => {
+    const params = new URLSearchParams({ create: '1', type: 'PRODUCT', productId })
+    if (customerIdParam) params.set('customerId', customerIdParam)
+    return `/sales?${params.toString()}`
+  }
 
   return (
-    <DashboardLayout title="Sản Phẩm Bán Chéo">
+    <DashboardLayout title="Danh Mục Sản Phẩm">
       <div className="flex flex-col gap-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="relative w-full md:w-96">
@@ -194,6 +200,10 @@ function ProductsPageContent() {
               <Plus className="w-4 h-4" /> Thêm Sản Phẩm
             </button>
           )}
+        </div>
+
+        <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl px-4 py-3 text-sm">
+          Giao dịch bán sản phẩm mới nên được ghi nhận tại <Link href={customerIdParam ? `/sales?customerId=${customerIdParam}` : '/sales'} className="font-semibold underline underline-offset-2">Bảng Bán Hàng</Link>. Trang này tiếp tục dùng để quản lý danh mục sản phẩm và theo dõi hiệu suất.
         </div>
 
         {loading ? (
@@ -241,17 +251,36 @@ function ProductsPageContent() {
                     <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4">
                       <div className={clsx("h-1.5 rounded-full transition-all duration-500", percent >= 100 ? "bg-emerald-500" : "bg-indigo-500")} style={{ width: `${percent}%` }} />
                     </div>
-                    <button 
-                      onClick={() => {
-                        setSelectedProduct(product)
-                        setSelectedCustomerId("")
-                        setCustomerSearch("")
-                        setShowSaleModal(true)
-                      }}
-                      className="w-full mt-2 py-2 flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors"
-                    >
-                      <ShoppingCart className="w-4 h-4" /> Bán Sản Phẩm
-                    </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                      <Link
+                        href={getCreateSaleHref(product.id)}
+                        className="py-2 flex items-center justify-center gap-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                      >
+                        <ShoppingCart className="w-4 h-4" /> Bảng Bán Hàng
+                      </Link>
+                      <button 
+                        onClick={() => {
+                          setSelectedProduct(product)
+                          if (customerIdParam) {
+                            const presetCustomer = customers.find(c => c.id === customerIdParam)
+                            if (presetCustomer) {
+                              setSelectedCustomerId(presetCustomer.id)
+                              setCustomerSearch(getCustomerFullName(presetCustomer))
+                            } else {
+                              setSelectedCustomerId("")
+                              setCustomerSearch("")
+                            }
+                          } else {
+                            setSelectedCustomerId("")
+                            setCustomerSearch("")
+                          }
+                          setShowSaleModal(true)
+                        }}
+                        className="py-2 flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors"
+                      >
+                        <ShoppingCart className="w-4 h-4" /> Ghi nhanh tại đây
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
@@ -472,7 +501,7 @@ function ProductsPageContent() {
           </FormField>
           
           <FormField label="Ngày bán">
-            <FormInput name="sale_date" type="datetime-local" defaultValue={new Date().toISOString().slice(0, 16)} />
+            <FormInput name="sale_date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
           </FormField>
           
           <FormField label="Ghi chú">

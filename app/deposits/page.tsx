@@ -6,6 +6,7 @@ import { Search, Plus, PiggyBank, TrendingUp, CalendarClock, Loader2, ChevronLef
 import { useAuthStore } from "@/store/useAuthStore"
 import { Suspense, useEffect, useState, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { fetchDeposits, createDeposit, fetchCustomers, formatCurrency, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
@@ -80,6 +81,9 @@ function DepositsPageContent() {
   const activeDeposits = deposits.filter((d: any) => d.status === 'ACTIVE')
   const totalAmount = activeDeposits.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0)
   const pendingDeposits = deposits.filter((d: any) => d.status === 'PENDING')
+  const createDepositHref = customerIdParam
+    ? `/sales?create=1&type=DEPOSIT&customerId=${customerIdParam}`
+    : '/sales?create=1&type=DEPOSIT'
 
   if (!mounted) return null
 
@@ -96,7 +100,6 @@ function DepositsPageContent() {
         customer_id: selectedCustomerId,
         account_number: form.get('account_number') as string || `DP${Date.now()}`,
         amount: Number(form.get('amount')),
-        interest_rate: Number(form.get('interest_rate')) || 0,
         start_date: form.get('start_date') as string,
         maturity_date: form.get('maturity_date') as string,
         deposit_type: form.get('deposit_type') as string || 'Tiết kiệm thường',
@@ -156,7 +159,7 @@ function DepositsPageContent() {
   }
 
   return (
-    <DashboardLayout title="Quản Lý Tiền Gửi">
+    <DashboardLayout title="Theo Dõi Tiền Gửi">
       <div className="flex flex-col gap-6">
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -184,9 +187,13 @@ function DepositsPageContent() {
             <input type="text" placeholder="Tìm kiếm theo số TK, khách hàng..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 w-full outline-none" />
           </div>
-          <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm">
-            <Plus className="w-4 h-4" /> Mở Sổ Mới
-          </button>
+          <Link href={createDepositHref} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm">
+            <Plus className="w-4 h-4" /> Ghi nhận tại Bảng Bán Hàng
+          </Link>
+        </div>
+
+        <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl px-4 py-3 text-sm">
+          Giao dịch huy động mới nên được ghi nhận tại <Link href={createDepositHref} className="font-semibold underline underline-offset-2">Bảng Bán Hàng</Link>. Trang này tiếp tục dùng để theo dõi danh sách sổ và tình trạng hiện tại.
         </div>
 
         {/* Table */}
@@ -203,9 +210,7 @@ function DepositsPageContent() {
                       <th className="py-3 px-4 font-semibold">Khách Hàng</th>
                       <th className="py-3 px-4 font-semibold">Loại</th>
                       <th className="py-3 px-4 font-semibold">Số Tiền</th>
-                      <th className="py-3 px-4 font-semibold">Lãi Suất</th>
-                      <th className="py-3 px-4 font-semibold">Ngày Gửi</th>
-                      <th className="py-3 px-4 font-semibold">Ngày Đáo Hạn</th>
+                      <th className="py-3 px-4 font-semibold">Ngày Giao Dịch</th>
                       <th className="py-3 px-4 font-semibold">Trạng Thái</th>
                     </tr>
                   </thead>
@@ -218,15 +223,16 @@ function DepositsPageContent() {
                           <td className="py-3 px-4 text-sm font-medium text-slate-800">{deposit.customers ? getCustomerFullName(deposit.customers) : '—'}</td>
                           <td className="py-3 px-4 text-sm text-slate-600">{deposit.deposit_type || '—'}</td>
                           <td className="py-3 px-4 text-sm font-medium text-emerald-700">{formatCurrency(Number(deposit.amount))}</td>
-                          <td className="py-3 px-4 text-sm text-slate-600">{deposit.interest_rate}%/năm</td>
-                          <td className="py-3 px-4 text-sm text-slate-600">{new Date(deposit.start_date).toLocaleDateString('vi-VN')}</td>
-                          <td className="py-3 px-4 text-sm text-slate-600">{new Date(deposit.maturity_date).toLocaleDateString('vi-VN')}</td>
+                          <td className="py-3 px-4 text-sm text-slate-600">
+                            <div>{new Date(deposit.start_date).toLocaleDateString('vi-VN')}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">Đáo hạn: {new Date(deposit.maturity_date).toLocaleDateString('vi-VN')}</div>
+                          </td>
                           <td className="py-3 px-4"><span className={clsx("px-2.5 py-1 rounded-full text-xs font-medium", status.color)}>{status.label}</span></td>
                         </tr>
                       )
                     })}
                     {filteredDeposits.length === 0 && (
-                      <tr><td colSpan={8} className="py-12 text-center text-slate-500">Chưa có khoản gửi nào.</td></tr>
+                      <tr><td colSpan={6} className="py-12 text-center text-slate-500">Chưa có khoản gửi nào. Hãy ghi nhận giao dịch mới từ Bảng Bán Hàng.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -319,17 +325,15 @@ function DepositsPageContent() {
             <FormField label="Số tiền gửi (VNĐ)" required>
               <FormInput name="amount" type="number" required placeholder="100000000" />
             </FormField>
-            <FormField label="Lãi suất (%/năm)">
-              <FormInput name="interest_rate" type="number" step="0.1" placeholder="5.5" />
-            </FormField>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
             <FormField label="Ngày gửi" required>
               <FormInput name="start_date" type="date" required defaultValue={new Date().toISOString().split('T')[0]} />
             </FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <FormField label="Ngày đáo hạn" required>
               <FormInput name="maturity_date" type="date" required />
             </FormField>
+            <div></div>
           </div>
           <SubmitButton loading={formLoading}>Mở Sổ Tiền Gửi</SubmitButton>
         </form>

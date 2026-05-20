@@ -352,10 +352,10 @@ function InteractionsPageContent() {
           </FormField>
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Ngày tương tác">
-              <FormInput name="interaction_date" type="datetime-local" defaultValue={new Date().toISOString().slice(0, 16)} />
+              <FormInput name="interaction_date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
             </FormField>
             <FormField label="Ngày hẹn lại">
-              <FormInput name="follow_up_date" type="datetime-local" />
+              <FormInput name="follow_up_date" type="date" />
             </FormField>
           </div>
           <FormField label="Ghi chú">

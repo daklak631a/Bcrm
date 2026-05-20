@@ -2,10 +2,11 @@
 
 import clsx from "clsx"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
-import { Search, Plus, MoreHorizontal, ArrowUpRight, CheckCircle2, Clock, Loader2, ChevronLeft, ChevronRight, Check, Building2, User, X } from "lucide-react"
+import { Search, Plus, ArrowUpRight, CheckCircle2, Clock, Loader2, ChevronLeft, ChevronRight, Check, Building2, User, X } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { Suspense, useEffect, useState, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { fetchLoans, createLoan, fetchCustomers, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
@@ -119,6 +120,9 @@ function LoansPageContent() {
   const activeLoans = loans.filter((l: any) => l.status === 'ACTIVE')
   const pendingLoans = loans.filter((l: any) => l.status === 'PENDING')
   const totalBalance = activeLoans.reduce((sum: number, l: any) => sum + Number(l.balance || 0), 0)
+  const createLoanHref = customerIdParam
+    ? `/sales?create=1&type=LOAN&customerId=${customerIdParam}`
+    : '/sales?create=1&type=LOAN'
 
   if (!mounted) return null
 
@@ -143,7 +147,6 @@ function LoansPageContent() {
         account_number: form.get('account_number') as string || `LN${Date.now()}`,
         loan_amount: Number(form.get('loan_amount')),
         balance: Number(form.get('loan_amount')),
-        interest_rate: Number(form.get('interest_rate')) || 0,
         start_date: form.get('start_date') as string,
         due_date: form.get('due_date') as string,
         loan_type: loanType,
@@ -212,7 +215,7 @@ function LoansPageContent() {
   }
 
   return (
-    <DashboardLayout title="Quản Lý Khoản Vay">
+    <DashboardLayout title="Theo Dõi Khoản Vay">
       <div className="flex flex-col gap-6">
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -246,9 +249,13 @@ function LoansPageContent() {
             <input type="text" placeholder="Tìm kiếm theo số HĐ, khách hàng..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 w-full outline-none" />
           </div>
-          <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm">
-            <Plus className="w-4 h-4" /> Tạo Khoản Vay
-          </button>
+          <Link href={createLoanHref} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm">
+            <Plus className="w-4 h-4" /> Ghi nhận tại Bảng Bán Hàng
+          </Link>
+        </div>
+
+        <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl px-4 py-3 text-sm">
+          Giao dịch bán mới nên được ghi nhận tại <Link href={createLoanHref} className="font-semibold underline underline-offset-2">Bảng Bán Hàng</Link>. Trang này tiếp tục dùng để theo dõi danh sách khoản vay và trạng thái xử lý.
         </div>
 
         {/* Table */}
@@ -269,8 +276,7 @@ function LoansPageContent() {
                       <th className="py-3 px-4 font-semibold">Loại Vay</th>
                       <th className="py-3 px-4 font-semibold">Số Tiền Vay</th>
                       <th className="py-3 px-4 font-semibold">Dư Nợ</th>
-                      <th className="py-3 px-4 font-semibold">Lãi Suất</th>
-                      <th className="py-3 px-4 font-semibold">Ngày Vay</th>
+                      <th className="py-3 px-4 font-semibold">Ngày Giao Dịch</th>
                       <th className="py-3 px-4 font-semibold">Trạng Thái</th>
                     </tr>
                   </thead>
@@ -307,14 +313,16 @@ function LoansPageContent() {
                             )}
                           </td>
                           <td className="py-3 px-4 text-sm text-slate-600">
-                            <div>{loan.interest_rate}%/năm</div>
+                            <div>{new Date(loan.start_date).toLocaleDateString('vi-VN')}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5 font-normal">
+                              Đáo hạn: {new Date(loan.due_date).toLocaleDateString('vi-VN')}
+                            </div>
                             {loan.collateral_assets && (
                               <div className="text-[11px] text-amber-600 mt-0.5 font-normal" title={loan.collateral_assets}>
                                 TSĐB: {loan.collateral_assets.length > 20 ? `${loan.collateral_assets.slice(0, 20)}...` : loan.collateral_assets}
                               </div>
                             )}
                           </td>
-                          <td className="py-3 px-4 text-sm text-slate-600">{new Date(loan.start_date).toLocaleDateString('vi-VN')}</td>
                           <td className="py-3 px-4">
                             <span className={clsx("px-2.5 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1", status.color)}>
                               {status.icon} {status.label}
@@ -324,7 +332,7 @@ function LoansPageContent() {
                       )
                     })}
                     {filteredLoans.length === 0 && (
-                      <tr><td colSpan={8} className="py-12 text-center text-slate-500">Chưa có khoản vay nào. Bấm &quot;Tạo Khoản Vay&quot; để bắt đầu.</td></tr>
+                      <tr><td colSpan={7} className="py-12 text-center text-slate-500">Chưa có khoản vay nào. Hãy ghi nhận giao dịch mới từ Bảng Bán Hàng.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -587,18 +595,16 @@ function LoansPageContent() {
             <FormField label="Số tiền vay (VNĐ)" required>
               <FormInput name="loan_amount" type="number" required placeholder="500000000" />
             </FormField>
-            <FormField label="Lãi suất (%/năm)">
-              <FormInput name="interest_rate" type="number" step="0.1" placeholder="7.5" />
+            <FormField label="Ngày giải ngân" required>
+              <FormInput name="start_date" type="date" required defaultValue={new Date().toISOString().split('T')[0]} />
             </FormField>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
-            <FormField label="Ngày giải ngân" required>
-              <FormInput name="start_date" type="date" required defaultValue={new Date().toISOString().split('T')[0]} />
-            </FormField>
             <FormField label="Ngày đáo hạn" required>
               <FormInput name="due_date" type="date" required />
             </FormField>
+            <div></div>
           </div>
           
           <SubmitButton loading={formLoading}>Tạo Khoản Vay</SubmitButton>

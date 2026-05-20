@@ -109,6 +109,7 @@ export interface Loan {
   id: string;
   customer_id: string;
   account_number: string;
+  loan_type?: string | null;
   loan_amount: number;
   balance: number;
   start_date: string;
@@ -130,6 +131,7 @@ export interface Deposit {
   id: string;
   customer_id: string;
   account_number: string;
+  deposit_type?: string | null;
   amount: number;
   start_date: string;
   maturity_date: string;
@@ -163,4 +165,28 @@ export interface Notification {
   is_read: boolean;
   link_url: string | null;
   created_at: string;
+}
+
+export type SaleRecordType = 'LOAN' | 'DEPOSIT' | 'PRODUCT';
+
+export interface SalesRecord {
+  id: string;
+  source_id: string;
+  source_type: SaleRecordType;
+  customer_id: string | null;
+  customer_name: string;
+  agent_id: string | null;
+  sale_date: string;
+  status: string;
+  title: string;
+  category: string;
+  amount: number;
+  quantity: number;
+  note?: string | null;
+  account_number?: string | null;
+  product_id?: string | null;
+  source_href?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  raw?: any;
 }

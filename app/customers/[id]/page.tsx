@@ -2,8 +2,8 @@
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useState, useEffect, useCallback, use } from "react"
-import { fetchCustomerById, fetchLoansByCustomer, fetchDepositsByCustomer, fetchInteractionsByCustomer, fetchProductSalesByCustomer, getCustomerFullName, formatCurrency, updateCustomer } from "@/lib/supabase/api"
-import { ArrowLeft, Edit, Save, X, Phone, Mail, MapPin, User as UserIcon, Calendar, FileText, Briefcase, CreditCard, ShoppingCart, Loader2, Plus, ArrowRight } from "lucide-react"
+import { fetchCustomerById, fetchInteractionsByCustomer, fetchSalesRecordsByCustomer, getCustomerFullName, formatCurrency, updateCustomer } from "@/lib/supabase/api"
+import { ArrowLeft, Edit, Save, X, Phone, Mail, MapPin, Calendar, FileText, Briefcase, CreditCard, ShoppingCart, Loader2, ArrowRight } from "lucide-react"
 import Link from "next/link"
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,10 +16,8 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const [saving, setSaving] = useState(false)
   
   const [customer, setCustomer] = useState<any>(null)
-  const [loans, setLoans] = useState<any[]>([])
-  const [deposits, setDeposits] = useState<any[]>([])
+  const [salesRecords, setSalesRecords] = useState<any[]>([])
   const [interactions, setInteractions] = useState<any[]>([])
-  const [productSales, setProductSales] = useState<any[]>([])
   
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<any>({})
@@ -27,19 +25,15 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [cust, lns, deps, ints, sales] = await Promise.all([
+      const [cust, sales, ints] = await Promise.all([
         fetchCustomerById(customerId),
-        fetchLoansByCustomer(customerId),
-        fetchDepositsByCustomer(customerId),
-        fetchInteractionsByCustomer(customerId),
-        fetchProductSalesByCustomer(customerId)
+        fetchSalesRecordsByCustomer(customerId),
+        fetchInteractionsByCustomer(customerId)
       ])
       setCustomer(cust)
       setEditForm(cust)
-      setLoans(lns)
-      setDeposits(deps)
+      setSalesRecords(sales)
       setInteractions(ints)
-      setProductSales(sales)
     } catch (err) {
       console.error('Error loading customer details:', err)
     } finally {
@@ -102,6 +96,21 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         return <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium">{status || 'N/A'}</span>
     }
   }
+
+  const getSaleMeta = (sourceType: string) => {
+    switch (sourceType) {
+      case 'LOAN':
+        return { label: 'Khoản vay', icon: Briefcase, badge: 'bg-indigo-100 text-indigo-700', iconWrap: 'bg-indigo-50 text-indigo-600' }
+      case 'DEPOSIT':
+        return { label: 'Tiền gửi', icon: CreditCard, badge: 'bg-emerald-100 text-emerald-700', iconWrap: 'bg-emerald-50 text-emerald-600' }
+      default:
+        return { label: 'Sản phẩm', icon: ShoppingCart, badge: 'bg-amber-100 text-amber-700', iconWrap: 'bg-amber-50 text-amber-600' }
+    }
+  }
+
+  const loanSalesCount = salesRecords.filter(record => record.source_type === 'LOAN').length
+  const depositSalesCount = salesRecords.filter(record => record.source_type === 'DEPOSIT').length
+  const productSalesCount = salesRecords.filter(record => record.source_type === 'PRODUCT').length
 
   return (
     <DashboardLayout title={loading ? "Đang tải..." : `Chi tiết: ${getCustomerFullName(customer)}`}>
@@ -293,21 +302,21 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2">
                     <Briefcase className="w-4 h-4" />
                   </div>
-                  <p className="text-xl font-bold text-slate-800">{loans.length}</p>
+                  <p className="text-xl font-bold text-slate-800">{loanSalesCount}</p>
                   <p className="text-xs font-medium text-slate-500">Khoản vay</p>
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col items-center">
                   <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center mb-2">
                     <CreditCard className="w-4 h-4" />
                   </div>
-                  <p className="text-xl font-bold text-slate-800">{deposits.length}</p>
+                  <p className="text-xl font-bold text-slate-800">{depositSalesCount}</p>
                   <p className="text-xs font-medium text-slate-500">Tiền gửi</p>
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col items-center">
                   <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center mb-2">
                     <ShoppingCart className="w-4 h-4" />
                   </div>
-                  <p className="text-xl font-bold text-slate-800">{productSales.length}</p>
+                  <p className="text-xl font-bold text-slate-800">{productSalesCount}</p>
                   <p className="text-xs font-medium text-slate-500">SP Dịch vụ</p>
                 </div>
               </div>
@@ -317,103 +326,57 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             {/* Right Column: Related Data */}
             <div className="lg:col-span-2 flex flex-col gap-6">
               
-              {/* Loans Section */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                  <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <Briefcase className="w-5 h-5 text-indigo-500" />
-                    Khoản Vay
-                  </h3>
-                  <Link href={`/loans?customerId=${customerId}`} className="text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-                    Xem tất cả <ArrowRight className="w-4 h-4" />
-                  </Link>
-                </div>
-                <div className="p-0">
-                  {loans.length === 0 ? (
-                    <div className="py-8 text-center text-slate-500 text-sm">Chưa có khoản vay nào.</div>
-                  ) : (
-                    <div className="divide-y divide-slate-100">
-                      {loans.slice(0, 5).map(loan => (
-                        <div key={loan.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                          <div>
-                            <p className="font-semibold text-slate-800">Số TK: {loan.account_number}</p>
-                            <p className="text-sm text-slate-500">{loan.loan_type || 'Vay tiêu dùng'} • Đáo hạn: {new Date(loan.due_date).toLocaleDateString('vi-VN')}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-slate-800">{formatCurrency(loan.balance)}</p>
-                            <div className="mt-1">{getStatusBadge(loan.status)}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Deposits Section */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                  <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-teal-500" />
-                    Tiền Gửi
-                  </h3>
-                  <Link href={`/deposits?customerId=${customerId}`} className="text-sm font-medium text-teal-600 hover:text-teal-700 flex items-center gap-1">
-                    Xem tất cả <ArrowRight className="w-4 h-4" />
-                  </Link>
-                </div>
-                <div className="p-0">
-                  {deposits.length === 0 ? (
-                    <div className="py-8 text-center text-slate-500 text-sm">Chưa có khoản tiền gửi nào.</div>
-                  ) : (
-                    <div className="divide-y divide-slate-100">
-                      {deposits.slice(0, 5).map(deposit => (
-                        <div key={deposit.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                          <div>
-                            <p className="font-semibold text-slate-800">Số TK: {deposit.account_number}</p>
-                            <p className="text-sm text-slate-500">{deposit.deposit_type || 'Tiết kiệm thường'} • Lãi suất: {deposit.interest_rate}%</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-slate-800">{formatCurrency(deposit.amount)}</p>
-                            <div className="mt-1">{getStatusBadge(deposit.status)}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Cross-Sell Products Section */}
+              {/* Sales Section */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                 <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                   <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                     <ShoppingCart className="w-5 h-5 text-amber-500" />
-                    Sản Phẩm Dịch Vụ (Bán Chéo)
+                    Bán Hàng
                   </h3>
-                  <Link href={`/products`} className="text-sm font-medium text-amber-600 hover:text-amber-700 flex items-center gap-1">
-                    Xem sản phẩm <ArrowRight className="w-4 h-4" />
+                  <Link href={`/sales?customerId=${customerId}`} className="text-sm font-medium text-amber-600 hover:text-amber-700 flex items-center gap-1">
+                    Xem tất cả <ArrowRight className="w-4 h-4" />
                   </Link>
                 </div>
                 <div className="p-0">
-                  {productSales.length === 0 ? (
-                    <div className="py-8 text-center text-slate-500 text-sm">Chưa có sản phẩm dịch vụ nào.</div>
+                  {salesRecords.length === 0 ? (
+                    <div className="py-8 text-center text-slate-500 text-sm">Chưa có giao dịch bán hàng nào.</div>
                   ) : (
                     <div className="divide-y divide-slate-100">
-                      {productSales.slice(0, 5).map(sale => (
-                        <div key={sale.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                          <div>
-                            <p className="font-semibold text-slate-800">{sale.cross_sell_products?.name || 'Sản phẩm'}</p>
-                            <p className="text-sm text-slate-500">Phân loại: {sale.cross_sell_products?.type || 'Khác'}</p>
-                            {sale.note && <p className="text-xs text-slate-400 mt-1 line-clamp-1">{sale.note}</p>}
+                      {salesRecords.slice(0, 8).map(sale => {
+                        const saleMeta = getSaleMeta(sale.source_type)
+                        const SaleIcon = saleMeta.icon
+                        return (
+                          <div key={sale.id} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
+                            <div className="flex items-start gap-3 min-w-0">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${saleMeta.iconWrap}`}>
+                                <SaleIcon className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="font-semibold text-slate-800">{sale.title || saleMeta.label}</p>
+                                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${saleMeta.badge}`}>
+                                    {saleMeta.label}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-slate-500 mt-0.5">
+                                  {sale.category}
+                                  {sale.account_number ? ` • Số TK: ${sale.account_number}` : ''}
+                                </p>
+                                {sale.note && <p className="text-xs text-slate-400 mt-1 line-clamp-1">{sale.note}</p>}
+                              </div>
+                            </div>
+                            <div className="text-right flex flex-col items-end gap-1 shrink-0">
+                              {sale.source_type !== 'PRODUCT' && (
+                                <p className="font-bold text-slate-800">{formatCurrency(Number(sale.amount || 0))}</p>
+                              )}
+                              <div className="mt-1">{getStatusBadge(sale.status)}</div>
+                              <p className="text-xs text-slate-500 mt-1">
+                                {new Date(sale.sale_date).toLocaleDateString('vi-VN')}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-right flex flex-col items-end gap-1">
-                            <div className="mt-1">{getStatusBadge(sale.status)}</div>
-                            <p className="text-xs text-slate-500 mt-1">
-                              {new Date(sale.sale_date).toLocaleDateString('vi-VN')}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>

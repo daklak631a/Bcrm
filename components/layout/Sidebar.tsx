@@ -4,11 +4,10 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   Users,
-  CreditCard,
-  PiggyBank,
   PieChart,
   MessageSquare,
   Package,
+  ShoppingCart,
   Target,
   X
 } from "lucide-react"
@@ -25,10 +24,9 @@ export function Sidebar({ onClose }: SidebarProps) {
 
   const links = [
     { href: "/dashboard", label: "Tổng Quan", icon: PieChart },
+    { href: "/sales", label: "Bảng Bán Hàng", icon: ShoppingCart },
     { href: "/customers", label: "Khách Hàng", icon: Users },
-    { href: "/loans", label: "Khoản Vay", icon: CreditCard },
-    { href: "/deposits", label: "Tiền Gửi", icon: PiggyBank },
-    { href: "/products", label: "Sản Phẩm Chéo", icon: Package },
+    { href: "/products", label: "Danh Mục Sản Phẩm", icon: Package },
     { href: "/reports", label: "Báo Cáo Tổng Hợp", icon: PieChart },
     { href: "/interactions", label: "Tương Tác", icon: MessageSquare },
   ]

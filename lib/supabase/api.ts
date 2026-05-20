@@ -1,5 +1,5 @@
 import { getSupabase } from './client'
-import { Customer, ManagerTransferRequest, Plan, PlanAssignment } from '@/types/models'
+import { Customer, ManagerTransferRequest, Plan, PlanAssignment, SalesRecord } from '@/types/models'
 
 // ==========================================
 // UTILITY HELPERS
@@ -15,6 +15,108 @@ export function getCustomerFullName(customer: any): string {
     return customer.business_name
   }
   return customer.full_name || '—'
+}
+
+function extractDateOnly(value?: string | null): string | undefined {
+  if (!value) return undefined
+  const matched = value.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (matched) return matched[1]
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return undefined
+  return parsed.toISOString().slice(0, 10)
+}
+
+function toSortableTimestamp(value?: string | null): number {
+  if (!value) return 0
+  const parsed = new Date(value)
+  if (!Number.isNaN(parsed.getTime())) return parsed.getTime()
+  const fallbackDate = extractDateOnly(value)
+  if (!fallbackDate) return 0
+  const fallbackParsed = new Date(fallbackDate)
+  return Number.isNaN(fallbackParsed.getTime()) ? 0 : fallbackParsed.getTime()
+}
+
+function getSalesSourceHref(_sourceType: SalesRecord['source_type'], customerId?: string | null) {
+  const basePath = '/sales'
+
+  return customerId ? `${basePath}?customerId=${customerId}` : basePath
+}
+
+function mapLoanToSalesRecord(loan: any): SalesRecord {
+  return {
+    id: `loan:${loan.id}`,
+    source_id: loan.id,
+    source_type: 'LOAN',
+    customer_id: loan.customer_id ?? loan.customers?.id ?? null,
+    customer_name: loan.customers ? getCustomerFullName(loan.customers) : '—',
+    agent_id: loan.customers?.assigned_manager_id || null,
+    sale_date: loan.start_date,
+    status: loan.status || 'ACTIVE',
+    title: loan.loan_type || 'Khoản vay',
+    category: 'Khoản vay',
+    amount: Number(loan.loan_amount || 0),
+    quantity: 1,
+    note: loan.disbursement_purpose || loan.business_sector || null,
+    account_number: loan.account_number || null,
+    source_href: getSalesSourceHref('LOAN', loan.customer_id ?? loan.customers?.id),
+    created_at: loan.created_at,
+    updated_at: loan.updated_at,
+    raw: loan,
+  }
+}
+
+function mapDepositToSalesRecord(deposit: any): SalesRecord {
+  return {
+    id: `deposit:${deposit.id}`,
+    source_id: deposit.id,
+    source_type: 'DEPOSIT',
+    customer_id: deposit.customer_id ?? deposit.customers?.id ?? null,
+    customer_name: deposit.customers ? getCustomerFullName(deposit.customers) : '—',
+    agent_id: deposit.customers?.assigned_manager_id || null,
+    sale_date: deposit.start_date,
+    status: deposit.status || 'ACTIVE',
+    title: deposit.deposit_type || 'Tiền gửi',
+    category: 'Tiền gửi',
+    amount: Number(deposit.amount || 0),
+    quantity: 1,
+    note: deposit.maturity_date ? `Đáo hạn: ${deposit.maturity_date}` : null,
+    account_number: deposit.account_number || null,
+    source_href: getSalesSourceHref('DEPOSIT', deposit.customer_id ?? deposit.customers?.id),
+    created_at: deposit.created_at,
+    updated_at: deposit.updated_at,
+    raw: deposit,
+  }
+}
+
+function mapProductSaleToSalesRecord(sale: any): SalesRecord {
+  return {
+    id: `product:${sale.id}`,
+    source_id: sale.id,
+    source_type: 'PRODUCT',
+    customer_id: sale.customer_id ?? sale.customers?.id ?? null,
+    customer_name: sale.customers ? getCustomerFullName(sale.customers) : '—',
+    agent_id: sale.agent_id || sale.profiles?.id || null,
+    sale_date: extractDateOnly(sale.sale_date) || sale.sale_date,
+    status: sale.status || 'PENDING',
+    title: sale.cross_sell_products?.name || 'Sản phẩm khác',
+    category: sale.cross_sell_products?.type || 'Sản phẩm',
+    amount: 0,
+    quantity: 1,
+    note: sale.note || null,
+    product_id: sale.product_id || sale.cross_sell_products?.id || null,
+    source_href: getSalesSourceHref('PRODUCT', sale.customer_id ?? sale.customers?.id),
+    created_at: sale.created_at,
+    updated_at: sale.updated_at,
+    raw: sale,
+  }
+}
+
+function sortSalesRecords(records: SalesRecord[]) {
+  return [...records].sort((a, b) => {
+    const bTime = toSortableTimestamp(b.sale_date || b.created_at)
+    const aTime = toSortableTimestamp(a.sale_date || a.created_at)
+    return bTime - aTime
+  })
 }
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'LOGIN' | 'LOGOUT'
@@ -393,7 +495,7 @@ export async function fetchLoans() {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('loans')
-    .select('*, customers(id, full_name)')
+    .select('*, customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id)')
     .order('created_at', { ascending: false })
   if (error) throw error
   return data || []
@@ -403,7 +505,7 @@ export async function fetchLoansByCustomer(customerId: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('loans')
-    .select('*')
+    .select('*, customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id)')
     .eq('customer_id', customerId)
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -416,7 +518,6 @@ export async function createLoan(loan: {
   loan_type?: string
   loan_amount: number
   balance: number
-  interest_rate?: number
   start_date: string
   due_date: string
   status?: string
@@ -428,9 +529,14 @@ export async function createLoan(loan: {
   term_type?: string
 }) {
   const supabase = getSupabase()
+  const payload = {
+    ...loan,
+    start_date: extractDateOnly(loan.start_date) || loan.start_date,
+    due_date: extractDateOnly(loan.due_date) || loan.due_date,
+  }
   const { data, error } = await supabase
     .from('loans')
-    .insert(loan)
+    .insert(payload)
     .select()
     .single()
   if (error) throw error
@@ -439,7 +545,7 @@ export async function createLoan(loan: {
     action: 'CREATE',
     entityType: 'LOAN',
     entityId: data.id,
-    afterValue: loan
+    afterValue: payload
   })
 
   return data
@@ -473,7 +579,7 @@ export async function fetchDeposits() {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('deposits')
-    .select('*, customers(id, full_name)')
+    .select('*, customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id)')
     .order('created_at', { ascending: false })
   if (error) throw error
   return data || []
@@ -483,7 +589,7 @@ export async function fetchDepositsByCustomer(customerId: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('deposits')
-    .select('*')
+    .select('*, customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id)')
     .eq('customer_id', customerId)
     .order('created_at', { ascending: false })
   if (error) throw error
@@ -495,16 +601,19 @@ export async function createDeposit(deposit: {
   account_number: string
   deposit_type?: string
   amount: number
-  interest_rate?: number
-  term_months?: number
   start_date: string
   maturity_date: string
   status?: string
 }) {
   const supabase = getSupabase()
+  const payload = {
+    ...deposit,
+    start_date: extractDateOnly(deposit.start_date) || deposit.start_date,
+    maturity_date: extractDateOnly(deposit.maturity_date) || deposit.maturity_date,
+  }
   const { data, error } = await supabase
     .from('deposits')
-    .insert(deposit)
+    .insert(payload)
     .select()
     .single()
   if (error) throw error
@@ -513,7 +622,7 @@ export async function createDeposit(deposit: {
     action: 'CREATE',
     entityType: 'DEPOSIT',
     entityId: data.id,
-    afterValue: deposit
+    afterValue: payload
   })
 
   return data
@@ -576,9 +685,14 @@ export async function createInteraction(interaction: {
   next_action?: string
 }) {
   const supabase = getSupabase()
+  const payload = {
+    ...interaction,
+    interaction_date: extractDateOnly(interaction.interaction_date) || undefined,
+    follow_up_date: extractDateOnly(interaction.follow_up_date) || undefined,
+  }
   const { data, error } = await supabase
     .from('interactions')
-    .insert(interaction)
+    .insert(payload)
     .select()
     .single()
   if (error) throw error
@@ -587,7 +701,7 @@ export async function createInteraction(interaction: {
     action: 'CREATE',
     entityType: 'INTERACTION',
     entityId: data.id,
-    afterValue: interaction
+    afterValue: payload
   })
 
   return data
@@ -712,7 +826,7 @@ export async function fetchProductSales() {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cross_sell_records')
-    .select('*, cross_sell_products(id, name, type), customers(id, full_name), profiles:agent_id(id, full_name)')
+    .select('*, cross_sell_products(id, name, type), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
@@ -722,7 +836,7 @@ export async function fetchProductSalesByCustomer(customerId: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cross_sell_records')
-    .select('*, cross_sell_products(id, name, type), profiles:agent_id(id, full_name)')
+    .select('*, cross_sell_products(id, name, type), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
     .eq('customer_id', customerId)
     .order('sale_date', { ascending: false })
   if (error) throw error
@@ -738,12 +852,22 @@ export async function createProductSale(sale: {
   note?: string
 }) {
   const supabase = getSupabase()
+  const payload = {
+    ...sale,
+    sale_date: extractDateOnly(sale.sale_date) || extractDateOnly(new Date().toISOString()) || new Date().toISOString().slice(0, 10),
+  }
   const { data, error } = await supabase
     .from('cross_sell_records')
-    .insert(sale)
+    .insert(payload)
     .select()
     .single()
   if (error) throw error
+  await logAudit({
+    action: 'CREATE',
+    entityType: 'CROSS_SALE',
+    entityId: data.id,
+    afterValue: payload,
+  })
   return data
 }
 
@@ -757,6 +881,107 @@ export async function updateProductSale(id: string, updates: Record<string, any>
     .single()
   if (error) throw error
   return data
+}
+
+export async function fetchSalesRecords() {
+  const [loans, deposits, productSales] = await Promise.all([
+    fetchLoans(),
+    fetchDeposits(),
+    fetchProductSales(),
+  ])
+
+  return sortSalesRecords([
+    ...loans.map(mapLoanToSalesRecord),
+    ...deposits.map(mapDepositToSalesRecord),
+    ...productSales.map(mapProductSaleToSalesRecord),
+  ])
+}
+
+export async function fetchSalesRecordsByCustomer(customerId: string) {
+  const [loans, deposits, productSales] = await Promise.all([
+    fetchLoansByCustomer(customerId),
+    fetchDepositsByCustomer(customerId),
+    fetchProductSalesByCustomer(customerId),
+  ])
+
+  return sortSalesRecords([
+    ...loans.map(mapLoanToSalesRecord),
+    ...deposits.map(mapDepositToSalesRecord),
+    ...productSales.map(mapProductSaleToSalesRecord),
+  ])
+}
+
+export async function createSalesRecord(record: {
+  source_type: SalesRecord['source_type']
+  customer_id: string
+  agent_id: string
+  title?: string
+  amount?: number
+  account_number?: string
+  sale_date?: string
+  due_date?: string
+  maturity_date?: string
+  status?: string
+  note?: string
+  product_id?: string
+  business_sector?: string
+  disbursement_purpose?: string
+  collateral_assets?: string
+  credit_limit?: number
+  loan_method?: string
+  term_type?: string
+}) {
+  if (record.source_type === 'LOAN') {
+    const normalizedSaleDate = extractDateOnly(record.sale_date) || new Date().toISOString().slice(0, 10)
+    const normalizedLoanTitle = (record.title || '').toLowerCase()
+    const inferredTermType = record.term_type || (
+      normalizedLoanTitle.includes('trung dài hạn') || normalizedLoanTitle.includes('trung/dài hạn') || normalizedLoanTitle.includes('đầu tư dự án')
+        ? 'MEDIUM_LONG_TERM'
+        : 'SHORT_TERM'
+    )
+    return createLoan({
+      customer_id: record.customer_id,
+      account_number: record.account_number || `LN${Date.now()}`,
+      loan_type: record.title || 'Khoản vay',
+      loan_amount: Number(record.amount || 0),
+      balance: Number(record.amount || 0),
+      start_date: normalizedSaleDate,
+      due_date: extractDateOnly(record.due_date) || normalizedSaleDate,
+      status: record.status || 'ACTIVE',
+      business_sector: record.business_sector,
+      disbursement_purpose: record.disbursement_purpose,
+      collateral_assets: record.collateral_assets,
+      credit_limit: record.credit_limit,
+      loan_method: record.loan_method,
+      term_type: inferredTermType,
+    })
+  }
+
+  if (record.source_type === 'DEPOSIT') {
+    const normalizedSaleDate = extractDateOnly(record.sale_date) || new Date().toISOString().slice(0, 10)
+    return createDeposit({
+      customer_id: record.customer_id,
+      account_number: record.account_number || `DP${Date.now()}`,
+      deposit_type: record.title || 'Tiền gửi',
+      amount: Number(record.amount || 0),
+      start_date: normalizedSaleDate,
+      maturity_date: extractDateOnly(record.maturity_date) || normalizedSaleDate,
+      status: record.status || 'ACTIVE',
+    })
+  }
+
+  if (!record.product_id) {
+    throw new Error('Vui lòng chọn sản phẩm')
+  }
+
+  return createProductSale({
+    product_id: record.product_id,
+    customer_id: record.customer_id,
+    agent_id: record.agent_id,
+    status: record.status || 'COMPLETED',
+    sale_date: extractDateOnly(record.sale_date) || new Date().toISOString().slice(0, 10),
+    note: record.note,
+  })
 }
 
 // ==========================================

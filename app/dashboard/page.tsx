@@ -5,33 +5,27 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { MessageSquare, Package, TrendingUp, Loader2 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useCallback } from "react"
-import Link from "next/link"
 import { KPISummaryTable } from "@/components/ui/kpi-summary-table"
-import { fetchCustomers, fetchLoans, fetchDeposits, fetchInteractions, fetchProductSales, fetchProfiles, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
+import { fetchCustomers, fetchInteractions, fetchProfiles, fetchSalesRecords, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [customers, setCustomers] = useState<any[]>([])
-  const [loans, setLoans] = useState<any[]>([])
-  const [deposits, setDeposits] = useState<any[]>([])
+  const [salesRecords, setSalesRecords] = useState<any[]>([])
   const [interactions, setInteractions] = useState<any[]>([])
-  const [productSales, setProductSales] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [c, l, d, i, ps, p] = await Promise.all([
-        fetchCustomers(), fetchLoans(), fetchDeposits(),
-        fetchInteractions(), fetchProductSales(), fetchProfiles()
+      const [c, sales, i, p] = await Promise.all([
+        fetchCustomers(), fetchSalesRecords(), fetchInteractions(), fetchProfiles()
       ])
       setCustomers(c)
-      setLoans(l)
-      setDeposits(d)
+      setSalesRecords(sales)
       setInteractions(i)
-      setProductSales(ps)
       setProfiles(p)
     } catch (err) {
       console.error('Dashboard load error:', err)
@@ -44,11 +38,22 @@ export default function DashboardPage() {
 
   if (!mounted) return null
 
-  const activeLoans = loans.filter((l: any) => l.status === 'ACTIVE')
-  const totalLoanBalance = activeLoans.reduce((sum: number, l: any) => sum + Number(l.balance || 0), 0)
-  const activeDeposits = deposits.filter((d: any) => d.status === 'ACTIVE')
-  const totalDepositAmount = activeDeposits.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0)
+  const activeLoans = salesRecords.filter((record: any) => record.source_type === 'LOAN' && record.status === 'ACTIVE')
+  const totalLoanBalance = activeLoans.reduce((sum: number, record: any) => sum + Number(record.amount || 0), 0)
+  const activeDeposits = salesRecords.filter((record: any) => record.source_type === 'DEPOSIT' && record.status === 'ACTIVE')
+  const totalDepositAmount = activeDeposits.reduce((sum: number, record: any) => sum + Number(record.amount || 0), 0)
   const pendingInteractions = interactions.filter((i: any) => i.result === 'PENDING')
+
+  const getSaleMeta = (sale: any) => {
+    switch (sale.source_type) {
+      case 'LOAN':
+        return { label: 'Khoản vay', color: 'bg-indigo-100 text-indigo-700' }
+      case 'DEPOSIT':
+        return { label: 'Tiền gửi', color: 'bg-emerald-100 text-emerald-700' }
+      default:
+        return { label: 'Sản phẩm', color: 'bg-amber-100 text-amber-700' }
+    }
+  }
 
   if (loading) {
     return (
@@ -100,6 +105,7 @@ export default function DashboardPage() {
             {profiles.map((agent: any) => {
               const agentCustomers = customers.filter((c: any) => c.assigned_manager_id === agent.id).length
               const agentInteractions = interactions.filter((i: any) => i.manager_id === agent.id).length
+              const agentSales = salesRecords.filter((sale: any) => sale.agent_id === agent.id).length
               return (
                 <div key={agent.id} className="p-4 border border-slate-100 rounded-xl bg-slate-50 flex items-start gap-4 hover:bg-slate-100/50 transition-colors">
                   <div className="w-11 h-11 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm shrink-0">
@@ -107,7 +113,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="font-medium text-slate-900 text-sm truncate">{agent.full_name}</p>
-                    <p className="text-xs text-slate-500 mt-1">{agentCustomers} KH • {agentInteractions} tương tác</p>
+                    <p className="text-xs text-slate-500 mt-1">{agentCustomers} KH • {agentInteractions} tương tác • {agentSales} bán hàng</p>
                   </div>
                 </div>
               )
@@ -168,36 +174,39 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent Cross-sell Sales */}
+      {/* Recent Sales */}
       <div className="mt-6 bg-white rounded-2xl ring-1 ring-slate-900/5 shadow-sm p-6 overflow-hidden">
         <h2 className="text-lg font-semibold text-slate-800 mb-4 tracking-tight flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-indigo-500" /> Kết Quả Bán Chéo Gần Đây
+          <TrendingUp className="w-5 h-5 text-indigo-500" /> Kết Quả Bán Hàng Gần Đây
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {productSales.slice(0, 8).map((sale: any) => (
-            <div key={sale.id} className="p-4 border border-slate-100 rounded-xl bg-slate-50 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-3 pt-4 opacity-10">
-                <Package className="w-12 h-12 text-indigo-500 transform group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300" />
+          {salesRecords.slice(0, 8).map((sale: any) => {
+            const meta = getSaleMeta(sale)
+            return (
+              <div key={sale.id} className="p-4 border border-slate-100 rounded-xl bg-slate-50 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-3 pt-4 opacity-10">
+                  <Package className="w-12 h-12 text-indigo-500 transform group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300" />
+                </div>
+                <div className="relative z-10">
+                  <span className={clsx(
+                    "text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full inline-block mb-2",
+                    meta.color
+                  )}>
+                    {meta.label}
+                  </span>
+                  <h4 className="font-medium text-slate-800 text-sm mb-1">{sale.title || '—'}</h4>
+                  <p className="text-xs text-slate-500 mb-2">KH: {sale.customer_name || '—'}</p>
+                  <p className="text-xs text-slate-500 mb-1">Trạng thái: {sale.status}</p>
+                  <p className="text-[11px] text-slate-400">{new Date(sale.sale_date).toLocaleDateString('vi-VN')}</p>
+                  {sale.source_type !== 'PRODUCT' && (
+                    <p className="text-xs font-semibold text-slate-700 mt-2">{formatCurrency(Number(sale.amount || 0))}</p>
+                  )}
+                </div>
               </div>
-              <div className="relative z-10">
-                <span className={clsx(
-                  "text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full inline-block mb-2",
-                  sale.status === 'COMPLETED' ? "bg-emerald-100 text-emerald-700" : 
-                  sale.status === 'INTERESTED' ? "bg-purple-100 text-purple-700" : 
-                  "bg-amber-100 text-amber-700"
-                )}>
-                  {sale.status === 'COMPLETED' ? 'Thành công' : 
-                   sale.status === 'INTERESTED' ? 'Quan tâm' : 
-                   'Đang xử lý'}
-                </span>
-                <h4 className="font-medium text-slate-800 text-sm mb-1">{sale.cross_sell_products?.name || '—'}</h4>
-                <p className="text-xs text-slate-500 mb-2">KH: {sale.customers ? getCustomerFullName(sale.customers) : '—'}</p>
-                <p className="text-[11px] text-slate-400">{new Date(sale.sale_date).toLocaleDateString('vi-VN')}</p>
-              </div>
-            </div>
-          ))}
-          {productSales.length === 0 && (
-            <div className="col-span-full py-8 text-center text-slate-500">Chưa có dữ liệu bán chéo.</div>
+            )
+          })}
+          {salesRecords.length === 0 && (
+            <div className="col-span-full py-8 text-center text-slate-500">Chưa có dữ liệu bán hàng.</div>
           )}
         </div>
       </div>
