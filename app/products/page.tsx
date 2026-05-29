@@ -8,7 +8,7 @@ import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import clsx from "clsx"
 import { formatMetricValue, getProductMetricDefinition, getProductMetricValue } from "@/lib/product-metrics"
-import { fetchProducts, fetchProductSales, createProduct, deleteProduct, fetchCustomers, createProductSale, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
+import { fetchProducts, fetchProductSales, createProduct, deleteProduct, fetchCustomers, createProductSale, getCustomerFullName, createCustomer, fetchPlans, fetchPlanAssignments } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 import { ProductMetricType } from "@/types/models"
@@ -25,6 +25,20 @@ function ProductsPageContent() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [customers, setCustomers] = useState<any[]>([])
+  const [planAssignments, setPlanAssignments] = useState<any[]>([])
+
+  const getProductTargetField = (productName: string): string | null => {
+    const name = productName.toUpperCase()
+    if (name.includes("CIF")) return "target_cif_moi"
+    if (name.includes("DIRECT")) return "target_bidv_direct"
+    if (name.includes("NHÂN THỌ")) return "target_bh_nhan_tho"
+    if (name.includes("KHOẢN VAY")) return "target_bh_khoan_vay"
+    if (name.includes("HUY ĐỘNG")) return "target_huy_dong_tang_rong"
+    if (name.includes("NGẮN HẠN")) return "target_du_no_ngan_han_tang_rong"
+    if (name.includes("TRUNG DÀI HẠN") || name.includes("TRUNG HẠN")) return "target_du_no_trung_han_tang_rong"
+    if (name.includes("HMTD")) return "target_cap_moi_hmtd"
+    return null
+  }
 
   // Sale Modal state
   const [showSaleModal, setShowSaleModal] = useState(false)
@@ -72,10 +86,25 @@ function ProductsPageContent() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [productsData, salesData, customersData] = await Promise.all([fetchProducts(), fetchProductSales(), fetchCustomers()])
+      const [productsData, salesData, customersData, plansData] = await Promise.all([
+        fetchProducts(),
+        fetchProductSales(),
+        fetchCustomers(),
+        fetchPlans()
+      ])
       setProducts(productsData)
       setSales(salesData)
       setCustomers(customersData)
+
+      if (plansData && plansData.length > 0) {
+        const latestPlan = plansData[0]
+        try {
+          const assignmentsData = await fetchPlanAssignments(latestPlan.id)
+          setPlanAssignments(assignmentsData)
+        } catch (assignErr) {
+          console.error("Error loading KPI assignments for products view:", assignErr)
+        }
+      }
     } catch (err: any) {
       toast.error('Lỗi tải dữ liệu: ' + err.message)
     } finally {
@@ -114,6 +143,30 @@ function ProductsPageContent() {
 
     return performanceMap
   }, [sales])
+
+  const getProductTarget = useCallback((product: any) => {
+    const targetField = getProductTargetField(product.name)
+    if (!targetField || planAssignments.length === 0) {
+      return Number(product.target || 0)
+    }
+
+    if (user?.role === "USER") {
+      const personalAssignment = planAssignments.find(a => a.user_id === user.id)
+      return personalAssignment ? Number(personalAssignment[targetField] || 0) : Number(product.target || 0)
+    }
+
+    if (user?.role === "ADMIN_LEVEL_2") {
+      const deptAssignments = planAssignments.filter(a => a.profiles?.department_id === user.department_id)
+      if (deptAssignments.length === 0) return Number(product.target || 0)
+      return deptAssignments.reduce((sum, a) => sum + Number(a[targetField] || 0), 0)
+    }
+
+    if (user?.role === "ADMIN_LEVEL_1") {
+      return planAssignments.reduce((sum, a) => sum + Number(a[targetField] || 0), 0)
+    }
+
+    return Number(product.target || 0)
+  }, [planAssignments, user])
 
   if (!mounted) return null
 
@@ -283,7 +336,8 @@ function ProductsPageContent() {
               const metricDefinition = getProductMetricDefinition(product)
               const performance = productPerformanceMap.get(product.id) || { metricValue: 0, completedCount: 0 }
               const currentMetricValue = performance.metricValue
-              const percent = product.target > 0 ? Math.min(Math.round((currentMetricValue / product.target) * 100), 100) : 0
+              const resolvedTarget = getProductTarget(product)
+              const percent = resolvedTarget > 0 ? Math.min(Math.round((currentMetricValue / resolvedTarget) * 100), 100) : 0
               return (
                 <div key={product.id} className="bg-white rounded-2xl ring-1 ring-slate-900/5 shadow-sm p-6 flex flex-col relative group">
                   {isAdmin && (
@@ -303,7 +357,7 @@ function ProductsPageContent() {
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                       <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><Target className="w-3 h-3" /> Mục tiêu</p>
-                      <p className="font-semibold text-slate-800">{formatMetricValue(Number(product.target || 0), metricDefinition.unitLabel)}</p>
+                      <p className="font-semibold text-slate-800">{formatMetricValue(resolvedTarget, metricDefinition.unitLabel)}</p>
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                       <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Kết quả</p>

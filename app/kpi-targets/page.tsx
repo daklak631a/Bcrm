@@ -488,13 +488,15 @@ export default function KpiTargetsPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => setShowCreatePlan(true)}
-                className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg transition-transform hover:-translate-y-0.5"
-              >
-                <Plus className="h-4 w-4" />
-                Tạo kỳ KPI
-              </button>
+              {user?.role === "ADMIN_LEVEL_1" && (
+                <button
+                  onClick={() => setShowCreatePlan(true)}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg transition-transform hover:-translate-y-0.5"
+                >
+                  <Plus className="h-4 w-4" />
+                  Tạo kỳ KPI
+                </button>
+              )}
               <button
                 onClick={handleSaveAll}
                 disabled={savingAll || dirtyUserIds.length === 0 || !selectedPlanId}
