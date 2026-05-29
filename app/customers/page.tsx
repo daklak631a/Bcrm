@@ -1,7 +1,7 @@
 "use client"
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
-import { Search, Plus, Filter, MoreHorizontal, Download, Upload, FileSpreadsheet, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { Search, Plus, Filter, MoreHorizontal, Download, Upload, FileSpreadsheet, ChevronLeft, ChevronRight, Loader2, ShoppingCart, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useRef, useMemo, useCallback } from "react"
@@ -468,9 +468,23 @@ export default function CustomersPage() {
                         </td>
                         <td className="py-3 px-4 text-sm text-slate-700">{customer.profiles?.full_name || '—'}</td>
                         <td className="py-3 px-4 text-right">
-                          <button className="inline-flex p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <Link
+                              href={`/sales?create=1&type=PRODUCT&customerId=${customer.id}`}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 border border-amber-200 rounded-md transition-all shadow-sm"
+                              title="Ghi nhận bán chéo sản phẩm"
+                            >
+                              <ShoppingCart className="w-3.5 h-3.5 text-amber-600" />
+                              <span>Bán SP</span>
+                            </Link>
+                            <Link
+                              href={`/customers/${customer.id}`}
+                              className="inline-flex p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors border border-slate-100 bg-white"
+                              title="Xem chi tiết hồ sơ"
+                            >
+                              <ArrowRight className="w-4 h-4" />
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     ))}

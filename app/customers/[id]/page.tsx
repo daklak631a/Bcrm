@@ -3,7 +3,7 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useState, useEffect, useCallback, use } from "react"
 import { fetchCustomerById, fetchInteractionsByCustomer, fetchSalesRecordsByCustomer, getCustomerFullName, formatCurrency, updateCustomer } from "@/lib/supabase/api"
-import { ArrowLeft, Edit, Save, X, Phone, Mail, MapPin, Calendar, FileText, Briefcase, CreditCard, ShoppingCart, Loader2, ArrowRight } from "lucide-react"
+import { ArrowLeft, Edit, Save, X, Phone, Mail, MapPin, Calendar, FileText, Briefcase, CreditCard, ShoppingCart, Loader2, ArrowRight, Plus } from "lucide-react"
 import Link from "next/link"
 import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
 
@@ -334,9 +334,17 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     <ShoppingCart className="w-5 h-5 text-amber-500" />
                     Bán Hàng
                   </h3>
-                  <Link href={`/sales?customerId=${customerId}`} className="text-sm font-medium text-amber-600 hover:text-amber-700 flex items-center gap-1">
-                    Xem tất cả <ArrowRight className="w-4 h-4" />
-                  </Link>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Link
+                      href={`/sales?create=1&type=PRODUCT&customerId=${customerId}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors text-xs font-semibold shadow-sm"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Bán SP chéo
+                    </Link>
+                    <Link href={`/sales?customerId=${customerId}`} className="text-sm font-medium text-amber-600 hover:text-amber-700 flex items-center gap-1">
+                      Xem tất cả <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </div>
                 </div>
                 <div className="p-0">
                   {salesRecords.length === 0 ? (

@@ -3,12 +3,12 @@
 import clsx from "clsx"
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Briefcase, Filter, Loader2, Package, PiggyBank, Plus, Search } from "lucide-react"
+import { Briefcase, Filter, Loader2, Package, PiggyBank, Plus, Search, TrendingUp, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { formatMetricValue, getProductMetricDefinition, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
-import { createSalesRecord, fetchCustomers, fetchProducts, fetchSalesRecords, fetchSalesRecordsByCustomer, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
+import { createSalesRecord, fetchCustomers, fetchProducts, fetchSalesRecords, fetchSalesRecordsByCustomer, formatCurrency, getCustomerFullName, updateProductSale } from "@/lib/supabase/api"
 import { useAuthStore } from "@/store/useAuthStore"
 import { SalesRecord } from "@/types/models"
 
@@ -57,6 +57,69 @@ function SalesPageContent() {
   const [customerSearch, setCustomerSearch] = useState("")
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
   const [routePresetApplied, setRoutePresetApplied] = useState(false)
+  const [showBatchModal, setShowBatchModal] = useState(false)
+  const [batchLoading, setBatchLoading] = useState(false)
+  const [batchEdits, setBatchEdits] = useState<Record<string, { result_value: number; status: string; note: string }>>({})
+
+  const recentProductSales = useMemo(() => {
+    return records.filter((record) => {
+      if (record.source_type !== "PRODUCT" || record.agent_id !== user?.id) return false
+      // Filter: created in last 7 days OR status is not COMPLETED
+      const recordDate = new Date(record.sale_date)
+      const today = new Date()
+      const diffTime = Math.abs(today.getTime() - recordDate.getTime())
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      return diffDays <= 7 || record.status !== "COMPLETED"
+    })
+  }, [records, user])
+
+  const handleOpenBatchModal = () => {
+    if (recentProductSales.length === 0) {
+      toast.info("Không có giao dịch bán chéo sản phẩm nào chưa hoàn thành hoặc mới tạo trong 7 ngày gần đây để cập nhật.")
+      return
+    }
+    const edits: Record<string, { result_value: number; status: string; note: string }> = {}
+    recentProductSales.forEach((record) => {
+      edits[record.source_id] = {
+        result_value: getRecordMetricValue(record),
+        status: record.status || "PENDING",
+        note: record.note || "",
+      }
+    })
+    setBatchEdits(edits)
+    setShowBatchModal(true)
+  }
+
+  const handleSaveBatchEdits = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      setBatchLoading(true)
+      const updatePromises = Object.entries(batchEdits).map(async ([sourceId, edit]) => {
+        const original = recentProductSales.find((r) => r.source_id === sourceId)
+        if (original) {
+          const origVal = getRecordMetricValue(original)
+          const origStatus = original.status || "PENDING"
+          const origNote = original.note || ""
+          if (origVal === edit.result_value && origStatus === edit.status && origNote === edit.note) {
+            return // No change
+          }
+        }
+        return updateProductSale(sourceId, {
+          result_value: edit.result_value,
+          status: edit.status,
+          note: edit.note || null,
+        })
+      })
+      await Promise.all(updatePromises)
+      toast.success("Cập nhật hàng loạt thành công!")
+      setShowBatchModal(false)
+      loadData()
+    } catch (err: any) {
+      toast.error("Lỗi cập nhật hàng loạt: " + err.message)
+    } finally {
+      setBatchLoading(false)
+    }
+  }
 
   const presetSaleType = useMemo(() => {
     const normalized = typeParam?.toUpperCase()
@@ -308,12 +371,21 @@ function SalesPageContent() {
               </select>
             </div>
           </div>
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm"
-          >
-            <Plus className="w-4 h-4" /> Ghi nhận bán hàng
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleOpenBatchModal}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors text-sm font-medium shadow-sm"
+              title="Cập nhật nhanh kết quả cho các giao dịch bán chéo sản phẩm"
+            >
+              <TrendingUp className="w-4 h-4" /> Cập nhật cuối ngày
+            </button>
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm"
+            >
+              <Plus className="w-4 h-4" /> Ghi nhận bán hàng
+            </button>
+          </div>
         </div>
 
         <div className="bg-white rounded-xl ring-1 ring-slate-900/5 shadow-sm overflow-hidden">
@@ -525,6 +597,114 @@ function SalesPageContent() {
           </FormField>
 
           <SubmitButton loading={formLoading}>Lưu giao dịch</SubmitButton>
+        </form>
+      </Modal>
+
+      {/* Batch Edit Modal */}
+      <Modal isOpen={showBatchModal} onClose={() => setShowBatchModal(false)} title="Cập nhật nhanh kết quả bán chéo" maxWidth="max-w-4xl">
+        <form onSubmit={handleSaveBatchEdits} className="space-y-4">
+          <p className="text-xs text-slate-500">
+            Hiển thị danh sách các giao dịch bán chéo sản phẩm chưa hoàn thành hoặc mới tạo trong vòng 7 ngày gần đây của bạn. Hãy điền kết quả thực tế cuối ngày và chuyển trạng thái thành <strong>&quot;Thành công&quot;</strong>.
+          </p>
+          <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[50vh] overflow-y-auto">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                <tr className="text-slate-600 font-medium">
+                  <th className="py-2.5 px-3">Khách hàng</th>
+                  <th className="py-2.5 px-3">Sản phẩm</th>
+                  <th className="py-2.5 px-3">Ngày bán</th>
+                  <th className="py-2.5 px-3 w-40">Kết quả</th>
+                  <th className="py-2.5 px-3 w-44">Trạng thái</th>
+                  <th className="py-2.5 px-3">Ghi chú</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {recentProductSales.map((record) => {
+                  const edit = batchEdits[record.source_id] || { result_value: 0, status: "PENDING", note: "" }
+                  const unitLabel = getRecordUnitLabel(record)
+                  return (
+                    <tr key={record.id} className="hover:bg-slate-50/50">
+                      <td className="py-2 px-3 font-medium text-slate-800">{record.customer_name}</td>
+                      <td className="py-2 px-3 text-slate-600">
+                        <div className="font-semibold text-slate-800">{record.title}</div>
+                        <div className="text-[10px] text-slate-400">{record.category}</div>
+                      </td>
+                      <td className="py-2 px-3 text-xs text-slate-500">
+                        {new Date(record.sale_date).toLocaleDateString("vi-VN")}
+                      </td>
+                      <td className="py-2 px-3">
+                        <div className="relative flex items-center">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={edit.result_value}
+                            onChange={(e) => {
+                              const val = Number(e.target.value) || 0
+                              setBatchEdits({
+                                ...batchEdits,
+                                [record.source_id]: { ...edit, result_value: val },
+                              })
+                            }}
+                            className="w-full pr-14 pl-2 py-1 border border-slate-200 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none text-right font-mono"
+                          />
+                          <span className="absolute right-1 text-[10px] font-semibold text-slate-500 bg-slate-50 px-1 py-0.5 rounded border border-slate-100 pointer-events-none truncate max-w-[50px]" title={unitLabel}>
+                            {unitLabel}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-2 px-3">
+                        <select
+                          value={edit.status}
+                          onChange={(e) => {
+                            setBatchEdits({
+                              ...batchEdits,
+                              [record.source_id]: { ...edit, status: e.target.value },
+                            })
+                          }}
+                          className="w-full px-2 py-1 border border-slate-200 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none"
+                        >
+                          <option value="PENDING">Đang xử lý</option>
+                          <option value="INTERESTED">Quan tâm</option>
+                          <option value="COMPLETED">Thành công</option>
+                        </select>
+                      </td>
+                      <td className="py-2 px-3">
+                        <input
+                          type="text"
+                          value={edit.note}
+                          onChange={(e) => {
+                            setBatchEdits({
+                              ...batchEdits,
+                              [record.source_id]: { ...edit, note: e.target.value },
+                            })
+                          }}
+                          placeholder="Ghi chú thêm..."
+                          className="w-full px-2 py-1 border border-slate-200 rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none text-xs"
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowBatchModal(false)}
+              className="px-4 py-2 border border-slate-200 rounded-md hover:bg-slate-50 transition-colors text-sm font-medium"
+            >
+              Hủy bỏ
+            </button>
+            <button
+              type="submit"
+              disabled={batchLoading}
+              className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors text-sm font-semibold shadow-sm disabled:opacity-75"
+            >
+              {batchLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Lưu tất cả"}
+            </button>
+          </div>
         </form>
       </Modal>
     </DashboardLayout>
