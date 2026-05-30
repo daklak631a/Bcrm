@@ -293,6 +293,9 @@ function SalesPageContent() {
   }
 
   const getStatusLabel = (record: SalesRecord) => {
+    if (record.source_type === "PRODUCT" && record.raw?.is_batch_entry === true && !record.raw?.is_allocated) {
+      return "Chưa phân bổ theo KH"
+    }
     switch (record.status) {
       case "ACTIVE":
         return "Đang hoạt động"

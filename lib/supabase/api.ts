@@ -103,12 +103,17 @@ function mapProductSaleToSalesRecord(sale: any): SalesRecord {
     unit_label: metricDefinition.unitLabel,
   }, sale.cross_sell_products || sale)
 
+  const isUnallocatedBatch = sale.is_batch_entry === true && !sale.is_allocated
+  const customerName = isUnallocatedBatch
+    ? 'Nhập lô cuối ngày'
+    : (sale.customers ? getCustomerFullName(sale.customers) : '—')
+
   return {
     id: `product:${sale.id}`,
     source_id: sale.id,
     source_type: 'PRODUCT',
     customer_id: sale.customer_id ?? sale.customers?.id ?? null,
-    customer_name: sale.customers ? getCustomerFullName(sale.customers) : '—',
+    customer_name: customerName,
     agent_id: sale.agent_id || sale.profiles?.id || null,
     sale_date: extractDateOnly(sale.sale_date) || sale.sale_date,
     status: sale.status || 'PENDING',
@@ -119,7 +124,7 @@ function mapProductSaleToSalesRecord(sale: any): SalesRecord {
     metric_value: metricValue,
     unit_label: metricDefinition.unitLabel,
     metric_type: metricDefinition.metricType,
-    note: sale.note || null,
+    note: isUnallocatedBatch ? 'Chưa phân bổ theo KH' : (sale.note || null),
     product_id: sale.product_id || sale.cross_sell_products?.id || null,
     source_href: getSalesSourceHref('PRODUCT', sale.customer_id ?? sale.customers?.id),
     created_at: sale.created_at,
@@ -846,7 +851,6 @@ export async function fetchProductSales() {
   const { data, error } = await supabase
     .from('cross_sell_records')
     .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
-    .or('is_batch_entry.eq.false,is_allocated.eq.true')
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
@@ -858,7 +862,6 @@ export async function fetchProductSalesByAgentId(agentId: string) {
     .from('cross_sell_records')
     .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
     .eq('agent_id', agentId)
-    .or('is_batch_entry.eq.false,is_allocated.eq.true')
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
@@ -871,7 +874,6 @@ export async function fetchProductSalesByAgentIds(agentIds: string[]) {
     .from('cross_sell_records')
     .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
     .in('agent_id', agentIds)
-    .or('is_batch_entry.eq.false,is_allocated.eq.true')
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
@@ -883,7 +885,6 @@ export async function fetchProductSalesByCustomer(customerId: string) {
     .from('cross_sell_records')
     .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
     .eq('customer_id', customerId)
-    .or('is_batch_entry.eq.false,is_allocated.eq.true')
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
