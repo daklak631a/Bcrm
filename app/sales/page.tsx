@@ -614,7 +614,7 @@ function SalesPageContent() {
                 </FormSelect>
               </FormField>
               {selectedProduct && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField label={`Kết quả (${selectedProductMetric.unitLabel})`} required>
                     <FormInput name="result_value" type="number" step="0.01" min="0" required placeholder={selectedProductMetric.metricType === "AMOUNT" ? "50" : "1"} defaultValue={selectedProductMetric.metricType === "QUANTITY" ? "1" : undefined} />
                   </FormField>
@@ -633,7 +633,7 @@ function SalesPageContent() {
                   ))}
                 </FormSelect>
               </FormField>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Số tiền" required>
                   <FormInput name="amount" type="number" required placeholder="100000000" />
                 </FormField>
@@ -641,7 +641,7 @@ function SalesPageContent() {
                   <FormInput name="account_number" placeholder="Để trống sẽ tự sinh" />
                 </FormField>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {saleType === "LOAN" ? (
                   <FormField label="Ngày đáo hạn (Tùy chọn)">
                     <FormInput name="due_date" type="date" />
@@ -656,7 +656,7 @@ function SalesPageContent() {
             </>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Ngày giao dịch" required>
               <FormInput name="sale_date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} />
             </FormField>

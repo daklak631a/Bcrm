@@ -67,19 +67,18 @@ export function Sidebar({ onClose }: SidebarProps) {
   return (
     <aside className="w-full h-full bg-gradient-to-b from-[#003836] via-[#002b29] to-[#001716] flex-shrink-0 flex flex-col text-slate-300">
       <div className="p-4 border-b border-[#004744]/70 flex items-center justify-between">
-        <div className="flex items-center gap-2.5 text-white">
-          {logoUrl ? (
+        <div className="flex items-center gap-2.5 text-white min-w-0 flex-1 mr-2">
+          {logoUrl && (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={logoUrl} alt="Logo" className="max-h-9 object-contain" />
-          ) : (
-            <div className="flex flex-col">
-              <span className="font-bold text-lg text-[#33b7ab]">{appName}</span>
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Business Portal</span>
-            </div>
+            <img src={logoUrl} alt="Logo" className="max-h-9 w-auto object-contain shrink-0" />
           )}
+          <div className="flex flex-col min-w-0">
+            <span className="font-bold text-base text-[#33b7ab] truncate">{appName}</span>
+            <span className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Business Portal</span>
+          </div>
         </div>
         {onClose && (
-          <button onClick={onClose} className="md:hidden p-1 text-slate-400 hover:text-white transition-colors">
+          <button onClick={onClose} className="md:hidden p-1 text-slate-400 hover:text-white transition-colors shrink-0">
             <X className="w-6 h-6" />
           </button>
         )}

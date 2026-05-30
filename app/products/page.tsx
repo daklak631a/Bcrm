@@ -460,7 +460,7 @@ function ProductsPageContent() {
               <option value="Dịch vụ khác">Dịch vụ khác</option>
             </FormSelect>
           </FormField>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Kiểu kết quả" required>
               <FormSelect value={newProductMetricType} onChange={(e) => {
                 setProductMetricTouched(true)
@@ -664,7 +664,7 @@ function ProductsPageContent() {
           </div>
 
           {selectedProduct && (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField label={`Kết quả (${selectedProductMetric.unitLabel})`} required>
                 <FormInput name="result_value" type="number" step="0.01" min="0" required placeholder={selectedProductMetric.metricType === 'AMOUNT' ? '50' : '1'} defaultValue={selectedProductMetric.metricType === 'QUANTITY' ? '1' : undefined} />
               </FormField>
