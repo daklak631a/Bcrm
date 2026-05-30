@@ -365,6 +365,29 @@ export default function KpiTargetsPage() {
     }
   }
 
+  // Auto distribute monthly target to weekly target (Divide by 4)
+  const handleAutoDistributeMonthToWeek = () => {
+    const myAssignment = assignments.find(a => a.user_id === user?.id)
+    if (!myAssignment) {
+      toast.error("Bạn chưa được giao chỉ tiêu tháng cho kỳ này!")
+      return
+    }
+
+    const nextWeek = { ...weeklyDraft }
+    ALL_ASSIGNMENT_FIELDS.forEach((field) => {
+      const val = Number(myAssignment[field.key as keyof PlanAssignment] || 0)
+      const isInteger = ["target_calls", "target_cif_moi", "target_bidv_direct", "target_cap_moi_hmtd"].includes(field.key)
+      if (isInteger) {
+        nextWeek[field.key] = Math.round(val / 4)
+      } else {
+        nextWeek[field.key] = parseFloat((val / 4).toFixed(2))
+      }
+    })
+
+    setWeeklyDraft(nextWeek)
+    toast.success("Đã tự động phân bổ chỉ tiêu Tháng (chia 4) cho Tuần này!")
+  }
+
   // Auto distribute weekly target to 5 working days (Monday - Friday)
   const handleAutoDistribute = () => {
     const nextDailies = { ...dailyDrafts }
@@ -846,10 +869,19 @@ export default function KpiTargetsPage() {
             <div className="flex flex-col gap-3 pt-3 border-t">
               <button
                 type="button"
+                onClick={handleAutoDistributeMonthToWeek}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-[#006b68] hover:bg-[#005451] text-white rounded-xl font-bold text-sm transition-all shadow-sm"
+              >
+                <Sparkles className="w-4 h-4 text-emerald-300" />
+                <span>Tự động lấy & phân bổ Tháng ➔ Tuần</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleAutoDistribute}
                 className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-teal-50 hover:bg-teal-100/80 text-[#006b68] rounded-xl font-bold text-sm transition-all border border-teal-200/50"
               >
-                <Sparkles className="w-4 h-4" />
+                <Layers3 className="w-4 h-4" />
                 <span>Tự động phân bổ tuần xuống ngày</span>
               </button>
             </div>

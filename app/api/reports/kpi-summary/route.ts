@@ -26,10 +26,13 @@ export async function GET(request: Request) {
 
     switch (period) {
       case 'day':
-        startDate = dayjs().subtract(1, 'day').format('YYYY-MM-DD')
+        startDate = dayjs().format('YYYY-MM-DD')
         break
       case 'week':
-        startDate = dayjs().subtract(7, 'day').format('YYYY-MM-DD')
+        // Lấy ngày Thứ Hai của tuần hiện tại (khớp tuyệt đối với logic Front-end)
+        const dayOfWeek = dayjs().day()
+        const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+        startDate = dayjs().add(diff, 'day').format('YYYY-MM-DD')
         break
       case 'month':
         startDate = dayjs().startOf('month').format('YYYY-MM-DD')
