@@ -2,6 +2,7 @@
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useState, useEffect, useCallback, useMemo } from "react"
+import Link from "next/link"
 import { Calendar, Download, Loader2, Users, Building2, User, Target, TrendingUp, CalendarDays, Sparkles, CheckCircle2 } from "lucide-react"
 import { getSupabase } from "@/lib/supabase/client"
 import { useAuthStore } from "@/store/useAuthStore"
@@ -276,7 +277,7 @@ export default function ReportsPage() {
         l.customer_id && 
         customers.some(c => c.id === l.customer_id && targetUserIds.includes(c.assigned_manager_id))
       )
-      return filteredLoans.reduce((sum, l) => sum + Number(l.amount || 0), 0)
+      return filteredLoans.reduce((sum, l) => sum + Number(l.loan_amount ?? l.amount ?? 0), 0)
     }
 
     // 2. Deposits amount

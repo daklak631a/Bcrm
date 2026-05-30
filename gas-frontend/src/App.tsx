@@ -1,15 +1,28 @@
 import { useEffect, useState } from 'react'
 import { gas } from './lib/gas'
 
+interface AppUser {
+  email: string
+  name: string
+  role: string
+}
+
+interface AppData {
+  user?: AppUser
+  customers?: unknown[]
+  accounts?: unknown[]
+  interactions?: unknown[]
+}
+
 function App() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     // Fetch user and initial data from GAS backend
-    gas.call('getAppData')
-      .then((res: any) => {
+    gas.call<AppData>('getAppData')
+      .then((res) => {
         setData(res);
         setLoading(false);
       })

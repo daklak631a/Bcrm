@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Search, Menu, LogOut, X, Check, Loader2 } from "lucide-react"
+import { Bell, Menu, LogOut, Check, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
@@ -10,9 +10,16 @@ import { getSupabase } from "@/lib/supabase/client"
 interface HeaderProps {
   title?: string;
   onMenuClick?: () => void;
+  isDesktopSidebarOpen?: boolean;
+  onDesktopSidebarToggle?: () => void;
 }
 
-export function Header({ title = "Trang Tổng Quan CRM", onMenuClick }: HeaderProps) {
+export function Header({
+  title = "Trang Tổng Quan CRM",
+  onMenuClick,
+  isDesktopSidebarOpen = true,
+  onDesktopSidebarToggle,
+}: HeaderProps) {
   const { user, logout } = useAuthStore()
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
@@ -109,10 +116,19 @@ export function Header({ title = "Trang Tổng Quan CRM", onMenuClick }: HeaderP
   }
 
   return (
-    <header className="h-16 bg-white border-b flex items-center justify-between px-4 md:px-6 flex-shrink-0">
+    <header className="relative z-30 h-16 bg-white border-b flex items-center justify-between px-4 md:px-6 flex-shrink-0">
       <div className="flex items-center gap-3 overflow-hidden">
         <button onClick={onMenuClick} className="md:hidden text-slate-500 hover:text-slate-700 focus:outline-none shrink-0">
           <Menu className="w-6 h-6" />
+        </button>
+        <button
+          onClick={onDesktopSidebarToggle}
+          className="hidden md:inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+          title={isDesktopSidebarOpen ? "Ẩn thanh điều hướng" : "Hiện thanh điều hướng"}
+          aria-label={isDesktopSidebarOpen ? "Ẩn thanh điều hướng" : "Hiện thanh điều hướng"}
+          aria-pressed={!isDesktopSidebarOpen}
+        >
+          {isDesktopSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
         </button>
         <span className="text-lg md:text-xl font-semibold text-slate-800 truncate">{title}</span>
       </div>
@@ -133,7 +149,7 @@ export function Header({ title = "Trang Tổng Quan CRM", onMenuClick }: HeaderP
 
           {/* Notification Dropdown */}
           {showNotifications && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+            <div className="fixed left-3 right-3 top-20 z-[80] max-h-[calc(100vh-6rem)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/20 sm:left-auto sm:right-4 sm:w-80 md:absolute md:left-auto md:right-0 md:top-full md:mt-2">
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
                 <h3 className="text-sm font-semibold text-slate-800">Thông báo</h3>
                 {unreadCount > 0 && (
@@ -142,7 +158,7 @@ export function Header({ title = "Trang Tổng Quan CRM", onMenuClick }: HeaderP
                   </button>
                 )}
               </div>
-              <div className="max-h-80 overflow-y-auto">
+              <div className="max-h-[calc(100vh-10rem)] overflow-y-auto md:max-h-80">
                 {notifLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="w-5 h-5 animate-spin text-slate-400" />

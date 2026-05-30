@@ -40,6 +40,7 @@ function DashboardLayoutShell({
 
 export function DashboardLayout({ children, title }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true)
   const { user, isLoading } = useAuthStore()
   const [mounted, setMounted] = useState(false)
 
@@ -67,7 +68,8 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
 
       {/* Sidebar */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-[#002b29] transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 w-64 bg-[#002b29] transform transition-all duration-200 ease-in-out md:relative md:translate-x-0",
+        isDesktopSidebarOpen ? "md:w-64" : "md:w-0 md:overflow-hidden",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <Sidebar onClose={() => setIsSidebarOpen(false)} />
@@ -75,7 +77,12 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden w-full">
-        <Header title={title} onMenuClick={() => setIsSidebarOpen(true)} />
+        <Header
+          title={title}
+          onMenuClick={() => setIsSidebarOpen(true)}
+          isDesktopSidebarOpen={isDesktopSidebarOpen}
+          onDesktopSidebarToggle={() => setIsDesktopSidebarOpen((open) => !open)}
+        />
         <div className="flex-1 overflow-auto p-4 md:p-6">
           {children}
         </div>

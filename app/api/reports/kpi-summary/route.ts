@@ -2,6 +2,17 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import dayjs from 'dayjs'
 
+const TARGET_FIELDS = [
+  'target_cif_moi',
+  'target_bidv_direct',
+  'target_bh_nhan_tho',
+  'target_bh_khoan_vay',
+  'target_huy_dong_tang_rong',
+  'target_du_no_ngan_han_tang_rong',
+  'target_du_no_trung_han_tang_rong',
+  'target_cap_moi_hmtd',
+] as const
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -38,7 +49,10 @@ export async function GET(request: Request) {
         startDate = dayjs().startOf('month').format('YYYY-MM-DD')
         break
       case 'quarter':
-        startDate = dayjs().subtract(3, 'month').format('YYYY-MM-DD')
+        startDate = dayjs()
+          .month(Math.floor(dayjs().month() / 3) * 3)
+          .startOf('month')
+          .format('YYYY-MM-DD')
         break
       case 'year':
         startDate = dayjs().startOf('year').format('YYYY-MM-DD')
@@ -59,25 +73,42 @@ export async function GET(request: Request) {
     }
 
     // Fetch targets based on period
-    let targetsData: any[] = []
+    let targetsByUser = new Map<string, Record<string, number>>()
+
+    const addTarget = (target: any) => {
+      if (!target?.user_id) return
+      const current = targetsByUser.get(target.user_id) || {}
+      TARGET_FIELDS.forEach((field) => {
+        current[field] = Number(current[field] || 0) + Number(target[field] || 0)
+      })
+      targetsByUser.set(target.user_id, current)
+    }
     
     if (period === 'day') {
       const { data: dData } = await supabase.from('daily_plans').select('*').eq('target_date', startDate)
-      targetsData = dData || []
+      dData?.forEach(addTarget)
     } else if (period === 'week') {
       const { data: wData } = await supabase.from('weekly_plans').select('*').eq('start_date', startDate)
-      targetsData = wData || []
-    } else if (period === 'month') {
-      const { data: plansData } = await supabase.from('plans').select('id, target_date')
-      const plan = plansData?.find(p => p.target_date.startsWith(startDate.slice(0, 7)))
-      if (plan) {
-        const { data: mData } = await supabase.from('plan_assignments').select('*').eq('plan_id', plan.id)
-        targetsData = mData || []
+      wData?.forEach(addTarget)
+    } else {
+      const { data: plansData } = await supabase
+        .from('plans')
+        .select('id, target_date')
+        .gte('target_date', startDate)
+        .lte('target_date', endDate)
+
+      const planIds = plansData?.map((plan) => plan.id) || []
+      if (planIds.length > 0) {
+        const { data: mData } = await supabase
+          .from('plan_assignments')
+          .select('*')
+          .in('plan_id', planIds)
+        mData?.forEach(addTarget)
       }
     }
 
     const mergedData = data?.map((row: any) => {
-      const target = targetsData.find(t => t.user_id === row.manager_id)
+      const target = targetsByUser.get(row.manager_id)
       return {
         ...row,
         target_cif_moi: target?.target_cif_moi || 0,

@@ -25,9 +25,9 @@ const METRICS = [
   { id: 'bidv_direct', label: 'BIDV DIRECT', unit: 'KH' },
   { id: 'bh_nhan_tho', label: 'BẢO HIỂM NHÂN THỌ', unit: 'Triệu đồng' },
   { id: 'bh_khoan_vay', label: 'BẢO HIỂM KHOẢN VAY', unit: 'Triệu đồng' },
-  { id: 'huy_dong_tang_rong', label: 'HUY ĐỘNG VỐN TĂNG RÒNG', unit: 'VNĐ' },
-  { id: 'du_no_ngan_han_tang_rong', label: 'DƯ NỢ NGẮN HẠN TĂNG RÒNG', unit: 'VNĐ' },
-  { id: 'du_no_trung_han_tang_rong', label: 'DƯ NỢ TRUNG/DÀI HẠN TĂNG RÒNG', unit: 'VNĐ' },
+  { id: 'huy_dong_tang_rong', label: 'HUY ĐỘNG VỐN TĂNG RÒNG', unit: 'Tỷ đồng', scale: 1_000_000_000 },
+  { id: 'du_no_ngan_han_tang_rong', label: 'DƯ NỢ NGẮN HẠN TĂNG RÒNG', unit: 'Tỷ đồng', scale: 1_000_000_000 },
+  { id: 'du_no_trung_han_tang_rong', label: 'DƯ NỢ TRUNG/DÀI HẠN TĂNG RÒNG', unit: 'Tỷ đồng', scale: 1_000_000_000 },
   { id: 'cap_moi_hmtd', label: 'CẤP MỚI HMTD (SL KH)', unit: 'KH' },
 ]
 
@@ -127,16 +127,12 @@ export function KPISummaryTable() {
                       const targetKey = `target_${metric.id}`;
                       const target = user[targetKey as keyof typeof user] as number | undefined;
 
-                      const isCurrency = ['huy_dong_tang_rong', 'du_no_ngan_han_tang_rong', 'du_no_trung_han_tang_rong'].includes(metric.id);
-                      
                       const formatCell = (val: number | undefined) => {
                         if (!val) return val === 0 ? '-' : '0';
-                        if (isCurrency) {
-                          const absVal = Math.abs(val)
-                          if (absVal >= 1000000000) return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(val / 1000000000) + ' Tỷ'
-                          if (absVal >= 1000000) return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(val / 1000000) + ' Triệu'
-                        }
-                        return new Intl.NumberFormat('vi-VN').format(val);
+                        const displayValue = metric.scale ? val / metric.scale : val;
+                        return new Intl.NumberFormat('vi-VN', {
+                          maximumFractionDigits: metric.scale ? 2 : 0,
+                        }).format(displayValue);
                       }
 
                       const formattedValue = formatCell(value);
