@@ -53,8 +53,8 @@ const EMPTY_PLAN_FORM: CreatePlanForm = {
 }
 
 const CORE_FIELDS: Array<{ key: keyof AssignmentDraft; label: string; unit: string; step?: string }> = [
-  { key: "target_loans_amount", label: "Chỉ tiêu vay", unit: "VNĐ", step: "0.01" },
-  { key: "target_deposits_amount", label: "Chỉ tiêu gửi", unit: "VNĐ", step: "0.01" },
+  { key: "target_loans_amount", label: "Chỉ tiêu vay", unit: "VNĐ", step: "1000000" },
+  { key: "target_deposits_amount", label: "Chỉ tiêu gửi", unit: "VNĐ", step: "1000000" },
   { key: "target_calls", label: "Chỉ tiêu gọi", unit: "Cuộc", step: "1" },
 ]
 
@@ -67,9 +67,9 @@ const PRODUCT_FIELDS: Array<{ key: keyof AssignmentDraft; label: string; unit: s
 ]
 
 const GROWTH_FIELDS: Array<{ key: keyof AssignmentDraft; label: string; unit: string; step?: string }> = [
-  { key: "target_huy_dong_tang_rong", label: "Huy động tăng ròng", unit: "VNĐ", step: "0.01" },
-  { key: "target_du_no_ngan_han_tang_rong", label: "Dư nợ ngắn hạn tăng ròng", unit: "VNĐ", step: "0.01" },
-  { key: "target_du_no_trung_han_tang_rong", label: "Dư nợ trung dài hạn tăng ròng", unit: "VNĐ", step: "0.01" },
+  { key: "target_huy_dong_tang_rong", label: "Huy động tăng ròng", unit: "VNĐ", step: "1000000" },
+  { key: "target_du_no_ngan_han_tang_rong", label: "Dư nợ ngắn hạn tăng ròng", unit: "VNĐ", step: "1000000" },
+  { key: "target_du_no_trung_han_tang_rong", label: "Dư nợ trung dài hạn tăng ròng", unit: "VNĐ", step: "1000000" },
 ]
 
 const ALL_ASSIGNMENT_FIELDS: Array<{ key: keyof AssignmentDraft; label: string; unit: string; step?: string }> = [...CORE_FIELDS, ...PRODUCT_FIELDS, ...GROWTH_FIELDS]
@@ -132,8 +132,25 @@ function formatPlanDate(value?: string) {
   return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value))
 }
 
-function formatCompact(value: number) {
-  return new Intl.NumberFormat("vi-VN").format(value || 0)
+function formatCompact(value: number, fieldKey?: string) {
+  if (!value) return "0"
+  
+  const isCurrency = fieldKey && [
+    'target_loans_amount', 'target_deposits_amount', 
+    'target_huy_dong_tang_rong', 'target_du_no_ngan_han_tang_rong', 'target_du_no_trung_han_tang_rong'
+  ].includes(fieldKey)
+
+  if (isCurrency) {
+    const absVal = Math.abs(value)
+    if (absVal >= 1000000000) {
+      return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value / 1000000000) + ' Tỷ'
+    }
+    if (absVal >= 1000000) {
+      return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value / 1000000) + ' Triệu'
+    }
+  }
+
+  return new Intl.NumberFormat("vi-VN").format(value)
 }
 
 function countConfiguredTargets(draft?: AssignmentDraft) {
@@ -795,8 +812,8 @@ export default function KpiTargetsPage() {
                 <div key={field.key} className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200 transition-all shadow-sm">
                   <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">{field.label}</p>
                   <div className="flex items-baseline justify-between mt-2">
-                    <p className="text-lg font-bold text-slate-800">{formatCompact(actualVal)} <span className="text-xs font-normal text-slate-500">{field.unit}</span></p>
-                    <p className="text-xs text-slate-400 font-semibold">Chỉ tiêu: {formatCompact(targetVal)}</p>
+                    <p className="text-lg font-bold text-slate-800">{formatCompact(actualVal, field.key)} <span className="text-xs font-normal text-slate-500">{field.unit}</span></p>
+                    <p className="text-xs text-slate-400 font-semibold">Chỉ tiêu: {formatCompact(targetVal, field.key)}</p>
                   </div>
                   {pct !== null && (
                     <div className="mt-3">
@@ -1285,7 +1302,7 @@ export default function KpiTargetsPage() {
                                 step={field.step || "1"}
                                 value={draft[field.key]}
                                 onChange={(event) => handleDraftChange(profile.id, field.key, Number(event.target.value) || 0)}
-                                aria-label={`${profile.full_name} - ${field.label}`}
+                                title={`${formatCompact(Number(draft[field.key] || 0))} - ${field.label}`}
                                 className="h-8 w-full border-0 bg-transparent p-0 text-sm font-semibold text-slate-900 outline-none focus:ring-0"
                               />
                               <div className="mt-1 text-[10px] uppercase tracking-wide text-slate-400">{field.unit}</div>

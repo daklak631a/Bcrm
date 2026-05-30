@@ -58,7 +58,40 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ data, startDate, endDate })
+    // Fetch targets based on period
+    let targetsData: any[] = []
+    
+    if (period === 'day') {
+      const { data: dData } = await supabase.from('daily_plans').select('*').eq('target_date', startDate)
+      targetsData = dData || []
+    } else if (period === 'week') {
+      const { data: wData } = await supabase.from('weekly_plans').select('*').eq('start_date', startDate)
+      targetsData = wData || []
+    } else if (period === 'month') {
+      const { data: plansData } = await supabase.from('plans').select('id, target_date')
+      const plan = plansData?.find(p => p.target_date.startsWith(startDate.slice(0, 7)))
+      if (plan) {
+        const { data: mData } = await supabase.from('plan_assignments').select('*').eq('plan_id', plan.id)
+        targetsData = mData || []
+      }
+    }
+
+    const mergedData = data?.map((row: any) => {
+      const target = targetsData.find(t => t.user_id === row.manager_id)
+      return {
+        ...row,
+        target_cif_moi: target?.target_cif_moi || 0,
+        target_bidv_direct: target?.target_bidv_direct || 0,
+        target_bh_nhan_tho: target?.target_bh_nhan_tho || 0,
+        target_bh_khoan_vay: target?.target_bh_khoan_vay || 0,
+        target_huy_dong_tang_rong: target?.target_huy_dong_tang_rong || 0,
+        target_du_no_ngan_han_tang_rong: target?.target_du_no_ngan_han_tang_rong || 0,
+        target_du_no_trung_han_tang_rong: target?.target_du_no_trung_han_tang_rong || 0,
+        target_cap_moi_hmtd: target?.target_cap_moi_hmtd || 0,
+      }
+    }) || []
+
+    return NextResponse.json({ data: mergedData, startDate, endDate })
   } catch (error: any) {
     console.error('API Error:', error)
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 })

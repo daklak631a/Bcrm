@@ -276,7 +276,7 @@ export default function ReportsPage() {
         l.customer_id && 
         customers.some(c => c.id === l.customer_id && targetUserIds.includes(c.assigned_manager_id))
       )
-      return filteredLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0)
+      return filteredLoans.reduce((sum, l) => sum + Number(l.amount || 0), 0)
     }
 
     // 2. Deposits amount
@@ -370,6 +370,16 @@ export default function ReportsPage() {
 
   const formatValue = (value: number, type: string) => {
     if (value === 0) return '-'
+    if (type === 'currency') {
+      const absVal = Math.abs(value)
+      if (absVal >= 1000000000) {
+        return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value / 1000000000) + ' Tỷ'
+      }
+      if (absVal >= 1000000) {
+        return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 }).format(value / 1000000) + ' Triệu'
+      }
+      return new Intl.NumberFormat('vi-VN').format(value)
+    }
     return new Intl.NumberFormat('vi-VN').format(value)
   }
 
@@ -483,6 +493,13 @@ export default function ReportsPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3 shrink-0">
+              <Link
+                href="/kpi-targets"
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-500/20 border border-emerald-400/30 px-4 py-3 text-sm font-bold text-white shadow-md transition-transform hover:-translate-y-0.5 hover:bg-emerald-500/30 backdrop-blur-md"
+              >
+                <Target className="h-4 w-4" />
+                Phân bổ chỉ tiêu
+              </Link>
               <button
                 onClick={handleExportExcel}
                 disabled={loading}
