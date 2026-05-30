@@ -5,6 +5,7 @@ import { getSupabase } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuthStore } from '@/store/useAuthStore'
+import Link from 'next/link'
 
 interface KPISummary {
   manager_id: string
@@ -65,9 +66,14 @@ export function KPISummaryTable() {
   return (
     <Card className="w-full overflow-hidden border-none shadow-md">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#006b68] to-[#33b7ab]">
-          ĐỘNG LỰC PHÒNG NGÀY
-        </CardTitle>
+        <Link href="/reports" className="group flex items-center gap-2">
+          <CardTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#006b68] to-[#33b7ab] group-hover:opacity-80 transition-all cursor-pointer flex items-center gap-2">
+            ĐỘNG LỰC PHÒNG NGÀY
+            <span className="text-xs font-bold text-teal-600 bg-teal-50 border border-teal-100 rounded-full px-2 py-0.5 opacity-0 group-hover:opacity-100 transition-all">
+              Xem chi tiết →
+            </span>
+          </CardTitle>
+        </Link>
         <Select value={period} onValueChange={(val) => val && setPeriod(val)}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Chọn kỳ báo cáo" />
