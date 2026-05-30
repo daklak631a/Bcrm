@@ -717,7 +717,7 @@ export default function ReportsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-left min-w-[1280px]">
+              <table className="w-full border-collapse text-left min-w-[1400px]">
                 <thead>
                   <tr className="border-b border-[#002625]">
                     <th rowSpan={2} className="sticky left-0 z-20 min-w-[240px] bg-[#002625] px-4 py-4 text-xs font-semibold uppercase tracking-wider text-white border-r border-[#001b1a]">
