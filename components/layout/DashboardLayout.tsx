@@ -67,7 +67,7 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
 
       {/* Sidebar */}
       <div className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 w-64 bg-[#002b29] transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <Sidebar onClose={() => setIsSidebarOpen(false)} />

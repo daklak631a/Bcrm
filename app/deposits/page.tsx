@@ -119,7 +119,7 @@ function DepositsPageContent() {
     switch (status) {
       case 'ACTIVE': return { label: 'Đang gửi', color: 'bg-emerald-100 text-emerald-700' }
       case 'PENDING': return { label: 'Chờ duyệt', color: 'bg-amber-100 text-amber-700' }
-      case 'MATURED': return { label: 'Đến hạn', color: 'bg-blue-100 text-blue-700' }
+      case 'MATURED': return { label: 'Đến hạn', color: 'bg-teal-50 text-[#006b68] border border-teal-200/50' }
       case 'CLOSED': return { label: 'Đã tất toán', color: 'bg-slate-100 text-slate-700' }
       default: return { label: status, color: 'bg-slate-100 text-slate-700' }
     }
@@ -169,7 +169,7 @@ function DepositsPageContent() {
             <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{formatCurrency(totalAmount)}</h3>
           </div>
           <div className="bg-white p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
-            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center mb-4"><TrendingUp className="w-5 h-5" /></div>
+            <div className="w-10 h-10 rounded-full bg-teal-50 text-[#006b68] border border-teal-100 flex items-center justify-center mb-4"><TrendingUp className="w-5 h-5" /></div>
             <p className="text-sm font-medium text-slate-500 mb-1">Số Lượng Giao Dịch</p>
             <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{deposits.length} <span className="text-lg font-medium text-slate-500">GD</span></h3>
           </div>

@@ -3,7 +3,8 @@
 import clsx from "clsx"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { TableSkeleton } from "@/components/skeletons"
-import { createPlan, fetchPlanAssignments, fetchPlans, fetchProfiles, upsertPlanAssignment } from "@/lib/supabase/api"
+import { createPlan, fetchPlanAssignments, fetchPlans, fetchProfiles, upsertPlanAssignment, fetchWeeklyPlans, fetchDailyPlans, upsertWeeklyPlan, upsertDailyPlans } from "@/lib/supabase/api"
+import { getSupabase } from "@/lib/supabase/client"
 import { useAuthStore } from "@/store/useAuthStore"
 import { Plan, PlanAssignment, Profile } from "@/types/models"
 import { BarChart3, Building2, CalendarDays, CheckCircle2, Download, FileSpreadsheet, Layers3, Loader2, Plus, Save, Search, Sparkles, Target, Upload, Users2 } from "lucide-react"
@@ -85,23 +86,23 @@ function getFieldGroup(key: keyof AssignmentDraft) {
 
 function getFieldHeaderClass(key: keyof AssignmentDraft) {
   const group = getFieldGroup(key)
-  if (group === "core") return "bg-emerald-50 text-emerald-900"
-  if (group === "product") return "bg-blue-50 text-blue-900"
-  return "bg-amber-50 text-amber-900"
+  if (group === "core") return "bg-teal-50 text-[#006b68]"
+  if (group === "product") return "bg-teal-100/60 text-[#005451]"
+  return "bg-[#ccedea]/40 text-[#003e3b]"
 }
 
 function getFieldInputTone(key: keyof AssignmentDraft) {
   const group = getFieldGroup(key)
-  if (group === "core") return "border-emerald-200 bg-emerald-50/60 group-hover:border-emerald-300"
-  if (group === "product") return "border-blue-200 bg-blue-50/55 group-hover:border-blue-300"
-  return "border-amber-200 bg-amber-50/60 group-hover:border-amber-300"
+  if (group === "core") return "border-teal-200 bg-teal-50/60 group-hover:border-teal-300"
+  if (group === "product") return "border-teal-300/70 bg-teal-100/30 group-hover:border-teal-400"
+  return "border-teal-200 bg-[#ccedea]/20 group-hover:border-teal-300"
 }
 
 function getFieldChipClass(key: keyof AssignmentDraft) {
   const group = getFieldGroup(key)
-  if (group === "core") return "bg-emerald-100 text-emerald-700"
-  if (group === "product") return "bg-blue-100 text-blue-700"
-  return "bg-amber-100 text-amber-700"
+  if (group === "core") return "bg-teal-50 text-[#006b68] border border-teal-200/50"
+  if (group === "product") return "bg-teal-100 text-[#005451]"
+  return "bg-[#ccedea] text-[#003e3b]"
 }
 
 function buildDraft(assignment?: Partial<PlanAssignment> | null): AssignmentDraft {
@@ -181,6 +182,29 @@ export default function KpiTargetsPage() {
   const [importingExcel, setImportingExcel] = useState(false)
   const excelInputRef = useRef<HTMLInputElement>(null)
 
+  // Helper to format date as YYYY-MM-DD local
+  const toDateStr = useCallback((d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }, [])
+
+  // Helper to get Monday of a date
+  const getMonday = useCallback((d: Date) => {
+    const day = d.getDay()
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+    return new Date(d.setDate(diff))
+  }, [])
+
+  const [selectedMonday, setSelectedMonday] = useState(() => toDateStr(getMonday(new Date())))
+  const [weeklyDraft, setWeeklyDraft] = useState<AssignmentDraft>(DEFAULT_DRAFT)
+  const [dailyDrafts, setDailyDrafts] = useState<Record<string, AssignmentDraft>>({})
+  const [personalLoading, setPersonalLoading] = useState(false)
+  const [savingPersonal, setSavingPersonal] = useState(false)
+  const [monthlyActual, setMonthlyActual] = useState<any>(null)
+  const [activeDayTab, setActiveDayTab] = useState("")
+
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -193,7 +217,7 @@ export default function KpiTargetsPage() {
     if (user?.role === "ADMIN_LEVEL_2") {
       return specialists.filter((profile) => profile.department_id === user.department_id)
     }
-    return []
+    return specialists.filter((profile) => profile.id === user?.id)
   }, [profiles, user])
 
   const assignmentMap = useMemo(() => {
@@ -250,17 +274,155 @@ export default function KpiTargetsPage() {
     }
   }, [])
 
+  // Load personal weekly & daily plans
+  const loadPersonalPlans = useCallback(async (userId: string, mondayStr: string) => {
+    try {
+      setPersonalLoading(true)
+      const mon = new Date(mondayStr)
+      const fri = new Date(mon)
+      fri.setDate(mon.getDate() + 4)
+      const fridayStr = toDateStr(fri)
+      
+      // Fetch weekly plan
+      const weeks = await fetchWeeklyPlans(userId)
+      const thisWeekPlan = weeks.find((w: any) => w.start_date === mondayStr)
+      setWeeklyDraft(thisWeekPlan ? buildDraft(thisWeekPlan) : DEFAULT_DRAFT)
+
+      // Fetch daily plans
+      const dailies = await fetchDailyPlans(userId, mondayStr, fridayStr)
+      const nextDailyDrafts: Record<string, AssignmentDraft> = {}
+      for (let i = 0; i < 5; i++) {
+        const d = new Date(mon)
+        d.setDate(mon.getDate() + i)
+        const dStr = toDateStr(d)
+        const dayPlan = dailies.find((dp: any) => dp.target_date === dStr)
+        nextDailyDrafts[dStr] = dayPlan ? buildDraft(dayPlan) : DEFAULT_DRAFT
+      }
+      setDailyDrafts(nextDailyDrafts)
+    } catch (err: any) {
+      toast.error("Lỗi tải kế hoạch tuần/ngày: " + err.message)
+    } finally {
+      setPersonalLoading(false)
+    }
+  }, [toDateStr])
+
+  // Load monthly actuals for current user and selected plan period
+  const loadMonthlyActuals = useCallback(async (plan: Plan) => {
+    if (!user?.id) return
+    try {
+      const planDate = new Date(plan.target_date)
+      const year = planDate.getFullYear()
+      const month = planDate.getMonth()
+      const startDateStr = toDateStr(new Date(year, month, 1))
+      const endDateStr = toDateStr(new Date(year, month + 1, 0))
+
+      const supabase = getSupabase()
+      const { data, error } = await supabase.rpc('get_kpi_summary', {
+        start_date: startDateStr,
+        end_date: endDateStr
+      })
+      if (error) throw error
+      
+      const userSummary = data?.find((row: any) => row.manager_id === user.id)
+      setMonthlyActual(userSummary || null)
+    } catch (err) {
+      console.error("Failed to load monthly actuals:", err)
+    }
+  }, [user?.id, toDateStr])
+
+  // Save personal weekly & daily plans
+  const handleSavePersonal = async () => {
+    if (!user?.id) return
+    try {
+      setSavingPersonal(true)
+      const mon = new Date(selectedMonday)
+      const fri = new Date(mon)
+      fri.setDate(mon.getDate() + 4)
+      const fridayStr = toDateStr(fri)
+
+      // Save weekly plan
+      await upsertWeeklyPlan({
+        user_id: user.id,
+        start_date: selectedMonday,
+        end_date: fridayStr,
+        ...weeklyDraft
+      })
+
+      // Save daily plans
+      const dailyPayloads = Object.keys(dailyDrafts).map((dStr) => ({
+        user_id: user.id,
+        target_date: dStr,
+        ...dailyDrafts[dStr]
+      }))
+      await upsertDailyPlans(dailyPayloads)
+
+      toast.success("Đã lưu kế hoạch tuần và ngày thành công!")
+      loadPersonalPlans(user.id, selectedMonday)
+    } catch (err: any) {
+      toast.error("Lỗi lưu kế hoạch: " + err.message)
+    } finally {
+      setSavingPersonal(false)
+    }
+  }
+
+  // Auto distribute weekly target to 5 working days (Monday - Friday)
+  const handleAutoDistribute = () => {
+    const nextDailies = { ...dailyDrafts }
+    const mon = new Date(selectedMonday)
+    
+    for (let i = 0; i < 5; i++) {
+      const d = new Date(mon)
+      d.setDate(mon.getDate() + i)
+      const dStr = toDateStr(d)
+      const dayDraft: AssignmentDraft = { ...DEFAULT_DRAFT }
+      
+      Object.keys(weeklyDraft).forEach((key) => {
+        const val = weeklyDraft[key as keyof AssignmentDraft]
+        const isInteger = ["target_calls", "target_cif_moi", "target_bidv_direct", "target_cap_moi_hmtd"].includes(key)
+        if (isInteger) {
+          const base = Math.floor(val / 5)
+          const remainder = val % 5
+          dayDraft[key as keyof AssignmentDraft] = base + (i < remainder ? 1 : 0)
+        } else {
+          dayDraft[key as keyof AssignmentDraft] = parseFloat((val / 5).toFixed(2))
+        }
+      })
+      nextDailies[dStr] = dayDraft
+    }
+    
+    setDailyDrafts(nextDailies)
+    toast.success("Đã tự động phân bổ chỉ tiêu tuần đều cho các ngày từ Thứ 2 đến Thứ 6")
+  }
+
   useEffect(() => {
-    if (mounted && canManage) {
+    if (mounted) {
       loadBaseData()
     }
-  }, [mounted, canManage, loadBaseData])
+  }, [mounted, loadBaseData])
 
   useEffect(() => {
     if (selectedPlanId) {
       loadAssignments(selectedPlanId)
     }
   }, [loadAssignments, selectedPlanId])
+
+  useEffect(() => {
+    if (mounted && user?.id && !canManage) {
+      loadPersonalPlans(user.id, selectedMonday)
+    }
+  }, [mounted, user?.id, selectedMonday, canManage, loadPersonalPlans])
+
+  useEffect(() => {
+    if (selectedMonday && !activeDayTab) {
+      setActiveDayTab(selectedMonday)
+    }
+  }, [selectedMonday, activeDayTab])
+
+  useEffect(() => {
+    if (mounted && selectedPlan && !canManage) {
+      loadMonthlyActuals(selectedPlan)
+    }
+  }, [mounted, selectedPlan, canManage, loadMonthlyActuals])
 
   useEffect(() => {
     const nextDrafts: Record<string, AssignmentDraft> = {}
@@ -546,13 +708,238 @@ export default function KpiTargetsPage() {
 
   if (!mounted) return <TableSkeleton title="Thiết lập KPI mục tiêu" rows={6} columns={6} />
 
-  if (!canManage) {
+  const renderSpecialistView = () => {
+    const myAssignment = assignments.find(a => a.user_id === user?.id)
+    const mon = new Date(selectedMonday)
+    const weekDates = Array.from({ length: 5 }).map((_, i) => {
+      const d = new Date(mon)
+      d.setDate(mon.getDate() + i)
+      return toDateStr(d)
+    })
+    const fridayStr = weekDates[4]
+
+    const getFieldActualValue = (fieldKey: string) => {
+      if (fieldKey === 'target_loans_amount') return Number(myAssignment?.actual_loans_amount || 0)
+      if (fieldKey === 'target_deposits_amount') return Number(myAssignment?.actual_deposits_amount || 0)
+      if (fieldKey === 'target_calls') return Number(myAssignment?.actual_calls || 0)
+      
+      if (!monthlyActual) return 0
+      const mapping: Record<string, string> = {
+        target_cif_moi: 'cif_moi',
+        target_bidv_direct: 'bidv_direct',
+        target_bh_nhan_tho: 'bh_nhan_tho',
+        target_bh_khoan_vay: 'bh_khoan_vay',
+        target_huy_dong_tang_rong: 'huy_dong_tang_rong',
+        target_du_no_ngan_han_tang_rong: 'du_no_ngan_han_tang_rong',
+        target_du_no_trung_han_tang_rong: 'du_no_trung_han_tang_rong',
+        target_cap_moi_hmtd: 'cap_moi_hmtd'
+      }
+      const actualKey = mapping[fieldKey]
+      return Number(monthlyActual[actualKey] || 0)
+    }
+
     return (
-      <DashboardLayout title="Thiết lập KPI mục tiêu">
-        <div className="flex h-[50vh] items-center justify-center text-slate-500">
-          Bạn không có quyền truy cập trang này.
-        </div>
-      </DashboardLayout>
+      <div className="flex flex-col gap-6">
+        {/* Banner */}
+        <section className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(51,183,171,0.25),_transparent_40%),linear-gradient(135deg,_#002b29_0%,_#004d4a_50%,_#006b68_100%)] p-6 text-white shadow-[0_20px_70px_rgba(15,23,42,0.28)] md:p-8">
+          <div className="absolute -right-10 -top-16 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />
+          <div className="absolute left-1/3 top-0 h-28 w-28 rounded-full bg-cyan-400/10 blur-3xl" />
+          <div className="relative flex flex-col gap-4">
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200 backdrop-blur-xl">
+              <Sparkles className="h-3.5 w-3.5" />
+              Specialist planning workspace
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">Kế hoạch chỉ tiêu cá nhân</h2>
+              <p className="max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
+                Xem chỉ tiêu tháng được giao, lập và phân bổ kế hoạch hoạt động tuần và ngày của bạn để bám sát mục tiêu.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* 1. Monthly Targets (Read-only) */}
+        <section className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-sm backdrop-blur-xl">
+          <h3 className="text-lg font-bold text-slate-800 border-b pb-3 mb-5 flex items-center gap-2">
+            <Target className="w-5 h-5 text-[#006b68]" /> Chỉ tiêu tháng được giao (Kỳ: {selectedPlan?.title || "Chưa chọn"})
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {ALL_ASSIGNMENT_FIELDS.map((field) => {
+              const targetVal = Number(myAssignment?.[field.key] || 0)
+              const actualVal = getFieldActualValue(field.key)
+              const pct = targetVal > 0 ? Math.round((actualVal / targetVal) * 100) : null
+              return (
+                <div key={field.key} className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200 transition-all shadow-sm">
+                  <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1">{field.label}</p>
+                  <div className="flex items-baseline justify-between mt-2">
+                    <p className="text-lg font-bold text-slate-800">{formatCompact(actualVal)} <span className="text-xs font-normal text-slate-500">{field.unit}</span></p>
+                    <p className="text-xs text-slate-400 font-semibold">Chỉ tiêu: {formatCompact(targetVal)}</p>
+                  </div>
+                  {pct !== null && (
+                    <div className="mt-3">
+                      <div className="h-1.5 bg-slate-200/80 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-[#006b68] to-[#33b7ab] transition-all"
+                          style={{ width: `${Math.min(pct, 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center mt-1.5">
+                        <span className="text-[10px] text-slate-400 font-medium">Tiến độ</span>
+                        <span className="text-xs font-bold text-[#006b68]">{pct}%</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
+        {/* 2. Weekly & Daily targets setting */}
+        <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          {/* Left panel: Weekly targets input */}
+          <div className="xl:col-span-5 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm flex flex-col gap-5">
+            <div className="border-b pb-4">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <CalendarDays className="w-5 h-5 text-[#006b68]" /> Lập chỉ tiêu Tuần
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">Lên kế hoạch chỉ tiêu tuần và phân bổ đều cho 5 ngày làm việc.</p>
+            </div>
+
+            {/* Week Selector */}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-semibold text-slate-700">Chọn tuần làm việc</label>
+              <input
+                type="date"
+                value={selectedMonday}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const mon = getMonday(new Date(e.target.value))
+                    setSelectedMonday(toDateStr(mon))
+                  }
+                }}
+                className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-[#006b68] focus:bg-white outline-none transition-all font-medium text-slate-800"
+              />
+              <p className="text-xs text-emerald-700 font-semibold mt-1">
+                Tuần: Thứ 2 ({formatPlanDate(selectedMonday)}) - Thứ 6 ({formatPlanDate(fridayStr)})
+              </p>
+            </div>
+
+            {/* Weekly Input Grid */}
+            <div className="flex-1 overflow-auto max-h-[450px] pr-2 space-y-4">
+              {ALL_ASSIGNMENT_FIELDS.map((field) => (
+                <div key={field.key} className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{field.label} ({field.unit})</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step={field.step || "1"}
+                    value={weeklyDraft[field.key]}
+                    onChange={(e) => setWeeklyDraft(prev => ({ ...prev, [field.key]: Number(e.target.value) || 0 }))}
+                    className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-[#006b68] focus:bg-white outline-none transition-all font-semibold text-slate-800"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Actions for Weekly */}
+            <div className="flex flex-col gap-3 pt-3 border-t">
+              <button
+                type="button"
+                onClick={handleAutoDistribute}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-teal-50 hover:bg-teal-100/80 text-[#006b68] rounded-xl font-bold text-sm transition-all border border-teal-200/50"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Tự động phân bổ tuần xuống ngày</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Right panel: Daily targets tabs */}
+          <div className="xl:col-span-7 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm flex flex-col gap-5">
+            <div className="border-b pb-4">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <Target className="w-5 h-5 text-[#006b68]" /> Chi tiết Kế hoạch Ngày
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">Điều chỉnh kế hoạch cụ thể cho từng ngày trong tuần.</p>
+            </div>
+
+            {/* Day Tabs */}
+            <div className="flex border-b border-slate-100 overflow-x-auto gap-1 p-1 bg-slate-50 rounded-2xl">
+              {weekDates.map((dStr, idx) => {
+                const dayLabel = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu"][idx]
+                const isActive = activeDayTab === dStr
+                return (
+                  <button
+                    key={dStr}
+                    type="button"
+                    onClick={() => setActiveDayTab(dStr)}
+                    className={clsx(
+                      "flex-1 min-w-[90px] py-2 px-3 text-xs font-bold rounded-xl transition-all text-center",
+                      isActive
+                        ? "bg-white text-[#006b68] shadow-sm border border-slate-200/50"
+                        : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
+                    )}
+                  >
+                    <div>{dayLabel}</div>
+                    <div className="text-[10px] opacity-75 font-medium mt-0.5">{formatPlanDate(dStr).slice(0, 5)}</div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Selected Day Inputs */}
+            <div className="flex-1 overflow-auto max-h-[415px] pr-2 space-y-4">
+              {activeDayTab && dailyDrafts[activeDayTab] ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {ALL_ASSIGNMENT_FIELDS.map((field) => {
+                    const dayDraft = dailyDrafts[activeDayTab] || DEFAULT_DRAFT
+                    return (
+                      <div key={field.key} className="flex flex-col gap-1.5 p-3.5 rounded-2xl border border-slate-100 bg-slate-50/30">
+                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{field.label} ({field.unit})</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step={field.step || "1"}
+                          value={dayDraft[field.key]}
+                          onChange={(e) => {
+                            const val = Number(e.target.value) || 0
+                            setDailyDrafts(prev => ({
+                              ...prev,
+                              [activeDayTab]: {
+                                ...(prev[activeDayTab] || DEFAULT_DRAFT),
+                                [field.key]: val
+                              }
+                            }))
+                          }}
+                          className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-[#006b68] focus:bg-white outline-none transition-all font-semibold text-slate-800"
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="flex h-40 items-center justify-center text-slate-400 text-sm">
+                  Vui lòng chọn tuần và ngày ở thanh trên để chỉnh sửa chỉ tiêu ngày.
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="pt-4 border-t flex justify-end">
+              <button
+                type="button"
+                onClick={handleSavePersonal}
+                disabled={personalLoading || savingPersonal}
+                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-gradient-to-r from-[#006b68] to-[#005451] hover:from-[#005451] hover:to-[#003e3b] text-white rounded-xl font-bold text-sm transition-all shadow-md disabled:opacity-50"
+              >
+                {savingPersonal ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <Save className="w-4.5 h-4.5" />}
+                <span>Lưu toàn bộ kế hoạch Tuần & Ngày</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
     )
   }
 
@@ -561,9 +948,11 @@ export default function KpiTargetsPage() {
   }
 
   return (
-    <DashboardLayout title="Thiết lập KPI mục tiêu">
-      <div className="flex flex-col gap-6">
-        <section className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_transparent_34%),linear-gradient(135deg,_#08111f_0%,_#0f172a_45%,_#111827_100%)] p-6 text-white shadow-[0_20px_70px_rgba(15,23,42,0.28)] md:p-8">
+    <DashboardLayout title={canManage ? "Thiết lập KPI mục tiêu" : "Kế hoạch KPI mục tiêu cá nhân"}>
+      {canManage ? (
+        <>
+          <div className="flex flex-col gap-6">
+        <section className="relative overflow-hidden rounded-[28px] border border-slate-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(51,183,171,0.25),_transparent_40%),linear-gradient(135deg,_#002b29_0%,_#004d4a_50%,_#006b68_100%)] p-6 text-white shadow-[0_20px_70px_rgba(15,23,42,0.28)] md:p-8">
           <div className="absolute -right-10 -top-16 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />
           <div className="absolute left-1/3 top-0 h-28 w-28 rounded-full bg-cyan-400/10 blur-3xl" />
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -743,145 +1132,7 @@ export default function KpiTargetsPage() {
           </section>
         )}
 
-        {filteredUsers.length > 0 && (
-          <section className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.1fr_0.9fr]">
-            <div className="rounded-[30px] border border-slate-200/80 bg-white p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-              <div className="flex items-start gap-3">
-                <div className="rounded-2xl bg-blue-50 p-2.5 text-blue-700">
-                  <Target className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold tracking-tight text-slate-900">Sao chép KPI từ 1 người sang nhiều người</h3>
-                  <p className="mt-1 text-sm text-slate-500">Chọn chuyên viên nguồn, đánh dấu các nhân sự nhận và áp dụng toàn bộ bộ KPI hiện tại chỉ với một thao tác.</p>
-                </div>
-              </div>
 
-              <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-[260px_1fr]">
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium text-slate-700">Nhân sự nguồn</span>
-                  <select
-                    value={copySourceUserId}
-                    onChange={(event) => setCopySourceUserId(event.target.value)}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
-                  >
-                    {filteredUsers.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <div>
-                  <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <span className="text-sm font-medium text-slate-700">Nhân sự nhận</span>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={handleSelectAllCopyTargets}
-                        className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                      >
-                        Chọn tất cả đang lọc
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCopyTargetUserIds([])}
-                        className="rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                      >
-                        Bỏ chọn
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="max-h-56 overflow-auto rounded-[24px] border border-slate-200 bg-slate-50 p-3">
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                      {filteredUsers
-                        .filter((profile) => profile.id !== copySourceUserId)
-                        .map((profile) => {
-                          const checked = copyTargetUserIds.includes(profile.id)
-                          return (
-                            <label key={profile.id} className={clsx("flex items-start gap-3 rounded-2xl border px-3 py-3 transition", checked ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white hover:border-slate-300") }>
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={() => handleToggleCopyTarget(profile.id)}
-                                className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                              />
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-slate-900">{profile.full_name}</p>
-                                <p className="truncate text-xs text-slate-500">{profile.department_id || "Chưa có phòng ban"}</p>
-                              </div>
-                            </label>
-                          )
-                        })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-slate-500">Đang chọn {copyTargetUserIds.length} nhân sự nhận bộ KPI từ nguồn hiện tại.</p>
-                <button
-                  type="button"
-                  onClick={handleApplyCopyTargets}
-                  className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-                >
-                  Sao chép KPI hàng loạt
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-[30px] border border-slate-200/80 bg-white p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
-              <div className="flex items-start gap-3">
-                <div className="rounded-2xl bg-emerald-50 p-2.5 text-emerald-700">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold tracking-tight text-slate-900">Dán nhanh từ Excel / Google Sheets</h3>
-                  <p className="mt-1 text-sm text-slate-500">Dán block dữ liệu KPI dạng tab/newline. Hệ thống sẽ áp dụng lần lượt theo thứ tự nhân sự đang hiển thị trên màn hình.</p>
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-3">
-                <textarea
-                  rows={8}
-                  value={pasteMatrix}
-                  onChange={(event) => setPasteMatrix(event.target.value)}
-                  placeholder={"Mỗi dòng tương ứng 1 chuyên viên đang lọc. Mỗi cột tương ứng 1 chỉ tiêu KPI theo đúng thứ tự hiển thị. Bạn có thể dán riêng 11 cột KPI hoặc dán cả hàng, hệ thống sẽ lấy block KPI ở cuối dòng."}
-                  className="w-full rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-4 focus:ring-emerald-100"
-                />
-
-                <div className="flex flex-wrap gap-2 rounded-[24px] border border-slate-200 bg-slate-50 p-3">
-                  {ALL_ASSIGNMENT_FIELDS.map((field) => (
-                    <span key={field.key} className={clsx("inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold", getFieldChipClass(field.key))}>
-                      {field.label}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-slate-500">Áp dụng tối đa cho {filteredUsers.length} nhân sự đang lọc. Nếu ít dòng hơn, hệ thống chỉ cập nhật các dòng đầu tiên.</p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPasteMatrix("")}
-                    className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-                  >
-                    Xóa nội dung dán
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleApplyPasteMatrix}
-                    className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                  >
-                    Áp dụng dữ liệu dán
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
 
         {filteredUsers.length > 0 && (
           <section className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
@@ -894,9 +1145,9 @@ export default function KpiTargetsPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{filteredUsers.length} nhân sự</span>
-                <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{CORE_FIELDS.length} cột trọng tâm</span>
-                <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">{PRODUCT_FIELDS.length} cột sản phẩm</span>
-                <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">{GROWTH_FIELDS.length} cột tăng ròng</span>
+                <span className="inline-flex items-center rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-[#006b68]">{CORE_FIELDS.length} cột trọng tâm</span>
+                <span className="inline-flex items-center rounded-full bg-teal-100 px-3 py-1 text-xs font-medium text-[#005451]">{PRODUCT_FIELDS.length} cột sản phẩm</span>
+                <span className="inline-flex items-center rounded-full bg-[#ccedea] px-3 py-1 text-xs font-medium text-[#003e3b]">{GROWTH_FIELDS.length} cột tăng ròng</span>
               </div>
             </div>
 
@@ -904,22 +1155,22 @@ export default function KpiTargetsPage() {
               <table className="min-w-[2650px] w-full border-separate border-spacing-0">
                 <thead>
                   <tr>
-                    <th rowSpan={2} className="sticky left-0 top-0 z-50 min-w-[320px] border-b border-r border-slate-800 bg-slate-900 px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-white">
+                    <th rowSpan={2} className="sticky left-0 top-0 z-50 min-w-[320px] border-b border-r border-[#001f1e] bg-[#002625] px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-white">
                       Nhân sự
                     </th>
-                    <th colSpan={3} className="sticky top-0 z-40 border-b border-r border-slate-800 bg-slate-900 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-slate-100">
+                    <th colSpan={3} className="sticky top-0 z-40 border-b border-r border-[#001f1e] bg-[#002625] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-slate-100">
                       Kết quả thực tế
                     </th>
-                    <th colSpan={CORE_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-emerald-900 bg-emerald-900 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-emerald-50">
+                    <th colSpan={CORE_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-[#002b29] bg-[#003835] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-50">
                       Chỉ tiêu trọng tâm
                     </th>
-                    <th colSpan={PRODUCT_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-blue-900 bg-blue-900 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-blue-50">
+                    <th colSpan={PRODUCT_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-[#003835] bg-[#004d4a] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-100">
                       Chỉ tiêu sản phẩm
                     </th>
-                    <th colSpan={GROWTH_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-amber-700 bg-amber-600 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-amber-50">
+                    <th colSpan={GROWTH_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-[#004744] bg-[#005c58] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-50">
                       Chỉ tiêu tăng ròng
                     </th>
-                    <th rowSpan={2} className="sticky right-0 top-0 z-50 min-w-[180px] border-b border-l border-slate-800 bg-slate-900 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-white">
+                    <th rowSpan={2} className="sticky right-0 top-0 z-50 min-w-[180px] border-b border-l border-[#001f1e] bg-[#002625] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-white">
                       Tác vụ
                     </th>
                   </tr>
@@ -1105,6 +1356,10 @@ export default function KpiTargetsPage() {
             </div>
           </div>
         </div>
+      )}
+        </>
+      ) : (
+        renderSpecialistView()
       )}
     </DashboardLayout>
   )

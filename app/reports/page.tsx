@@ -2,69 +2,51 @@
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { Calendar, Download, Loader2, Users, Building2, User } from "lucide-react"
-import { formatMetricNumber, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
-import { fetchProfiles, fetchSalesRecords, fetchSalesRecordsByAgent, fetchSalesRecordsByAgents, fetchPlanAssignments, fetchPlans } from "@/lib/supabase/api"
+import { Calendar, Download, Loader2, Users, Building2, User, Target, TrendingUp, CalendarDays, Sparkles, CheckCircle2 } from "lucide-react"
+import { getSupabase } from "@/lib/supabase/client"
 import { useAuthStore } from "@/store/useAuthStore"
 import * as XLSX from 'xlsx'
+import clsx from "clsx"
+import { toast } from "sonner"
 
-const SOURCE_LABELS: Record<string, string> = {
-  LOAN: 'Khoản vay',
-  DEPOSIT: 'Tiền gửi',
-  PRODUCT: 'Sản phẩm',
-}
-
-const SOURCE_SORT: Record<string, number> = {
-  LOAN: 1,
-  DEPOSIT: 2,
-  PRODUCT: 3,
-}
-
-const KPI_FIELDS = [
-  { key: 'target_loans_amount', label: 'Chỉ tiêu vay', sourceType: 'LOAN', unit: 'VNĐ' },
-  { key: 'target_deposits_amount', label: 'Chỉ tiêu gửi', sourceType: 'DEPOSIT', unit: 'VNĐ' },
-  { key: 'target_cif_moi', label: 'CIF mới', sourceType: 'PRODUCT', unit: 'KH' },
-  { key: 'target_bidv_direct', label: 'BIDV Direct', sourceType: 'PRODUCT', unit: 'KH' },
-  { key: 'target_bh_nhan_tho', label: 'BH nhân thọ', sourceType: 'PRODUCT', unit: 'Triệu' },
-  { key: 'target_bh_khoan_vay', label: 'BH khoản vay', sourceType: 'PRODUCT', unit: 'Triệu' },
-  { key: 'target_cap_moi_hmtd', label: 'Cấp mới HMTD', sourceType: 'PRODUCT', unit: 'KH' },
+const KPI_METRICS = [
+  { key: 'target_loans_amount', label: 'Chỉ tiêu cho vay', unit: 'VNĐ', type: 'currency' },
+  { key: 'target_deposits_amount', label: 'Chỉ tiêu huy động', unit: 'VNĐ', type: 'currency' },
+  { key: 'target_calls', label: 'Chỉ tiêu gọi điện', unit: 'Cuộc', type: 'number' },
+  { key: 'target_cif_moi', label: 'CIF mới phát triển', unit: 'KH', type: 'number' },
+  { key: 'target_bidv_direct', label: 'Đăng ký BIDV Direct', unit: 'KH', type: 'number' },
+  { key: 'target_bh_nhan_tho', label: 'Bảo hiểm nhân thọ (Life)', unit: 'Triệu', type: 'number' },
+  { key: 'target_bh_khoan_vay', label: 'Bảo hiểm khoản vay (Non-Life)', unit: 'Triệu', type: 'number' },
+  { key: 'target_cap_moi_hmtd', label: 'Cấp mới hạn mức tín dụng', unit: 'KH', type: 'number' },
+  { key: 'target_huy_dong_tang_rong', label: 'Huy động vốn tăng ròng', unit: 'VNĐ', type: 'currency' },
+  { key: 'target_du_no_ngan_han_tang_rong', label: 'Dư nợ ngắn hạn tăng ròng', unit: 'VNĐ', type: 'currency' },
+  { key: 'target_du_no_trung_han_tang_rong', label: 'Dư nợ trung/dài hạn tăng ròng', unit: 'VNĐ', type: 'currency' },
 ]
 
 type ViewMode = 'all' | 'department' | 'user'
-type TimeRange = 'month' | 'week' | 'today' | 'quarter' | 'year'
-
-function getDateRange(timeRange: TimeRange) {
-  const now = new Date()
-  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
-
-  switch (timeRange) {
-    case 'today':
-      return { start: new Date(now.getFullYear(), now.getMonth(), now.getDate()), end: endOfToday }
-    case 'week': {
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6)
-      return { start, end: endOfToday }
-    }
-    case 'month':
-      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: endOfToday }
-    case 'quarter': {
-      const start = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
-      return { start, end: endOfToday }
-    }
-    case 'year':
-      return { start: new Date(now.getFullYear(), 0, 1), end: endOfToday }
-    default:
-      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: endOfToday }
-  }
-}
 
 export default function ReportsPage() {
   const { user } = useAuthStore()
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [salesRecords, setSalesRecords] = useState<any[]>([])
+  
+  // Data States
   const [profiles, setProfiles] = useState<any[]>([])
+  const [plans, setPlans] = useState<any[]>([])
   const [assignments, setAssignments] = useState<any[]>([])
-  const [timeRange, setTimeRange] = useState<TimeRange>("month")
+  const [loans, setLoans] = useState<any[]>([])
+  const [deposits, setDeposits] = useState<any[]>([])
+  const [crossSellRecords, setCrossSellRecords] = useState<any[]>([])
+  const [interactions, setInteractions] = useState<any[]>([])
+  const [customers, setCustomers] = useState<any[]>([])
+  const [weeklyPlans, setWeeklyPlans] = useState<any[]>([])
+  const [dailyPlans, setDailyPlans] = useState<any[]>([])
+  const [snapshots, setSnapshots] = useState<any[]>([])
+
+  // Date States
+  const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10))
+
+  // Filter States
   const [viewMode, setViewMode] = useState<ViewMode>('all')
   const [selectedDepartment, setSelectedDepartment] = useState<string>('ALL')
   const [selectedUserId, setSelectedUserId] = useState<string>('ALL')
@@ -73,415 +55,781 @@ export default function ReportsPage() {
   const isAdminL2 = user?.role === 'ADMIN_LEVEL_2'
   const isUser = user?.role === 'USER'
 
-  // Fetch user-visible profiles based on role
+  // Helper date calculators
+  const getMondayOfDate = useCallback((dateStr: string) => {
+    const d = new Date(dateStr)
+    const day = d.getDay()
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+    const mon = new Date(d.setDate(diff))
+    const y = mon.getFullYear()
+    const m = String(mon.getMonth() + 1).padStart(2, '0')
+    const dayVal = String(mon.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dayVal}`
+  }, [])
+
+  const getFridayOfDate = useCallback((dateStr: string) => {
+    const mon = new Date(getMondayOfDate(dateStr))
+    const fri = new Date(mon)
+    fri.setDate(mon.getDate() + 4)
+    const y = fri.getFullYear()
+    const m = String(fri.getMonth() + 1).padStart(2, '0')
+    const dayVal = String(fri.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dayVal}`
+  }, [getMondayOfDate])
+
+  const getStartOfMonth = useCallback((dateStr: string) => {
+    const d = new Date(dateStr)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    return `${y}-${m}-01`
+  }, [])
+
+  const getEndOfMonth = useCallback((dateStr: string) => {
+    const d = new Date(dateStr)
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+    const y = lastDay.getFullYear()
+    const m = String(lastDay.getMonth() + 1).padStart(2, '0')
+    const dayVal = String(lastDay.getDate()).padStart(2, '0')
+    return `${y}-${m}-${dayVal}`
+  }, [])
+
+  // Computed Date Ranges
+  const selectedMonday = useMemo(() => getMondayOfDate(reportDate), [reportDate, getMondayOfDate])
+  const selectedFriday = useMemo(() => getFridayOfDate(reportDate), [reportDate, getFridayOfDate])
+  const selectedMonthStart = useMemo(() => getStartOfMonth(reportDate), [reportDate, getStartOfMonth])
+  const selectedMonthEnd = useMemo(() => getEndOfMonth(reportDate), [reportDate, getEndOfMonth])
+
+  // Get active monthly plan
+  const activeMonthPlan = useMemo(() => {
+    const selDate = new Date(reportDate)
+    return plans.find(p => {
+      const pDate = new Date(p.target_date)
+      return pDate.getFullYear() === selDate.getFullYear() && pDate.getMonth() === selDate.getMonth()
+    })
+  }, [plans, reportDate])
+
+  // Load All data once
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true)
+      const supabase = getSupabase()
+      
+      const [
+        profilesData,
+        plansData,
+        assignmentsData,
+        loansData,
+        depositsData,
+        productsData,
+        interactionsData,
+        customersData,
+        weeklyPlansData,
+        dailyPlansData,
+        snapshotsData,
+      ] = await Promise.all([
+        supabase.from('profiles').select('*').eq('is_active', true),
+        supabase.from('plans').select('*').order('target_date', { ascending: false }),
+        supabase.from('plan_assignments').select('*'),
+        supabase.from('loans').select('*').eq('status', 'ACTIVE'),
+        supabase.from('deposits').select('*').eq('status', 'ACTIVE'),
+        supabase.from('cross_sell_records').select('*, cross_sell_products(*)').eq('status', 'COMPLETED'),
+        supabase.from('interactions').select('*'),
+        supabase.from('customers').select('*').is('deleted_at', null),
+        supabase.from('weekly_plans').select('*'),
+        supabase.from('daily_plans').select('*'),
+        supabase.from('daily_manager_snapshots').select('*'),
+      ])
+
+      if (profilesData.data) setProfiles(profilesData.data)
+      if (plansData.data) setPlans(plansData.data)
+      if (assignmentsData.data) setAssignments(assignmentsData.data)
+      if (loansData.data) setLoans(loansData.data)
+      if (depositsData.data) setDeposits(depositsData.data)
+      if (productsData.data) setCrossSellRecords(productsData.data)
+      if (interactionsData.data) setInteractions(interactionsData.data)
+      if (customersData.data) setCustomers(customersData.data)
+      if (weeklyPlansData.data) setWeeklyPlans(weeklyPlansData.data)
+      if (dailyPlansData.data) setDailyPlans(dailyPlansData.data)
+      if (snapshotsData.data) setSnapshots(snapshotsData.data)
+    } catch (err: any) {
+      toast.error("Lỗi tải dữ liệu báo cáo: " + err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    setMounted(true)
+    loadData()
+  }, [loadData])
+
+  // Filtered Users List
   const visibleProfiles = useMemo(() => {
     const specialists = profiles.filter(p => p.role === 'USER')
     if (isAdminL1) return specialists
     if (isAdminL2) return specialists.filter(p => p.department_id === user?.department_id)
-    // Regular user: only self
-    return profiles.filter(p => p.id === user?.id)
+    return specialists.filter(p => p.id === user?.id)
   }, [profiles, user, isAdminL1, isAdminL2])
 
-  // Department list for filter (Admin L1 only)
+  // Departments list for filters
   const departments = useMemo(() => {
     const depts = new Set<string>()
     visibleProfiles.forEach(p => { if (p.department_id) depts.add(p.department_id) })
     return Array.from(depts).sort()
   }, [visibleProfiles])
 
-  // Profiles after department filter
-  const departmentFilteredProfiles = useMemo(() => {
-    if (!isAdminL1 || selectedDepartment === 'ALL') return visibleProfiles
-    return visibleProfiles.filter(p => p.department_id === selectedDepartment)
-  }, [visibleProfiles, selectedDepartment, isAdminL1])
-
-  // Final displayed profiles (for table columns)
-  const displayProfiles = useMemo(() => {
-    if (viewMode === 'user' && selectedUserId !== 'ALL') {
-      return departmentFilteredProfiles.filter(p => p.id === selectedUserId)
-    }
-    return departmentFilteredProfiles
-  }, [departmentFilteredProfiles, viewMode, selectedUserId])
-
-  const loadData = useCallback(async () => {
-    if (!user) return
-    try {
-      setLoading(true)
-      const [pr, plans] = await Promise.all([
-        fetchProfiles(),
-        fetchPlans(),
-      ])
-      setProfiles(pr)
-
-      let sales: any[] = []
-      if (isUser) {
-        // Regular user only sees own data
-        sales = await fetchSalesRecordsByAgent(user.id)
-      } else {
-        // Admin sees all
-        sales = await fetchSalesRecords()
-      }
-      setSalesRecords(sales)
-
-      // Load current plan assignments for KPI display
-      if (plans.length > 0) {
-        const currentPlan = plans[0]
-        const assigns = await fetchPlanAssignments(currentPlan.id)
-        setAssignments(assigns)
-      }
-    } catch (err) {
-      console.error('Reports load error:', err)
-    } finally {
-      setLoading(false)
-    }
-  }, [user, isUser])
-
-  useEffect(() => { setMounted(true); loadData() }, [loadData])
-
-  const filteredSales = useMemo(() => {
-    const { start, end } = getDateRange(timeRange)
-
-    // First filter by date
-    const dateFiltered = salesRecords.filter((sale: any) => {
-      const saleDate = new Date(sale.sale_date)
-      if (Number.isNaN(saleDate.getTime())) return false
-      return saleDate >= start && saleDate <= end
-    })
-
-    // Then filter by agent (based on viewMode + selectedUserId)
+  // Scope user ids list based on filters
+  const targetUserIds = useMemo(() => {
+    const specialists = profiles.filter(p => p.role === 'USER')
+    
     if (isUser) {
-      return dateFiltered.filter((s: any) => s.agent_id === user?.id)
+      return [user?.id || '']
+    }
+    
+    if (isAdminL2) {
+      const deptSpecialists = specialists.filter(p => p.department_id === user?.department_id)
+      if (viewMode === 'all') {
+        return deptSpecialists.map(p => p.id)
+      } else {
+        return selectedUserId === 'ALL' ? deptSpecialists.map(p => p.id) : [selectedUserId]
+      }
+    }
+    
+    // Admin L1
+    if (viewMode === 'all') {
+      return specialists.map(p => p.id)
+    } else if (viewMode === 'department') {
+      const deptSpecialists = selectedDepartment === 'ALL' 
+        ? specialists 
+        : specialists.filter(p => p.department_id === selectedDepartment)
+      return deptSpecialists.map(p => p.id)
+    } else {
+      // viewMode === 'user'
+      const deptSpecialists = selectedDepartment === 'ALL'
+        ? specialists
+        : specialists.filter(p => p.department_id === selectedDepartment)
+      return selectedUserId === 'ALL' 
+        ? deptSpecialists.map(p => p.id) 
+        : [selectedUserId]
+    }
+  }, [profiles, user, isUser, isAdminL2, viewMode, selectedDepartment, selectedUserId])
+
+  // Helper to calculate Net Growth actual from snapshots
+  const getNetGrowthActual = useCallback((metricType: 'deposit' | 'short_loan' | 'medium_loan', userIds: string[], startDateStr: string, endDateStr: string) => {
+    let total = 0
+    userIds.forEach(uId => {
+      const userSnaps = snapshots.filter(s => s.manager_id === uId)
+      if (userSnaps.length === 0) return
+
+      const sorted = [...userSnaps].sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
+
+      // Find closest snapshot on or before endDateStr
+      const endSnap = sorted.filter(s => s.snapshot_date <= endDateStr).pop()
+      const endVal = endSnap ? (
+        metricType === 'deposit' ? Number(endSnap.total_deposit_balance || 0) :
+        metricType === 'short_loan' ? Number(endSnap.total_short_term_loan_balance || 0) :
+        Number(endSnap.total_medium_term_loan_balance || 0)
+      ) : 0
+
+      // Find closest snapshot on or before startDateStr
+      const startSnap = sorted.filter(s => s.snapshot_date <= startDateStr).pop()
+      const startVal = startSnap ? (
+        metricType === 'deposit' ? Number(startSnap.total_deposit_balance || 0) :
+        metricType === 'short_loan' ? Number(startSnap.total_short_term_loan_balance || 0) :
+        Number(startSnap.total_medium_term_loan_balance || 0)
+      ) : 0
+
+      total += (endVal - startVal)
+    })
+    return total
+  }, [snapshots])
+
+  // Helper to calculate aggregated Target values
+  const getTargetValue = useCallback((fieldKey: string, level: 'month' | 'week' | 'day') => {
+    if (targetUserIds.length === 0) return 0
+
+    if (level === 'month') {
+      if (!activeMonthPlan) return 0
+      const activeAssigns = assignments.filter(a => a.plan_id === activeMonthPlan.id && targetUserIds.includes(a.user_id))
+      return activeAssigns.reduce((sum, a) => sum + Number(a[fieldKey] || 0), 0)
     }
 
-    const agentIds = displayProfiles.map(p => p.id)
-    return dateFiltered.filter((s: any) => agentIds.includes(s.agent_id))
-  }, [salesRecords, timeRange, displayProfiles, isUser, user])
+    if (level === 'week') {
+      const activeWeekPlans = weeklyPlans.filter(wp => wp.start_date === selectedMonday && targetUserIds.includes(wp.user_id))
+      return activeWeekPlans.reduce((sum, wp) => sum + Number(wp[fieldKey] || 0), 0)
+    }
 
-  const assignmentMap = useMemo(() => {
-    return assignments.reduce<Record<string, any>>((acc, a) => {
-      acc[a.user_id] = a
-      return acc
-    }, {})
-  }, [assignments])
+    // level === 'day'
+    const activeDailyPlans = dailyPlans.filter(dp => dp.target_date === reportDate && targetUserIds.includes(dp.user_id))
+    return activeDailyPlans.reduce((sum, dp) => sum + Number(dp[fieldKey] || 0), 0)
+  }, [targetUserIds, activeMonthPlan, assignments, weeklyPlans, selectedMonday, dailyPlans, reportDate])
 
-  const reportRows = useMemo(() => {
-    const rowMap = new Map<string, { key: string; sourceType: string; label: string; unit: string }>()
-    filteredSales.forEach((sale: any) => {
-      const label = sale.title || sale.category || 'Khác'
-      const unit = getRecordUnitLabel(sale)
-      const key = `${sale.source_type}:${label}:${unit}`
-      if (!rowMap.has(key)) {
-        rowMap.set(key, { key, sourceType: sale.source_type, label, unit })
+  // Helper to calculate aggregated Actual values
+  const getActualValue = useCallback((fieldKey: string, startDateStr: string, endDateStr: string) => {
+    if (targetUserIds.length === 0) return 0
+
+    // 1. Loans amount
+    if (fieldKey === 'target_loans_amount') {
+      const filteredLoans = loans.filter(l => 
+        l.start_date >= startDateStr && 
+        l.start_date <= endDateStr && 
+        l.customer_id && 
+        customers.some(c => c.id === l.customer_id && targetUserIds.includes(c.assigned_manager_id))
+      )
+      return filteredLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0)
+    }
+
+    // 2. Deposits amount
+    if (fieldKey === 'target_deposits_amount') {
+      const filteredDeposits = deposits.filter(d => 
+        d.start_date >= startDateStr && 
+        d.start_date <= endDateStr && 
+        d.customer_id && 
+        customers.some(c => c.id === d.customer_id && targetUserIds.includes(c.assigned_manager_id))
+      )
+      return filteredDeposits.reduce((sum, d) => sum + Number(d.amount || 0), 0)
+    }
+
+    // 3. Calls count
+    if (fieldKey === 'target_calls') {
+      const filteredInteractions = interactions.filter(i => 
+        i.type === 'CALL' && 
+        i.interaction_date >= startDateStr && 
+        i.interaction_date <= endDateStr && 
+        targetUserIds.includes(i.manager_id)
+      )
+      return filteredInteractions.length
+    }
+
+    // 4. CIF mới count
+    if (fieldKey === 'target_cif_moi') {
+      const filteredCustomers = customers.filter(c => {
+        const cDate = c.created_at ? c.created_at.slice(0, 10) : ''
+        return cDate >= startDateStr && cDate <= endDateStr && targetUserIds.includes(c.assigned_manager_id)
+      })
+      return filteredCustomers.length
+    }
+
+    // 5. Product metrics (BIDV Direct, BH nhân thọ, BH khoản vay, Cấp mới HMTD)
+    const productMapping: Record<string, string> = {
+      target_bidv_direct: 'BIDV Direct',
+      target_bh_nhan_tho: 'BH nhân thọ',
+      target_bh_khoan_vay: 'BH khoản vay',
+      target_cap_moi_hmtd: 'Cấp mới HMTD'
+    }
+
+    if (productMapping[fieldKey]) {
+      const productName = productMapping[fieldKey]
+      const filteredSales = crossSellRecords.filter(s => {
+        const sDate = s.sale_date || (s.created_at ? s.created_at.slice(0, 10) : '')
+        const pName = s.cross_sell_products?.name || ''
+        return (
+          pName.toLowerCase().includes(productName.toLowerCase()) &&
+          sDate >= startDateStr &&
+          sDate <= endDateStr &&
+          targetUserIds.includes(s.agent_id)
+        )
+      })
+
+      if (fieldKey === 'target_bidv_direct' || fieldKey === 'target_cap_moi_hmtd') {
+        return filteredSales.length
+      } else {
+        // BH nhân thọ and BH khoản vay are numeric amounts (triệu đồng)
+        return filteredSales.reduce((sum, s) => sum + Number(s.result_value || 0), 0)
       }
-    })
-    return Array.from(rowMap.values()).sort((a, b) => {
-      const sourceSort = (SOURCE_SORT[a.sourceType] || 99) - (SOURCE_SORT[b.sourceType] || 99)
-      if (sourceSort !== 0) return sourceSort
-      return a.label.localeCompare(b.label, 'vi')
-    })
-  }, [filteredSales])
+    }
 
-  const getMetricValue = (row: { sourceType: string; label: string; unit: string }, agentId: string) => {
-    return filteredSales.reduce((sum: number, sale: any) => {
-      const saleLabel = sale.title || sale.category || 'Khác'
-      if (sale.agent_id !== agentId || sale.source_type !== row.sourceType || saleLabel !== row.label || getRecordUnitLabel(sale) !== row.unit) {
-        return sum
-      }
-      return sum + getRecordMetricValue(sale)
-    }, 0)
+    // 6. Net growth metrics using snapshots
+    if (fieldKey === 'target_huy_dong_tang_rong') {
+      return getNetGrowthActual('deposit', targetUserIds, startDateStr, endDateStr)
+    }
+    if (fieldKey === 'target_du_no_ngan_han_tang_rong') {
+      return getNetGrowthActual('short_loan', targetUserIds, startDateStr, endDateStr)
+    }
+    if (fieldKey === 'target_du_no_trung_han_tang_rong') {
+      return getNetGrowthActual('medium_loan', targetUserIds, startDateStr, endDateStr)
+    }
+
+    return 0
+  }, [targetUserIds, loans, deposits, crossSellRecords, interactions, customers, getNetGrowthActual])
+
+  // Helper values
+  const getPercent = (actual: number, target: number) => {
+    if (target <= 0) return null
+    return Math.round((actual / target) * 100)
   }
 
-  const getKpiTarget = (agentId: string, kpiKey: string) => {
-    const assign = assignmentMap[agentId]
-    if (!assign) return 0
-    return Number(assign[kpiKey] || 0)
+  const getPercentColorClass = (pct: number | null) => {
+    if (pct === null) return 'text-slate-400 font-medium'
+    if (pct >= 100) return 'text-[#006b68] font-bold'
+    if (pct >= 70) return 'text-amber-600 font-bold'
+    return 'text-rose-600 font-bold'
   }
 
-  const formatMetric = (value: number) => {
-    if (!value) return '-'
-    return formatMetricNumber(value)
-  }
-
-  const getProgressColor = (actual: number, target: number) => {
-    if (!target) return 'text-slate-600'
-    const pct = actual / target
-    if (pct >= 1) return 'text-emerald-700'
-    if (pct >= 0.7) return 'text-amber-600'
-    return 'text-rose-600'
+  const formatValue = (value: number, type: string) => {
+    if (value === 0) return '-'
+    return new Intl.NumberFormat('vi-VN').format(value)
   }
 
   const handleExportExcel = () => {
-    const agentNames = displayProfiles.map(p => p.full_name)
-    const headers = ['Danh mục', 'Nhóm', 'Đơn vị', ...agentNames, 'Tổng cộng']
-    const exportData = reportRows.map((reportRow) => {
-      const exportRow: any = {
-        'Danh mục': SOURCE_LABELS[reportRow.sourceType] || reportRow.sourceType,
-        'Nhóm': reportRow.label,
-        'Đơn vị': reportRow.unit,
+    const exportData = KPI_METRICS.map(kpi => {
+      const mTarget = getTargetValue(kpi.key, 'month')
+      const mActual = getActualValue(kpi.key, selectedMonthStart, selectedMonthEnd)
+      const mPct = getPercent(mActual, mTarget)
+      
+      const wTarget = getTargetValue(kpi.key, 'week')
+      const wActual = getActualValue(kpi.key, selectedMonday, selectedFriday)
+      const wPct = getPercent(wActual, wTarget)
+      
+      const dTarget = getTargetValue(kpi.key, 'day')
+      const dActual = getActualValue(kpi.key, reportDate, reportDate)
+      const dPct = getPercent(dActual, dTarget)
+
+      return {
+        'Chỉ tiêu': kpi.label,
+        'Đơn vị': kpi.unit,
+        'Chỉ tiêu Tháng': mTarget,
+        'Thực tế Tháng': mActual,
+        'Hoàn thành Tháng (%)': mPct !== null ? `${mPct}%` : '-',
+        'Chỉ tiêu Tuần': wTarget,
+        'Thực tế Tuần': wActual,
+        'Hoàn thành Tuần (%)': wPct !== null ? `${wPct}%` : '-',
+        'Chỉ tiêu Ngày': dTarget,
+        'Kết quả Ngày': dActual,
+        'Hoàn thành Ngày (%)': dPct !== null ? `${dPct}%` : '-',
       }
-      let rowTotal = 0
-      displayProfiles.forEach((agent) => {
-        const value = getMetricValue(reportRow, agent.id)
-        exportRow[agent.full_name] = value
-        rowTotal += value
-      })
-      exportRow['Tổng cộng'] = rowTotal
-      return exportRow
     })
-    const worksheet = XLSX.utils.json_to_sheet(exportData, { header: headers })
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData)
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "BaoCaoBanHang")
-    XLSX.writeFile(workbook, `BaoCao_BanHang_${timeRange}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    XLSX.utils.book_append_sheet(workbook, worksheet, "BaoCaoKPI")
+    XLSX.writeFile(workbook, `BaoCao_KPISummary_${reportDate}.xlsx`)
+    toast.success("Xuất file báo cáo Excel thành công!")
   }
+
+  // Calculate average completion percentages for top summary
+  const summaryMetrics = useMemo(() => {
+    let mSum = 0, mCount = 0
+    let wSum = 0, wCount = 0
+    let dSum = 0, dCount = 0
+
+    KPI_METRICS.forEach(kpi => {
+      const mTarget = getTargetValue(kpi.key, 'month')
+      if (mTarget > 0) {
+        const mActual = getActualValue(kpi.key, selectedMonthStart, selectedMonthEnd)
+        mSum += Math.min((mActual / mTarget) * 100, 100)
+        mCount++
+      }
+
+      const wTarget = getTargetValue(kpi.key, 'week')
+      if (wTarget > 0) {
+        const wActual = getActualValue(kpi.key, selectedMonday, selectedFriday)
+        wSum += Math.min((wActual / wTarget) * 100, 100)
+        wCount++
+      }
+
+      const dTarget = getTargetValue(kpi.key, 'day')
+      if (dTarget > 0) {
+        const dActual = getActualValue(kpi.key, reportDate, reportDate)
+        dSum += Math.min((dActual / dTarget) * 100, 100)
+        dCount++
+      }
+    })
+
+    return {
+      monthAvg: mCount > 0 ? Math.round(mSum / mCount) : 0,
+      weekAvg: wCount > 0 ? Math.round(wSum / wCount) : 0,
+      dayAvg: dCount > 0 ? Math.round(dSum / dCount) : 0,
+    }
+  }, [getTargetValue, getActualValue, selectedMonthStart, selectedMonthEnd, selectedMonday, selectedFriday, reportDate])
+
+  const reportTitleScope = useMemo(() => {
+    if (isUser) return `Chuyên viên: ${user?.full_name}`
+    if (isAdminL2) {
+      if (viewMode === 'all') return `Phòng: ${user?.department_id || 'Chưa phân phòng'}`
+      const targetUser = profiles.find(p => p.id === selectedUserId)
+      return targetUser ? `Chuyên viên: ${targetUser.full_name}` : 'Cấp phòng'
+    }
+    // Admin L1
+    if (viewMode === 'all') return 'Toàn bộ Chi nhánh'
+    if (viewMode === 'department') return `Phòng: ${selectedDepartment}`
+    const targetUser = profiles.find(p => p.id === selectedUserId)
+    return targetUser ? `Chuyên viên: ${targetUser.full_name}` : 'Chi nhánh'
+  }, [isUser, isAdminL2, viewMode, selectedUserId, selectedDepartment, user, profiles])
 
   if (!mounted) return null
-
-  const timeRangeLabel: Record<TimeRange, string> = {
-    today: 'Hôm nay',
-    week: 'Tuần này',
-    month: 'Tháng này',
-    quarter: 'Quý này',
-    year: 'Năm nay',
-  }
 
   return (
     <DashboardLayout title="Báo Cáo Tổng Hợp">
       <div className="flex flex-col gap-6">
-        {/* Header Controls */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex flex-wrap gap-2">
-            {/* Time range */}
-            <div className="relative">
-              <select
-                className="appearance-none pl-9 pr-10 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 font-medium outline-none"
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-                aria-label="Chọn khoảng thời gian báo cáo"
-              >
-                <option value="today">Hôm nay</option>
-                <option value="week">Tuần này</option>
-                <option value="month">Tháng này</option>
-                <option value="quarter">Quý này</option>
-                <option value="year">Năm nay</option>
-              </select>
-              <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            </div>
-
-            {/* Admin L1: View mode + Department filter */}
-            {isAdminL1 && (
-              <>
-                <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden text-sm font-medium">
-                  <button
-                    onClick={() => { setViewMode('all'); setSelectedUserId('ALL') }}
-                    className={`flex items-center gap-1.5 px-3 py-2 transition-colors ${viewMode === 'all' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <Users className="w-3.5 h-3.5" /> Tất cả
-                  </button>
-                  <button
-                    onClick={() => { setViewMode('department'); setSelectedUserId('ALL') }}
-                    className={`flex items-center gap-1.5 px-3 py-2 transition-colors ${viewMode === 'department' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <Building2 className="w-3.5 h-3.5" /> Theo phòng
-                  </button>
-                  <button
-                    onClick={() => setViewMode('user')}
-                    className={`flex items-center gap-1.5 px-3 py-2 transition-colors ${viewMode === 'user' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-                  >
-                    <User className="w-3.5 h-3.5" /> Theo user
-                  </button>
-                </div>
-
-                {(viewMode === 'department' || viewMode === 'user') && (
-                  <select
-                    className="appearance-none px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={selectedDepartment}
-                    onChange={(e) => { setSelectedDepartment(e.target.value); setSelectedUserId('ALL') }}
-                    aria-label="Lọc theo phòng ban"
-                  >
-                    <option value="ALL">Tất cả phòng</option>
-                    {departments.map(d => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                )}
-
-                {viewMode === 'user' && (
-                  <select
-                    className="appearance-none px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                    value={selectedUserId}
-                    onChange={(e) => setSelectedUserId(e.target.value)}
-                    aria-label="Lọc theo chuyên viên"
-                  >
-                    <option value="ALL">Tất cả user</option>
-                    {departmentFilteredProfiles.map(p => (
-                      <option key={p.id} value={p.id}>{p.full_name}</option>
-                    ))}
-                  </select>
-                )}
-              </>
-            )}
-
-            {/* Admin L2: Only user filter */}
-            {isAdminL2 && (
-              <div className="flex bg-white border border-slate-200 rounded-lg overflow-hidden text-sm font-medium">
-                <button
-                  onClick={() => { setViewMode('all'); setSelectedUserId('ALL') }}
-                  className={`flex items-center gap-1.5 px-3 py-2 transition-colors ${viewMode === 'all' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                  <Building2 className="w-3.5 h-3.5" /> Toàn phòng
-                </button>
-                <button
-                  onClick={() => setViewMode('user')}
-                  className={`flex items-center gap-1.5 px-3 py-2 transition-colors ${viewMode === 'user' ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                  <User className="w-3.5 h-3.5" /> Theo user
-                </button>
-                {viewMode === 'user' && (
-                  <select
-                    className="appearance-none px-3 py-2 bg-white border border-slate-200 text-sm focus:ring-2 focus:ring-emerald-500 outline-none border-l"
-                    value={selectedUserId}
-                    onChange={(e) => setSelectedUserId(e.target.value)}
-                    aria-label="Lọc theo chuyên viên trong phòng"
-                  >
-                    <option value="ALL">Tất cả user</option>
-                    {visibleProfiles.map(p => (
-                      <option key={p.id} value={p.id}>{p.full_name}</option>
-                    ))}
-                  </select>
-                )}
+        
+        {/* Banner Section */}
+        <section className="relative overflow-hidden rounded-xl border border-[#003e3b]/30 bg-[radial-gradient(circle_at_top_left,_rgba(51,183,171,0.2),_transparent_35%),linear-gradient(135deg,_#002b29_0%,_#004d4a_50%,_#006b68_100%)] p-6 text-white shadow-lg md:p-8">
+          <div className="absolute -right-10 -top-16 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />
+          <div className="absolute left-1/3 top-0 h-28 w-28 rounded-full bg-cyan-400/10 blur-3xl" />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-4">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200 backdrop-blur-xl">
+                <Sparkles className="h-3.5 w-3.5" />
+                Động Lực Phát Triển Chi Nhánh
               </div>
-            )}
-          </div>
-
-          <button
-            onClick={handleExportExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium shrink-0"
-          >
-            <Download className="w-4 h-4" /> Xuất Excel
-          </button>
-        </div>
-
-        {/* KPI vs Thực tế summary banner */}
-        {!isUser && assignments.length > 0 && (
-          <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-5 text-white">
-            <p className="text-xs text-slate-400 uppercase tracking-widest mb-3 font-semibold">
-              KPI Kỳ Hiện Tại × Kết Quả {timeRangeLabel[timeRange]} (Lũy Kế)
-            </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-              {KPI_FIELDS.map(kpi => {
-                const agentIds = displayProfiles.map(p => p.id)
-                const totalKpi = agentIds.reduce((sum, id) => sum + getKpiTarget(id, kpi.key), 0)
-                const totalActual = filteredSales
-                  .filter((s: any) => agentIds.includes(s.agent_id) && s.source_type === kpi.sourceType)
-                  .reduce((sum: number, s: any) => sum + getRecordMetricValue(s), 0)
-                const pct = totalKpi > 0 ? Math.round((totalActual / totalKpi) * 100) : null
-                return (
-                  <div key={kpi.key} className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                    <p className="text-[10px] text-slate-300 font-semibold uppercase tracking-wider mb-1">{kpi.label}</p>
-                    <p className="text-lg font-bold">{formatMetricNumber(totalActual)}</p>
-                    <p className="text-[11px] text-slate-400">/ {formatMetricNumber(totalKpi)} {kpi.unit}</p>
-                    {pct !== null && (
-                      <div className="mt-1.5 h-1.5 bg-white/20 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-emerald-400' : pct >= 70 ? 'bg-amber-400' : 'bg-rose-400'}`}
-                          style={{ width: `${Math.min(pct, 100)}%` }}
-                        />
-                      </div>
-                    )}
-                    {pct !== null && <p className={`text-[10px] mt-1 font-semibold ${pct >= 100 ? 'text-emerald-300' : pct >= 70 ? 'text-amber-300' : 'text-rose-300'}`}>{pct}%</p>}
-                  </div>
-                )
-              })}
+              <div className="space-y-2">
+                <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Báo Cáo Tổng Hợp KPI & Kết Quả</h1>
+                <p className="max-w-2xl text-sm leading-6 text-slate-300">
+                  Đối chiếu chỉ tiêu được giao và kết quả thực hiện lũy kế cấp <span className="text-emerald-300 font-semibold">Tháng</span>, <span className="text-emerald-300 font-semibold">Tuần</span>, và <span className="text-emerald-300 font-semibold">Ngày</span>.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3 shrink-0">
+              <button
+                onClick={handleExportExcel}
+                disabled={loading}
+                className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-md transition-transform hover:-translate-y-0.5 disabled:opacity-50"
+              >
+                <Download className="h-4 w-4 text-[#006b68]" />
+                Xuất Excel
+              </button>
             </div>
           </div>
-        )}
+        </section>
 
-        {/* Main Report Table */}
-        <div className="bg-white rounded-2xl ring-1 ring-slate-900/5 shadow-sm overflow-hidden">
-          <div className="p-5 border-b border-slate-100 bg-slate-50/50">
-            <h2 className="text-lg font-semibold text-slate-800 tracking-tight">Thống Kê Bán Hàng Theo Cán Bộ</h2>
-            <p className="text-xs text-slate-500 mt-1">
-              {isUser ? 'Kết quả của bạn' : `Khoản vay và tiền gửi tính theo VNĐ, sản phẩm khác tính theo đơn vị của từng loại.`}
-              {' '}Lũy kế: <span className="font-semibold text-emerald-700">{timeRangeLabel[timeRange]}</span>
-            </p>
+        {/* Date Selector & Filters Card */}
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-end">
+            
+            {/* Date Pickers */}
+            <div className="lg:col-span-4 space-y-2">
+              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Ngày xem báo cáo</label>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={reportDate}
+                  onChange={(e) => e.target.value && setReportDate(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#006b68] outline-none transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Range Info Cards */}
+            <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Kỳ Tháng</p>
+                <p className="text-xs font-bold text-slate-700 mt-1">
+                  {new Date(selectedMonthStart).toLocaleDateString('vi-VN')} - {new Date(selectedMonthEnd).toLocaleDateString('vi-VN')}
+                </p>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Kỳ Tuần (T2-T6)</p>
+                <p className="text-xs font-bold text-slate-700 mt-1">
+                  {new Date(selectedMonday).toLocaleDateString('vi-VN')} - {new Date(selectedFriday).toLocaleDateString('vi-VN')}
+                </p>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Kỳ Ngày</p>
+                <p className="text-xs font-bold text-slate-700 mt-1">
+                  {new Date(reportDate).toLocaleDateString('vi-VN')}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Filtering row for Admin L1 / L2 */}
+          {!isUser && (
+            <div className="border-t border-slate-100 mt-5 pt-4 flex flex-wrap gap-4 items-center">
+              
+              {/* Admin L1 Filters */}
+              {isAdminL1 && (
+                <>
+                  <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold border border-slate-200">
+                    <button
+                      onClick={() => { setViewMode('all'); setSelectedUserId('ALL') }}
+                      className={clsx("flex items-center gap-1.5 px-3.5 py-2 rounded-lg transition-colors", viewMode === 'all' ? 'bg-[#006b68] text-white' : 'text-slate-600 hover:bg-white/50')}
+                    >
+                      <Users className="w-3.5 h-3.5" /> Toàn chi nhánh
+                    </button>
+                    <button
+                      onClick={() => { setViewMode('department'); setSelectedUserId('ALL') }}
+                      className={clsx("flex items-center gap-1.5 px-3.5 py-2 rounded-lg transition-colors", viewMode === 'department' ? 'bg-[#006b68] text-white' : 'text-slate-600 hover:bg-white/50')}
+                    >
+                      <Building2 className="w-3.5 h-3.5" /> Theo phòng ban
+                    </button>
+                    <button
+                      onClick={() => setViewMode('user')}
+                      className={clsx("flex items-center gap-1.5 px-3.5 py-2 rounded-lg transition-colors", viewMode === 'user' ? 'bg-[#006b68] text-white' : 'text-slate-600 hover:bg-white/50')}
+                    >
+                      <User className="w-3.5 h-3.5" /> Theo chuyên viên
+                    </button>
+                  </div>
+
+                  {(viewMode === 'department' || viewMode === 'user') && (
+                    <div className="flex flex-col gap-1">
+                      <select
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-[#006b68] outline-none"
+                        value={selectedDepartment}
+                        onChange={(e) => { setSelectedDepartment(e.target.value); setSelectedUserId('ALL') }}
+                        aria-label="Chọn phòng ban để lọc"
+                      >
+                        <option value="ALL">Tất cả phòng</option>
+                        {departments.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {viewMode === 'user' && (
+                    <div className="flex flex-col gap-1">
+                      <select
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-[#006b68] outline-none"
+                        value={selectedUserId}
+                        onChange={(e) => setSelectedUserId(e.target.value)}
+                        aria-label="Chọn chuyên viên để lọc"
+                      >
+                        <option value="ALL">Tất cả cán bộ</option>
+                        {profiles.filter(p => p.role === 'USER' && (selectedDepartment === 'ALL' || p.department_id === selectedDepartment)).map(p => (
+                          <option key={p.id} value={p.id}>{p.full_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Admin L2 Filters */}
+              {isAdminL2 && (
+                <>
+                  <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-bold border border-slate-200">
+                    <button
+                      onClick={() => { setViewMode('all'); setSelectedUserId('ALL') }}
+                      className={clsx("flex items-center gap-1.5 px-3.5 py-2 rounded-lg transition-colors", viewMode === 'all' ? 'bg-[#006b68] text-white' : 'text-slate-600 hover:bg-white/50')}
+                    >
+                      <Building2 className="w-3.5 h-3.5" /> Tổng hợp phòng
+                    </button>
+                    <button
+                      onClick={() => setViewMode('user')}
+                      className={clsx("flex items-center gap-1.5 px-3.5 py-2 rounded-lg transition-colors", viewMode === 'user' ? 'bg-[#006b68] text-white' : 'text-slate-600 hover:bg-white/50')}
+                    >
+                      <User className="w-3.5 h-3.5" /> Theo chuyên viên
+                    </button>
+                  </div>
+
+                  {viewMode === 'user' && (
+                    <div className="flex flex-col gap-1">
+                      <select
+                        className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:ring-2 focus:ring-[#006b68] outline-none"
+                        value={selectedUserId}
+                        onChange={(e) => setSelectedUserId(e.target.value)}
+                        aria-label="Chọn chuyên viên trong phòng"
+                      >
+                        <option value="ALL">Tất cả cán bộ phòng</option>
+                        {visibleProfiles.map(p => (
+                          <option key={p.id} value={p.id}>{p.full_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="ml-auto text-xs font-bold text-slate-400 italic">
+                Bộ lọc: {reportTitleScope}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Core Stats Progress Overview */}
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          
+          {/* Month progress */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tiến độ bình quân Tháng</p>
+              <h3 className="text-2xl font-black text-slate-800">{summaryMetrics.monthAvg}%</h3>
+              <p className="text-[10px] text-[#006b68] font-bold">Kỳ hạn: 30 ngày</p>
+            </div>
+            <div className="h-16 w-16 relative">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                <path className="text-slate-100" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path className="text-[#006b68]" strokeDasharray={`${summaryMetrics.monthAvg}, 100`} strokeWidth="3" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center text-xs font-black text-[#006b68]">{summaryMetrics.monthAvg}%</div>
+            </div>
+          </div>
+
+          {/* Week progress */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tiến độ bình quân Tuần</p>
+              <h3 className="text-2xl font-black text-slate-800">{summaryMetrics.weekAvg}%</h3>
+              <p className="text-[10px] text-[#006b68] font-bold">Kỳ hạn: Thứ 2 - Thứ 6</p>
+            </div>
+            <div className="h-16 w-16 relative">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                <path className="text-slate-100" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path className="text-[#006b68]" strokeDasharray={`${summaryMetrics.weekAvg}, 100`} strokeWidth="3" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center text-xs font-black text-[#006b68]">{summaryMetrics.weekAvg}%</div>
+            </div>
+          </div>
+
+          {/* Day progress */}
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Tiến độ bình quân Ngày</p>
+              <h3 className="text-2xl font-black text-slate-800">{summaryMetrics.dayAvg}%</h3>
+              <p className="text-[10px] text-[#006b68] font-bold">Ngày xem: {new Date(reportDate).toLocaleDateString('vi-VN')}</p>
+            </div>
+            <div className="h-16 w-16 relative">
+              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                <path className="text-slate-100" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path className="text-[#006b68]" strokeDasharray={`${summaryMetrics.dayAvg}, 100`} strokeWidth="3" strokeLinecap="round" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center text-xs font-black text-[#006b68]">{summaryMetrics.dayAvg}%</div>
+            </div>
+          </div>
+
+        </section>
+
+        {/* 3-Level Core Summary Report Table */}
+        <section className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-md">
+          <div className="flex flex-col gap-4 border-b border-slate-200/80 p-5 lg:flex-row lg:items-center lg:justify-between bg-slate-50/50">
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Báo cáo chỉ tiêu KPI liên thông 3 Cấp</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Hiển thị song hành chỉ tiêu và kết quả thực tế của kỳ hạn Tháng (Lũy kế), Tuần (Lũy kế T2-T6) và Ngày đã chọn.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                {targetUserIds.length} Chuyên viên
+              </span>
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-[#006b68]">
+                {KPI_METRICS.length} Chỉ tiêu sản phẩm
+              </span>
+            </div>
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
-              <span className="ml-2 text-slate-500">Đang tải...</span>
+            <div className="flex items-center justify-center py-32">
+              <Loader2 className="w-8 h-8 animate-spin text-[#006b68]" />
+              <span className="ml-3 text-slate-500 text-sm font-semibold">Đang truy vấn dữ liệu...</span>
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[980px]">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="py-4 px-4 font-semibold text-slate-700 text-sm border-r border-slate-200 sticky left-0 bg-slate-50 z-10 w-44">
-                      Danh mục
+              <table className="w-full border-collapse text-left min-w-[1280px]">
+                <thead>
+                  <tr className="border-b border-[#002625]">
+                    <th rowSpan={2} className="sticky left-0 z-20 min-w-[240px] bg-[#002625] px-4 py-4 text-xs font-semibold uppercase tracking-wider text-white border-r border-[#001b1a]">
+                      Danh mục chỉ tiêu
                     </th>
-                    <th className="py-4 px-4 font-semibold text-slate-700 text-sm border-r border-slate-200 sticky left-[176px] bg-slate-50 z-10 w-64">
-                      Nhóm bán hàng
-                    </th>
-                    <th className="py-4 px-4 font-semibold text-slate-700 text-sm text-center min-w-[80px] border-r border-slate-200">
+                    <th rowSpan={2} className="text-center w-24 bg-[#002625] px-2 py-4 text-xs font-semibold uppercase tracking-wider text-white border-r border-[#001b1a]">
                       Đơn vị
                     </th>
-                    {displayProfiles.map((agent: any) => (
-                      <th key={agent.id} className="py-4 px-4 font-semibold text-slate-700 text-sm text-center min-w-[140px]">
-                        <div className="flex flex-col items-center gap-1">
-                          <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
-                            {agent.full_name?.charAt(0) || 'U'}
-                          </div>
-                          <span className="truncate w-full">{agent.full_name}</span>
-                          <span className="text-[10px] font-normal text-slate-400 bg-white px-2 py-0.5 rounded border">
-                            {agent.department_id || '—'}
-                          </span>
-                        </div>
-                      </th>
-                    ))}
-                    <th className="py-4 px-4 font-bold text-slate-800 text-sm text-center bg-slate-100/50 min-w-[100px]">
-                      Tổng cộng
+                    <th colSpan={3} className="text-center bg-[#003835] px-4 py-3 text-xs font-semibold uppercase tracking-wider text-teal-50 border-r border-[#002b29]">
+                      Cấp Tháng
+                    </th>
+                    <th colSpan={3} className="text-center bg-[#004d4a] px-4 py-3 text-xs font-semibold uppercase tracking-wider text-teal-100 border-r border-[#003e3b]">
+                      Cấp Tuần (Thứ 2 - Thứ 6)
+                    </th>
+                    <th colSpan={3} className="text-center bg-[#005c58] px-4 py-3 text-xs font-semibold uppercase tracking-wider text-teal-50">
+                      Cấp Ngày
                     </th>
                   </tr>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    {/* Month columns */}
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 bg-teal-50/30">Chỉ tiêu</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 bg-teal-50/30">Lũy kế</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-600 bg-teal-50/50 border-r border-slate-200">% Đạt</th>
+                    
+                    {/* Week columns */}
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 bg-emerald-50/10">Chỉ tiêu</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 bg-emerald-50/10">Lũy kế</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-600 bg-emerald-50/30 border-r border-slate-200">% Đạt</th>
+                    
+                    {/* Day columns */}
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 bg-slate-50">Chỉ tiêu</th>
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-600 bg-slate-50">Thực tế</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-600 bg-slate-100">% Đạt</th>
+                  </tr>
                 </thead>
-                <tbody>
-                  {reportRows.map((row) => {
-                    let rowTotal = 0
+                <tbody className="divide-y divide-slate-100">
+                  {KPI_METRICS.map((kpi, idx) => {
+                    // Month calculations
+                    const mTarget = getTargetValue(kpi.key, 'month')
+                    const mActual = getActualValue(kpi.key, selectedMonthStart, selectedMonthEnd)
+                    const mPct = getPercent(mActual, mTarget)
+
+                    // Week calculations
+                    const wTarget = getTargetValue(kpi.key, 'week')
+                    const wActual = getActualValue(kpi.key, selectedMonday, selectedFriday)
+                    const wPct = getPercent(wActual, wTarget)
+
+                    // Day calculations
+                    const dTarget = getTargetValue(kpi.key, 'day')
+                    const dActual = getActualValue(kpi.key, reportDate, reportDate)
+                    const dPct = getPercent(dActual, dTarget)
+
+                    const isEven = idx % 2 === 0
+                    const rowBg = isEven ? "bg-white" : "bg-slate-50/40"
+
                     return (
-                      <tr key={row.key} className="border-b last:border-0 hover:bg-slate-50/50 transition-colors">
-                        <td className="py-4 px-4 text-sm font-medium text-slate-800 border-r border-slate-100 sticky left-0 bg-white shadow-[1px_0_0_0_#f1f5f9]">
-                          {SOURCE_LABELS[row.sourceType] || row.sourceType}
+                      <tr key={kpi.key} className={clsx("hover:bg-slate-50 transition-colors", rowBg)}>
+                        <td className="sticky left-0 z-10 font-semibold text-slate-800 text-sm px-4 py-3 border-r border-slate-100 bg-white shadow-[1px_0_0_0_#f1f5f9]">
+                          {kpi.label}
                         </td>
-                        <td className="py-4 px-4 text-sm font-medium text-slate-800 border-r border-slate-100 sticky left-[176px] bg-white shadow-[1px_0_0_0_#f1f5f9]">
-                          {row.label}
+                        <td className="text-center text-xs font-bold text-slate-500 px-2 py-3 bg-slate-50 border-r border-slate-200">
+                          {kpi.unit}
                         </td>
-                        <td className="py-4 px-4 text-center text-xs font-semibold text-slate-500 bg-slate-50 border-r border-slate-100">
-                          {row.unit}
+                        
+                        {/* Month Data Cells */}
+                        <td className="px-3 py-3 text-right font-medium text-slate-600 bg-teal-50/10">
+                          {formatValue(mTarget, kpi.type)}
                         </td>
-                        {displayProfiles.map((agent: any) => {
-                          const value = getMetricValue(row, agent.id)
-                          rowTotal += value
-                          return (
-                            <td key={agent.id} className="py-4 px-4 text-center">
-                              <span className={value > 0 ? "inline-flex items-center justify-center min-w-8 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 font-semibold" : "text-slate-300 font-medium"}>
-                                {formatMetric(value)}
-                              </span>
-                            </td>
-                          )
-                        })}
-                        <td className="py-4 px-4 text-center bg-slate-50/30">
-                          <span className="font-bold text-slate-800">{formatMetric(rowTotal)}</span>
+                        <td className="px-3 py-3 text-right font-bold text-slate-800 bg-teal-50/10">
+                          {formatValue(mActual, kpi.type)}
+                        </td>
+                        <td className={clsx("px-3 py-3 text-center border-r border-slate-200 bg-teal-50/20", getPercentColorClass(mPct))}>
+                          {mPct !== null ? `${mPct}%` : '-'}
+                        </td>
+
+                        {/* Week Data Cells */}
+                        <td className="px-3 py-3 text-right font-medium text-slate-600 bg-emerald-50/5">
+                          {formatValue(wTarget, kpi.type)}
+                        </td>
+                        <td className="px-3 py-3 text-right font-bold text-slate-800 bg-emerald-50/5">
+                          {formatValue(wActual, kpi.type)}
+                        </td>
+                        <td className={clsx("px-3 py-3 text-center border-r border-slate-200 bg-emerald-50/10", getPercentColorClass(wPct))}>
+                          {wPct !== null ? `${wPct}%` : '-'}
+                        </td>
+
+                        {/* Day Data Cells */}
+                        <td className="px-3 py-3 text-right font-medium text-slate-600">
+                          {formatValue(dTarget, kpi.type)}
+                        </td>
+                        <td className="px-3 py-3 text-right font-bold text-slate-800">
+                          {formatValue(dActual, kpi.type)}
+                        </td>
+                        <td className={clsx("px-3 py-3 text-center bg-slate-50", getPercentColorClass(dPct))}>
+                          {dPct !== null ? `${dPct}%` : '-'}
                         </td>
                       </tr>
                     )
                   })}
-                  {reportRows.length === 0 && (
-                    <tr><td colSpan={displayProfiles.length + 4} className="py-12 text-center text-slate-500">Chưa có dữ liệu bán hàng trong khoảng thời gian này.</td></tr>
-                  )}
                 </tbody>
               </table>
             </div>
           )}
-        </div>
+        </section>
+
+        {/* Empty status check */}
+        {!loading && targetUserIds.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center text-slate-500 font-medium">
+            Không tìm thấy dữ liệu cán bộ hoặc phòng ban tương ứng. Vui lòng kiểm tra lại bộ lọc.
+          </div>
+        )}
+
       </div>
     </DashboardLayout>
   )

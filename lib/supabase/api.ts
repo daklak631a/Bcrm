@@ -1365,3 +1365,67 @@ export async function updateSystemSetting(key: string, value: string) {
   if (error) throw error
   return data
 }
+
+// ==========================================
+// WEEKLY & DAILY PLANS
+// ==========================================
+
+export async function fetchWeeklyPlans(userId: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('weekly_plans')
+    .select('*')
+    .eq('user_id', userId)
+    .order('start_date', { ascending: false })
+  if (error) {
+    console.warn("Table weekly_plans may not exist yet:", error)
+    return []
+  }
+  return data || []
+}
+
+export async function fetchDailyPlans(userId: string, startDate: string, endDate: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('daily_plans')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('target_date', startDate)
+    .lte('target_date', endDate)
+    .order('target_date', { ascending: true })
+  if (error) {
+    console.warn("Table daily_plans may not exist yet:", error)
+    return []
+  }
+  return data || []
+}
+
+export async function upsertWeeklyPlan(plan: any) {
+  const supabase = getSupabase()
+  const payload = {
+    ...plan,
+    updated_at: new Date().toISOString()
+  }
+  const { data, error } = await supabase
+    .from('weekly_plans')
+    .upsert(payload, { onConflict: 'user_id,start_date' })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function upsertDailyPlans(plans: any[]) {
+  const supabase = getSupabase()
+  const payloads = plans.map(p => ({
+    ...p,
+    updated_at: new Date().toISOString()
+  }))
+  const { data, error } = await supabase
+    .from('daily_plans')
+    .upsert(payloads, { onConflict: 'user_id,target_date' })
+    .select()
+  if (error) throw error
+  return data
+}
+

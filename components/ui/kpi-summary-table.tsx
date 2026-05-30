@@ -65,7 +65,7 @@ export function KPISummaryTable() {
   return (
     <Card className="w-full overflow-hidden border-none shadow-md">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
+        <CardTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#006b68] to-[#33b7ab]">
           ĐỘNG LỰC PHÒNG NGÀY
         </CardTitle>
         <Select value={period} onValueChange={(val) => val && setPeriod(val)}>
@@ -85,17 +85,17 @@ export function KPISummaryTable() {
         <div className="min-w-[800px]">
           {loading ? (
             <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#006b68]"></div>
             </div>
           ) : (
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="bg-indigo-50 border-b-2 border-indigo-100">
-                  <th className="py-3 px-4 text-left font-semibold text-indigo-900 w-12 border-r border-indigo-100">STT</th>
-                  <th className="py-3 px-4 text-left font-semibold text-indigo-900 min-w-[200px] border-r border-indigo-100">HOẠT ĐỘNG/ CHỈ TIÊU</th>
-                  <th className="py-3 px-4 text-center font-semibold text-indigo-900 w-24 border-r border-indigo-100">Đơn vị</th>
+                <tr className="bg-[#e6f3f2] border-b-2 border-[#ccedea]">
+                  <th className="py-3 px-4 text-left font-semibold text-[#003e3b] w-12 border-r border-[#ccedea]">STT</th>
+                  <th className="py-3 px-4 text-left font-semibold text-[#003e3b] min-w-[200px] border-r border-[#ccedea]">HOẠT ĐỘNG/ CHỈ TIÊU</th>
+                  <th className="py-3 px-4 text-center font-semibold text-[#003e3b] w-24 border-r border-[#ccedea]">Đơn vị</th>
                   {data.map((user) => (
-                    <th key={user.manager_id} className="py-3 px-4 text-center font-semibold text-indigo-900 min-w-[120px] border-r border-indigo-100 whitespace-nowrap">
+                    <th key={user.manager_id} className="py-3 px-4 text-center font-semibold text-[#003e3b] min-w-[120px] border-r border-[#ccedea] whitespace-nowrap">
                       {user.full_name}
                     </th>
                   ))}

@@ -48,7 +48,7 @@ export default function AuditLogsPage() {
   const getActionColor = (action: string) => {
     switch (action) {
       case 'CREATE': return 'text-emerald-600 bg-emerald-50 border-emerald-200'
-      case 'UPDATE': return 'text-blue-600 bg-blue-50 border-blue-200'
+      case 'UPDATE': return 'text-teal-600 bg-teal-50 border-teal-200'
       case 'DELETE': return 'text-rose-600 bg-rose-50 border-rose-200'
       default: return 'text-slate-600 bg-slate-50 border-slate-200'
     }

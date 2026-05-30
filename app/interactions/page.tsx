@@ -88,7 +88,7 @@ function InteractionsPageContent() {
     switch (result) {
       case "SUCCESS": return { label: "Thành công", color: "bg-emerald-100 text-emerald-700" }
       case "NO_ANSWER": return { label: "Không nghe máy", color: "bg-slate-100 text-slate-700" }
-      case "FOLLOW_UP": return { label: "Theo dõi", color: "bg-blue-100 text-blue-700" }
+      case "FOLLOW_UP": return { label: "Theo dõi", color: "bg-teal-50 text-[#006b68] border border-teal-200/50" }
       case "NOT_INTERESTED": return { label: "Không quan tâm", color: "bg-rose-100 text-rose-700" }
       case "PENDING": return { label: "Đang chờ", color: "bg-amber-100 text-amber-700" }
       default: return { label: result, color: "bg-slate-100 text-slate-700" }
@@ -188,7 +188,7 @@ function InteractionsPageContent() {
           </div>
           <div className="bg-white p-6 rounded-xl border shadow-sm flex items-center justify-between">
             <div><p className="text-sm font-medium text-slate-500 mb-1">Cuộc Gọi</p><h3 className="text-2xl font-bold text-slate-800">{callCount}</h3></div>
-            <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><PhoneCall className="w-6 h-6" /></div>
+            <div className="w-12 h-12 rounded-full bg-teal-50 text-[#006b68] border border-teal-100 flex items-center justify-center"><PhoneCall className="w-6 h-6" /></div>
           </div>
           <div className="bg-white p-6 rounded-xl border shadow-sm flex items-center justify-between">
             <div><p className="text-sm font-medium text-slate-500 mb-1">Gặp Mặt</p><h3 className="text-2xl font-bold text-slate-800">{meetingCount}</h3></div>

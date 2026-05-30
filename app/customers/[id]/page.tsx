@@ -88,7 +88,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       case 'closed':
         return <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium">Đã đóng</span>
       case 'matured':
-        return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">Đã tất toán</span>
+        return <span className="px-2 py-1 bg-teal-50 text-[#006b68] border border-teal-200/50 rounded-full text-xs font-medium">Đã tất toán</span>
       case 'completed':
         return <span className="px-2 py-1 bg-teal-100 text-teal-700 rounded-full text-xs font-medium">Thành công</span>
       case 'interested':
@@ -101,7 +101,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const getSaleMeta = (sourceType: string) => {
     switch (sourceType) {
       case 'LOAN':
-        return { label: 'Khoản vay', icon: Briefcase, badge: 'bg-indigo-100 text-indigo-700', iconWrap: 'bg-indigo-50 text-indigo-600' }
+        return { label: 'Khoản vay', icon: Briefcase, badge: 'bg-teal-100 text-teal-700', iconWrap: 'bg-teal-50 text-teal-600' }
       case 'DEPOSIT':
         return { label: 'Tiền gửi', icon: CreditCard, badge: 'bg-emerald-100 text-emerald-700', iconWrap: 'bg-emerald-50 text-emerald-600' }
       default:
@@ -300,7 +300,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               {/* Summary Stats */}
               <div className="grid grid-cols-3 gap-4">
                 <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-teal-50 text-[#006b68] border border-teal-100 flex items-center justify-center mb-2">
                     <Briefcase className="w-4 h-4" />
                   </div>
                   <p className="text-xl font-bold text-slate-800">{loanSalesCount}</p>

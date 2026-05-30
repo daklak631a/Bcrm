@@ -348,7 +348,7 @@ function ProductsPageContent() {
                     </div>
                   )}
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><PackageSearch className="w-5 h-5" /></div>
+                    <div className="w-10 h-10 rounded-xl bg-teal-50 text-[#006b68] border border-teal-100/50 flex items-center justify-center shrink-0"><PackageSearch className="w-5 h-5" /></div>
                     <div>
                       <h3 className="font-bold text-slate-800 text-lg leading-tight">{product.name}</h3>
                       <p className="text-xs text-slate-500 font-medium">{product.type} • {metricDefinition.unitLabel}</p>
@@ -361,7 +361,7 @@ function ProductsPageContent() {
                     </div>
                     <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                       <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Kết quả</p>
-                      <p className="font-semibold text-indigo-600">{formatMetricValue(currentMetricValue, metricDefinition.unitLabel)}</p>
+                      <p className="font-semibold text-[#006b68]">{formatMetricValue(currentMetricValue, metricDefinition.unitLabel)}</p>
                       <p className="text-[11px] text-slate-500 mt-1">{performance.completedCount} giao dịch thành công</p>
                     </div>
                   </div>
@@ -371,12 +371,12 @@ function ProductsPageContent() {
                       <span className="text-xs font-bold text-slate-800">{percent}%</span>
                     </div>
                     <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4">
-                      <div className={clsx("h-1.5 rounded-full transition-all duration-500", percent >= 100 ? "bg-emerald-500" : "bg-indigo-500")} style={{ width: `${percent}%` }} />
+                      <div className={clsx("h-1.5 rounded-full transition-all duration-500", percent >= 100 ? "bg-emerald-500" : "bg-teal-500")} style={{ width: `${percent}%` }} />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                       <Link
                         href={getCreateSaleHref(product.id)}
-                        className="py-2 flex items-center justify-center gap-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                        className="py-2 flex items-center justify-center gap-2 bg-[#006b68] hover:bg-[#005451] text-white rounded-lg text-sm font-medium transition-colors"
                       >
                         <ShoppingCart className="w-4 h-4" /> Bảng Bán Hàng
                       </Link>
@@ -398,7 +398,7 @@ function ProductsPageContent() {
                           }
                           setShowSaleModal(true)
                         }}
-                        className="py-2 flex items-center justify-center gap-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors"
+                        className="py-2 flex items-center justify-center gap-2 bg-teal-50 text-[#006b68] hover:bg-teal-100/50 border border-teal-200/50 rounded-lg text-sm font-medium transition-colors"
                       >
                         <ShoppingCart className="w-4 h-4" /> Ghi nhanh tại đây
                       </button>

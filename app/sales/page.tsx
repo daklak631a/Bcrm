@@ -68,6 +68,7 @@ function SalesPageContent() {
   const [batchProductNotes, setBatchProductNotes] = useState<Record<string, string>>({})
   const [isBatchMode, setIsBatchMode] = useState(false) // true = không cần KH
   const [batchEntryNote, setBatchEntryNote] = useState("")
+  const [isSingleBatchMode, setIsSingleBatchMode] = useState(false)
 
   const filteredBatchCustomers = useMemo(() => {
     if (!batchCustomerSearch.trim()) return customers
@@ -283,7 +284,7 @@ function SalesPageContent() {
   const getSourceMeta = (sourceType: SalesRecord["source_type"]) => {
     switch (sourceType) {
       case "LOAN":
-        return { label: "Khoản vay", icon: Briefcase, color: "bg-indigo-100 text-indigo-700" }
+        return { label: "Khoản vay", icon: Briefcase, color: "bg-teal-100 text-teal-700" }
       case "DEPOSIT":
         return { label: "Tiền gửi", icon: PiggyBank, color: "bg-emerald-100 text-emerald-700" }
       default:
@@ -318,11 +319,12 @@ function SalesPageContent() {
       setCustomerSearch("")
     }
     setShowCustomerDropdown(false)
+    setIsSingleBatchMode(false)
   }
 
   const handleCreateRecord = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    if (!selectedCustomerId) {
+    if (!isSingleBatchMode && !selectedCustomerId) {
       toast.error("Vui lòng chọn khách hàng")
       return
     }
@@ -337,21 +339,32 @@ function SalesPageContent() {
 
     try {
       setFormLoading(true)
-      await createSalesRecord({
-        source_type: saleType,
-        customer_id: selectedCustomerId,
-        agent_id: user?.id || "",
-        title: saleType === "PRODUCT" ? undefined : (form.get("title") as string),
-        amount: saleType === "PRODUCT" ? 0 : Number(form.get("amount") || 0),
-        result_value: saleType === "PRODUCT" ? resultValue : undefined,
-        account_number: (form.get("account_number") as string) || undefined,
-        sale_date: form.get("sale_date") as string,
-        due_date: saleType === "LOAN" ? (form.get("due_date") as string) : undefined,
-        maturity_date: saleType === "DEPOSIT" ? (form.get("maturity_date") as string) : undefined,
-        status: form.get("status") as string,
-        note: (form.get("note") as string) || undefined,
-        product_id: saleType === "PRODUCT" ? (selectedProductId || (form.get("product_id") as string)) : undefined,
-      })
+      if (saleType === "PRODUCT" && isSingleBatchMode) {
+        await createBatchSale({
+          product_id: selectedProductId || (form.get("product_id") as string),
+          agent_id: user?.id || "",
+          status: form.get("status") as string,
+          sale_date: form.get("sale_date") as string,
+          result_value: resultValue,
+          batch_note: (form.get("note") as string) || undefined,
+        })
+      } else {
+        await createSalesRecord({
+          source_type: saleType,
+          customer_id: selectedCustomerId,
+          agent_id: user?.id || "",
+          title: saleType === "PRODUCT" ? undefined : (form.get("title") as string),
+          amount: saleType === "PRODUCT" ? 0 : Number(form.get("amount") || 0),
+          result_value: saleType === "PRODUCT" ? resultValue : undefined,
+          account_number: (form.get("account_number") as string) || undefined,
+          sale_date: form.get("sale_date") as string,
+          due_date: saleType === "LOAN" ? (form.get("due_date") as string) : undefined,
+          maturity_date: saleType === "DEPOSIT" ? (form.get("maturity_date") as string) : undefined,
+          status: form.get("status") as string,
+          note: (form.get("note") as string) || undefined,
+          product_id: saleType === "PRODUCT" ? (selectedProductId || (form.get("product_id") as string)) : undefined,
+        })
+      }
       toast.success("Đã ghi nhận bán hàng")
       setShowAddModal(false)
       resetModalState()
@@ -523,46 +536,72 @@ function SalesPageContent() {
             </FormSelect>
           </FormField>
 
-          <div className="space-y-1 relative">
-            <label className="text-sm font-medium text-slate-700">Khách hàng <span className="text-rose-500">*</span></label>
-            <div className="relative">
+          {saleType === "PRODUCT" && (
+            <div className="flex items-center gap-2 p-2 bg-amber-50/50 border border-amber-200 rounded-xl">
               <input
-                type="text"
-                value={customerSearch}
+                type="checkbox"
+                id="single-batch-mode-toggle"
+                checked={isSingleBatchMode}
                 onChange={(e) => {
-                  setCustomerSearch(e.target.value)
-                  setShowCustomerDropdown(true)
-                  if (selectedCustomerId) setSelectedCustomerId("")
+                  setIsSingleBatchMode(e.target.checked)
+                  if (e.target.checked) {
+                    setSelectedCustomerId("BATCH")
+                    setCustomerSearch("Cập nhật theo lô cuối ngày")
+                  } else {
+                    setSelectedCustomerId("")
+                    setCustomerSearch("")
+                  }
                 }}
-                onFocus={() => setShowCustomerDropdown(true)}
-                placeholder="Tìm kiếm tên hoặc SĐT..."
-                className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                className="h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
               />
-              {showCustomerDropdown && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  {filteredCustomers.length > 0 ? (
-                    filteredCustomers.map((customer) => (
-                      <div
-                        key={customer.id}
-                        className={clsx("px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 flex items-center justify-between", selectedCustomerId === customer.id && "bg-emerald-50 text-emerald-700")}
-                        onClick={() => {
-                          setSelectedCustomerId(customer.id)
-                          setCustomerSearch(getCustomerFullName(customer))
-                          setShowCustomerDropdown(false)
-                        }}
-                      >
-                        <span>{getCustomerFullName(customer)} {customer.phone ? `- ${customer.phone}` : ""}</span>
-                        {selectedCustomerId === customer.id && <span className="text-xs font-medium">Đã chọn</span>}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-3 py-4 text-sm text-center text-slate-500">Không tìm thấy khách hàng.</div>
-                  )}
-                </div>
-              )}
+              <label htmlFor="single-batch-mode-toggle" className="text-xs font-semibold text-amber-800 cursor-pointer">
+                Cập nhật theo lô cuối ngày (không cần chọn KH cụ thể)
+              </label>
             </div>
-            {showCustomerDropdown && <div className="fixed inset-0 z-0" onClick={() => setShowCustomerDropdown(false)}></div>}
-          </div>
+          )}
+
+          {!isSingleBatchMode && (
+            <div className="space-y-1 relative">
+              <label className="text-sm font-medium text-slate-700">Khách hàng <span className="text-rose-500">*</span></label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={customerSearch}
+                  onChange={(e) => {
+                    setCustomerSearch(e.target.value)
+                    setShowCustomerDropdown(true)
+                    if (selectedCustomerId) setSelectedCustomerId("")
+                  }}
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  placeholder="Tìm kiếm tên hoặc SĐT..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-[#006b68] outline-none"
+                />
+                {showCustomerDropdown && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    {filteredCustomers.length > 0 ? (
+                      filteredCustomers.map((customer) => (
+                        <div
+                          key={customer.id}
+                          className={clsx("px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 flex items-center justify-between", selectedCustomerId === customer.id && "bg-teal-50 text-[#006b68]")}
+                          onClick={() => {
+                            setSelectedCustomerId(customer.id)
+                            setCustomerSearch(getCustomerFullName(customer))
+                            setShowCustomerDropdown(false)
+                          }}
+                        >
+                          <span>{getCustomerFullName(customer)} {customer.phone ? `- ${customer.phone}` : ""}</span>
+                          {selectedCustomerId === customer.id && <span className="text-xs font-medium text-[#006b68]">Đã chọn</span>}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-3 py-4 text-sm text-center text-slate-500">Không tìm thấy khách hàng.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+              {showCustomerDropdown && <div className="fixed inset-0 z-0" onClick={() => setShowCustomerDropdown(false)}></div>}
+            </div>
+          )}
 
           {saleType === "PRODUCT" ? (
             <>

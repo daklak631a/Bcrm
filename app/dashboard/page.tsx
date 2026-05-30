@@ -48,7 +48,7 @@ export default function DashboardPage() {
   const getSaleMeta = (sale: any) => {
     switch (sale.source_type) {
       case 'LOAN':
-        return { label: 'Khoản vay', color: 'bg-indigo-100 text-indigo-700' }
+        return { label: 'Khoản vay', color: 'bg-emerald-50 text-[#006b68] border border-emerald-100' }
       case 'DEPOSIT':
         return { label: 'Tiền gửi', color: 'bg-emerald-100 text-emerald-700' }
       default:
@@ -178,7 +178,7 @@ export default function DashboardPage() {
       {/* Recent Sales */}
       <div className="mt-6 bg-white rounded-2xl ring-1 ring-slate-900/5 shadow-sm p-6 overflow-hidden">
         <h2 className="text-lg font-semibold text-slate-800 mb-4 tracking-tight flex items-center gap-2">
-          <TrendingUp className="w-5 h-5 text-indigo-500" /> Kết Quả Bán Hàng Gần Đây
+          <TrendingUp className="w-5 h-5 text-[#006b68]" /> Kết Quả Bán Hàng Gần Đây
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {salesRecords.slice(0, 8).map((sale: any) => {
@@ -186,7 +186,7 @@ export default function DashboardPage() {
             return (
               <div key={sale.id} className="p-4 border border-slate-100 rounded-xl bg-slate-50 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-3 pt-4 opacity-10">
-                  <Package className="w-12 h-12 text-indigo-500 transform group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300" />
+                  <Package className="w-12 h-12 text-[#006b68] transform group-hover:scale-110 group-hover:rotate-12 transition-transform duration-300" />
                 </div>
                 <div className="relative z-10">
                   <span className={clsx(
