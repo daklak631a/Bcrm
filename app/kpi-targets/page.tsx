@@ -969,7 +969,7 @@ export default function KpiTargetsPage() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
-              {user?.role === "ADMIN_LEVEL_1" && (
+              {canManage && (
                 <button
                   onClick={() => setShowCreatePlan(true)}
                   className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-lg transition-transform hover:-translate-y-0.5"

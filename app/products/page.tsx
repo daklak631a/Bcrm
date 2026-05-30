@@ -331,82 +331,114 @@ function ProductsPageContent() {
             {searchQuery ? `Không tìm thấy sản phẩm "${searchQuery}"` : 'Chưa có sản phẩm nào. Bấm "Thêm Sản Phẩm" để bắt đầu.'}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProducts.map((product: any) => {
-              const metricDefinition = getProductMetricDefinition(product)
-              const performance = productPerformanceMap.get(product.id) || { metricValue: 0, completedCount: 0 }
-              const currentMetricValue = performance.metricValue
-              const resolvedTarget = getProductTarget(product)
-              const percent = resolvedTarget > 0 ? Math.min(Math.round((currentMetricValue / resolvedTarget) * 100), 100) : 0
-              return (
-                <div key={product.id} className="bg-white rounded-2xl ring-1 ring-slate-900/5 shadow-sm p-6 flex flex-col relative group">
-                  {isAdmin && (
-                    <div className="absolute top-4 right-4 flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => handleDeleteProduct(product.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-teal-50 text-[#006b68] border border-teal-100/50 flex items-center justify-center shrink-0"><PackageSearch className="w-5 h-5" /></div>
-                    <div>
-                      <h3 className="font-bold text-slate-800 text-lg leading-tight">{product.name}</h3>
-                      <p className="text-xs text-slate-500 font-medium">{product.type} • {metricDefinition.unitLabel}</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                      <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><Target className="w-3 h-3" /> Mục tiêu</p>
-                      <p className="font-semibold text-slate-800">{formatMetricValue(resolvedTarget, metricDefinition.unitLabel)}</p>
-                    </div>
-                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                      <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Kết quả</p>
-                      <p className="font-semibold text-[#006b68]">{formatMetricValue(currentMetricValue, metricDefinition.unitLabel)}</p>
-                      <p className="text-[11px] text-slate-500 mt-1">{performance.completedCount} giao dịch thành công</p>
-                    </div>
-                  </div>
-                  <div className="mt-auto pt-4 border-t border-slate-100">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs font-medium text-slate-600">Tiến độ</span>
-                      <span className="text-xs font-bold text-slate-800">{percent}%</span>
-                    </div>
-                    <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4">
-                      <div className={clsx("h-1.5 rounded-full transition-all duration-500", percent >= 100 ? "bg-emerald-500" : "bg-teal-500")} style={{ width: `${percent}%` }} />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
-                      <Link
-                        href={getCreateSaleHref(product.id)}
-                        className="py-2 flex items-center justify-center gap-2 bg-[#006b68] hover:bg-[#005451] text-white rounded-lg text-sm font-medium transition-colors"
-                      >
-                        <ShoppingCart className="w-4 h-4" /> Bảng Bán Hàng
-                      </Link>
-                      <button 
-                        onClick={() => {
-                          setSelectedProduct(product)
-                          if (customerIdParam) {
-                            const presetCustomer = customers.find(c => c.id === customerIdParam)
-                            if (presetCustomer) {
-                              setSelectedCustomerId(presetCustomer.id)
-                              setCustomerSearch(getCustomerFullName(presetCustomer))
-                            } else {
-                              setSelectedCustomerId("")
-                              setCustomerSearch("")
-                            }
-                          } else {
-                            setSelectedCustomerId("")
-                            setCustomerSearch("")
-                          }
-                          setShowSaleModal(true)
-                        }}
-                        className="py-2 flex items-center justify-center gap-2 bg-teal-50 text-[#006b68] hover:bg-teal-100/50 border border-teal-200/50 rounded-lg text-sm font-medium transition-colors"
-                      >
-                        <ShoppingCart className="w-4 h-4" /> Ghi nhanh tại đây
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+          <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1000px] border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    <th className="py-4 px-6">Sản phẩm</th>
+                    <th className="py-4 px-4 text-center">Đơn vị</th>
+                    <th className="py-4 px-4 text-right">Mục tiêu</th>
+                    <th className="py-4 px-4 text-right">Thực tế</th>
+                    <th className="py-4 px-6 min-w-[200px]">Tiến độ</th>
+                    <th className="py-4 px-6 text-right">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredProducts.map((product: any, idx: number) => {
+                    const metricDefinition = getProductMetricDefinition(product)
+                    const performance = productPerformanceMap.get(product.id) || { metricValue: 0, completedCount: 0 }
+                    const currentMetricValue = performance.metricValue
+                    const resolvedTarget = getProductTarget(product)
+                    const percent = resolvedTarget > 0 ? Math.min(Math.round((currentMetricValue / resolvedTarget) * 100), 100) : 0
+                    
+                    return (
+                      <tr key={product.id} className={clsx("hover:bg-slate-50/80 transition-colors group", idx % 2 === 0 ? "bg-white" : "bg-slate-50/30")}>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-teal-50 text-[#006b68] border border-teal-100/50 flex items-center justify-center shrink-0">
+                              <PackageSearch className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-800 text-[14px] truncate">{product.name}</p>
+                              <p className="text-[11px] text-slate-400 font-medium mt-0.5">{product.type}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-center">
+                          <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                            {metricDefinition.unitLabel}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-right font-semibold text-slate-700">
+                          {formatMetricValue(resolvedTarget, metricDefinition.unitLabel)}
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                          <p className="font-bold text-[#006b68]">{formatMetricValue(currentMetricValue, metricDefinition.unitLabel)}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5 font-medium">{performance.completedCount} giao dịch</p>
+                        </td>
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1">
+                              <div className="w-full bg-slate-100 rounded-full h-2">
+                                <div 
+                                  className={clsx("h-2 rounded-full transition-all duration-500", percent >= 100 ? "bg-emerald-500" : "bg-[#006b68]")} 
+                                  style={{ width: `${percent}%` }} 
+                                />
+                              </div>
+                            </div>
+                            <span className="text-xs font-bold text-slate-700 shrink-0 w-8 text-right">{percent}%</span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-6 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setSelectedProduct(product)
+                                if (customerIdParam) {
+                                  const presetCustomer = customers.find(c => c.id === customerIdParam)
+                                  if (presetCustomer) {
+                                    setSelectedCustomerId(presetCustomer.id)
+                                    setCustomerSearch(getCustomerFullName(presetCustomer))
+                                  } else {
+                                    setSelectedCustomerId("")
+                                    setCustomerSearch("")
+                                  }
+                                } else {
+                                  setSelectedCustomerId("")
+                                  setCustomerSearch("")
+                                }
+                                setShowSaleModal(true)
+                              }}
+                              className="px-3 py-1.5 bg-teal-50 text-[#006b68] hover:bg-teal-100/50 border border-teal-200/50 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1"
+                            >
+                              <ShoppingCart className="w-3.5 h-3.5" /> Ghi nhanh
+                            </button>
+                            
+                            <Link
+                              href={getCreateSaleHref(product.id)}
+                              className="px-3 py-1.5 bg-[#006b68] hover:bg-[#005451] text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1"
+                            >
+                              <ShoppingCart className="w-3.5 h-3.5" /> Bán hàng
+                            </Link>
+
+                            {isAdmin && (
+                              <button 
+                                onClick={() => handleDeleteProduct(product.id)} 
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors ml-1"
+                                title="Xóa sản phẩm"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>
