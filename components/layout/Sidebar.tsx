@@ -1,7 +1,9 @@
-'use client'
+"use client"
 
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { fetchSystemSettings } from "@/lib/supabase/api"
 import {
   Users,
   PieChart,
@@ -9,7 +11,8 @@ import {
   Package,
   ShoppingCart,
   Target,
-  X
+  X,
+  Settings
 } from "lucide-react"
 
 import { useAuthStore } from "@/store/useAuthStore"
@@ -21,6 +24,26 @@ interface SidebarProps {
 export function Sidebar({ onClose }: SidebarProps) {
   const pathname = usePathname()
   const { user } = useAuthStore()
+
+  const [logoUrl, setLogoUrl] = useState("")
+  const [appName, setAppName] = useState("Nexus Banking CRM")
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const settings = await fetchSystemSettings()
+        const logo = settings.find(s => s.key === 'logo_url')?.value
+        const name = settings.find(s => s.key === 'app_name')?.value
+        if (logo) setLogoUrl(logo)
+        if (name) setAppName(name)
+      } catch (err) {
+        console.warn("Failed to load logo in Sidebar:", err)
+      }
+    }
+    loadSettings()
+    window.addEventListener('storage', loadSettings)
+    return () => window.removeEventListener('storage', loadSettings)
+  }, [])
 
   const links = [
     { href: "/dashboard", label: "Tổng Quan", icon: PieChart },
@@ -34,6 +57,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   if (user?.role === 'ADMIN_LEVEL_1') {
     links.push({ href: "/team", label: "Phân Bổ Nhân Sự", icon: Users })
     links.push({ href: "/audit-logs", label: "Lịch Sử Hệ Thống", icon: Package })
+    links.push({ href: "/settings", label: "Cấu Hình Hệ Thống", icon: Settings })
   }
 
   if (user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADMIN_LEVEL_2') {
@@ -43,9 +67,16 @@ export function Sidebar({ onClose }: SidebarProps) {
   return (
     <aside className="w-full h-full bg-slate-900 flex-shrink-0 flex flex-col text-slate-300">
       <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-        <div className="flex flex-col text-white">
-          <span className="font-bold text-lg text-emerald-400">Nexus Banking CRM</span>
-          <span className="text-xs text-slate-500 uppercase tracking-wider">Business Portal</span>
+        <div className="flex items-center gap-2.5 text-white">
+          {logoUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={logoUrl} alt="Logo" className="max-h-9 object-contain" />
+          ) : (
+            <div className="flex flex-col">
+              <span className="font-bold text-lg text-emerald-400">{appName}</span>
+              <span className="text-xs text-slate-500 uppercase tracking-wider">Business Portal</span>
+            </div>
+          )}
         </div>
         {onClose && (
           <button onClick={onClose} className="md:hidden p-1 text-slate-400 hover:text-white transition-colors">

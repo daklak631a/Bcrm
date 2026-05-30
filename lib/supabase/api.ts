@@ -1333,3 +1333,35 @@ export async function updateTransferRequestStatus(
 
   return data
 }
+
+// ==========================================
+// SYSTEM SETTINGS
+// ==========================================
+
+export async function fetchSystemSettings() {
+  const supabase = getSupabase()
+  try {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('*')
+    if (error) {
+      console.warn("Table system_settings may not exist yet:", error)
+      return []
+    }
+    return data || []
+  } catch (err) {
+    console.warn("Failed to fetch system settings:", err)
+    return []
+  }
+}
+
+export async function updateSystemSetting(key: string, value: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('system_settings')
+    .upsert({ key, value, updated_at: new Date().toISOString() })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}

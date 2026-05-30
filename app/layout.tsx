@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from 'next/font/google'
 import AuthProvider from '@/providers/auth-provider'
 import QueryProvider from '@/providers/query-provider'
 import { Toaster } from 'sonner'
+import { FaviconInjector } from '@/components/layout/FaviconInjector'
 import './globals.css'
 
 const inter = Inter({
@@ -31,6 +32,7 @@ export default function RootLayout({
         <QueryProvider>
           <AuthProvider>
             <Toaster richColors position="top-right" />
+            <FaviconInjector />
             {children}
           </AuthProvider>
         </QueryProvider>

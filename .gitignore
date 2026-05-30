@@ -10,3 +10,10 @@ coverage/
 check_db.js
 excel_content.txt
 read_excel_temp.js
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+

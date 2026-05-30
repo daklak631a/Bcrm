@@ -58,6 +58,10 @@ export default function CustomersPage() {
   const [importing, setImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [bulkManagerId, setBulkManagerId] = useState("")
+  const [bulkAssigning, setBulkAssigning] = useState(false)
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
@@ -92,7 +96,8 @@ export default function CustomersPage() {
     })
   }, [customers, searchQuery])
 
-  useEffect(() => { setCurrentPage(1) }, [searchQuery])
+  useEffect(() => { setCurrentPage(1); setSelectedIds([]) }, [searchQuery])
+  useEffect(() => { setSelectedIds([]) }, [currentPage])
 
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE))
   const paginatedCustomers = filteredCustomers.slice(
@@ -101,6 +106,47 @@ export default function CustomersPage() {
   )
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE + 1
   const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, filteredCustomers.length)
+
+  const pageCustomerIds = useMemo(() => paginatedCustomers.map((c: any) => c.id), [paginatedCustomers])
+  const isAllPageSelected = useMemo(() => pageCustomerIds.length > 0 && pageCustomerIds.every(id => selectedIds.includes(id)), [pageCustomerIds, selectedIds])
+
+  const handleToggleSelectAllPage = () => {
+    if (isAllPageSelected) {
+      setSelectedIds(prev => prev.filter(id => !pageCustomerIds.includes(id)))
+    } else {
+      setSelectedIds(prev => {
+        const uniqueNew = pageCustomerIds.filter(id => !prev.includes(id))
+        return [...prev, ...uniqueNew]
+      })
+    }
+  }
+
+  const handleToggleSelect = (customerId: string) => {
+    setSelectedIds(prev => 
+      prev.includes(customerId) 
+        ? prev.filter(id => id !== customerId) 
+        : [...prev, customerId]
+    )
+  }
+
+  const handleBulkAssign = async () => {
+    if (!bulkManagerId) {
+      toast.error("Vui lòng chọn chuyên viên để phân giao")
+      return
+    }
+    try {
+      setBulkAssigning(true)
+      await Promise.all(selectedIds.map(id => updateCustomer(id, { assigned_manager_id: bulkManagerId })))
+      toast.success(`Đã phân giao thành công ${selectedIds.length} khách hàng!`)
+      setSelectedIds([])
+      setBulkManagerId("")
+      loadData()
+    } catch (err: any) {
+      toast.error("Lỗi phân giao: " + err.message)
+    } finally {
+      setBulkAssigning(false)
+    }
+  }
 
   if (!mounted) return null
 
@@ -403,6 +449,17 @@ export default function CustomersPage() {
                 <table className="w-full text-left border-collapse min-w-[800px]">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr className="text-sm text-slate-600 font-medium">
+                      {isAdmin && (
+                        <th className="py-3 px-4 w-10">
+                          <input 
+                            type="checkbox" 
+                            checked={isAllPageSelected}
+                            onChange={handleToggleSelectAllPage}
+                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                            aria-label="Chọn tất cả khách hàng trên trang"
+                          />
+                        </th>
+                      )}
                       <th className="py-3 px-4 font-semibold">Họ Tên</th>
                       <th className="py-3 px-4 font-semibold">Liên Hệ</th>
                       <th className="py-3 px-4 font-semibold">Địa Chỉ</th>
@@ -413,7 +470,18 @@ export default function CustomersPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {paginatedCustomers.map((customer: any) => (
-                      <tr key={customer.id} className="hover:bg-slate-50 transition-colors group">
+                      <tr key={customer.id} className={clsx("hover:bg-slate-50 transition-colors group", selectedIds.includes(customer.id) && "bg-slate-50/70")}>
+                        {isAdmin && (
+                          <td className="py-3 px-4 w-10">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedIds.includes(customer.id)}
+                              onChange={() => handleToggleSelect(customer.id)}
+                              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                              aria-label={`Chọn khách hàng ${getCustomerFullName(customer)}`}
+                            />
+                          </td>
+                        )}
                         <td className="py-3 px-4">
                           <div className="flex flex-wrap items-center gap-2">
                             <Link href={`/customers/${customer.id}`} className="text-sm font-medium text-slate-800 hover:text-emerald-600 transition-colors">
@@ -489,7 +557,7 @@ export default function CustomersPage() {
                     ))}
                     {filteredCustomers.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-slate-500">
+                        <td colSpan={isAdmin ? 7 : 6} className="py-12 text-center text-slate-500">
                           {searchQuery ? `Không tìm thấy khách hàng với "${searchQuery}"` : "Chưa có khách hàng nào. Bấm \"Thêm KH\" để bắt đầu."}
                         </td>
                       </tr>
@@ -522,6 +590,43 @@ export default function CustomersPage() {
             </>
           )}
         </div>
+        
+        {/* Bulk Actions Floating Bar */}
+        {selectedIds.length > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white rounded-2xl px-6 py-4 shadow-2xl flex items-center gap-6 z-50 border border-slate-800 animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <span className="text-sm font-semibold text-slate-300">
+              Đã chọn <strong className="text-emerald-400 font-bold">{selectedIds.length}</strong> khách hàng
+            </span>
+            <div className="h-4 w-px bg-slate-700" />
+            <div className="flex items-center gap-2">
+              <select
+                value={bulkManagerId}
+                onChange={(e) => setBulkManagerId(e.target.value)}
+                className="px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-emerald-500 text-slate-200"
+                aria-label="Chọn chuyên viên để phân giao hàng loạt"
+              >
+                <option value="">Chọn chuyên viên...</option>
+                {profiles.map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.full_name}</option>
+                ))}
+              </select>
+              <button
+                onClick={handleBulkAssign}
+                disabled={!bulkManagerId || bulkAssigning}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all disabled:opacity-40 flex items-center gap-1 shadow-sm"
+              >
+                {bulkAssigning && <Loader2 className="w-3 h-3 animate-spin" />}
+                Phân giao
+              </button>
+              <button
+                onClick={() => setSelectedIds([])}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all"
+              >
+                Hủy chọn
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add Customer Modal */}

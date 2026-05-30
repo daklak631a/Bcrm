@@ -1,12 +1,31 @@
-'use client'
+"use client"
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase/client'
 import { Building2, AlertCircle } from 'lucide-react'
+import { fetchSystemSettings } from '@/lib/supabase/api'
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  const [appName, setAppName] = useState("Nexus Banking CRM")
+  const [logoUrl, setLogoUrl] = useState("")
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const settings = await fetchSystemSettings()
+        const logo = settings.find(s => s.key === 'logo_url')?.value
+        const name = settings.find(s => s.key === 'app_name')?.value
+        if (logo) setLogoUrl(logo)
+        if (name) setAppName(name)
+      } catch (err) {
+        console.warn("Failed to load settings in Login page:", err)
+      }
+    }
+    loadSettings()
+  }, [])
 
   const handleGoogleLogin = async () => {
     setIsLoading(true)
@@ -34,17 +53,24 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="flex justify-center">
-          <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center transform rotate-3 shadow-lg">
-            <Building2 className="w-7 h-7 text-white font-bold transform -rotate-3" />
-          </div>
+        <div className="flex flex-col items-center justify-center text-center">
+          {logoUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={logoUrl} alt="Logo" className="max-h-16 object-contain mb-4" />
+          ) : (
+            <>
+              <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center transform rotate-3 shadow-lg mb-4">
+                <Building2 className="w-7 h-7 text-white font-bold transform -rotate-3" />
+              </div>
+              <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+                {appName}
+              </h2>
+            </>
+          )}
+          <p className="mt-2 text-sm text-slate-600">
+            Hệ thống quản lý quan hệ khách hàng
+          </p>
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 tracking-tight">
-          Nexus Banking CRM
-        </h2>
-        <p className="mt-2 text-center text-sm text-slate-600">
-          Hệ thống quản lý quan hệ khách hàng
-        </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
