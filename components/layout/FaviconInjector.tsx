@@ -1,19 +1,46 @@
 "use client"
  
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { fetchSystemSettings } from "@/lib/supabase/api"
 import { usePathname } from "next/navigation"
  
 export function FaviconInjector() {
   const pathname = usePathname()
+  const customTitleRef = useRef<string>("")
+
+  // 1. MutationObserver to lock the title tag and enforce the custom app name against Next.js metadata overrides
+  useEffect(() => {
+    // Find or create title element if missing
+    let target = document.querySelector('title')
+    if (!target) {
+      target = document.createElement('title')
+      document.head.appendChild(target)
+    }
+
+    const observer = new MutationObserver(() => {
+      const expectedTitle = customTitleRef.current
+      if (expectedTitle && document.title !== expectedTitle) {
+        document.title = expectedTitle
+      }
+    })
+
+    observer.observe(target, {
+      childList: true,
+      characterData: true,
+      subtree: true
+    })
+
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
-    // 1. Instantly apply from localStorage cache to prevent flicker during transitions
+    // 2. Instantly apply from localStorage cache to prevent flicker during transitions
     try {
       const cachedName = localStorage.getItem("sys_app_name")
       const cachedFavicon = localStorage.getItem("sys_favicon_url")
       
       if (cachedName) {
+        customTitleRef.current = cachedName
         document.title = cachedName
       }
       
@@ -30,7 +57,7 @@ export function FaviconInjector() {
       console.warn("Storage access failed:", e)
     }
 
-    // 2. Fetch fresh settings from DB to update cache and title
+    // 3. Fetch fresh settings from DB to update cache and title
     const updateFavicon = async () => {
       try {
         const settings = await fetchSystemSettings()
@@ -54,6 +81,7 @@ export function FaviconInjector() {
           try {
             localStorage.setItem("sys_app_name", appName)
           } catch (e) {}
+          customTitleRef.current = appName
           document.title = appName
         }
       } catch (err) {
