@@ -3,12 +3,13 @@
 import clsx from "clsx"
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Briefcase, Filter, Loader2, Package, PiggyBank, Plus, Search, TrendingUp, ArrowRight } from "lucide-react"
+import { Briefcase, Filter, Loader2, Package, PiggyBank, Plus, Search, TrendingUp, ArrowRight, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
+import Link from "next/link"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { formatMetricValue, getProductMetricDefinition, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
-import { createSalesRecord, fetchCustomers, fetchProducts, fetchSalesRecords, fetchSalesRecordsByCustomer, formatCurrency, getCustomerFullName, updateProductSale } from "@/lib/supabase/api"
+import { createSalesRecord, createBatchSale, fetchCustomers, fetchProducts, fetchSalesRecords, fetchSalesRecordsByCustomer, formatCurrency, getCustomerFullName, updateProductSale } from "@/lib/supabase/api"
 import { useAuthStore } from "@/store/useAuthStore"
 import { SalesRecord } from "@/types/models"
 
@@ -65,6 +66,8 @@ function SalesPageContent() {
   const [batchSaleDate, setBatchSaleDate] = useState(new Date().toISOString().slice(0, 10))
   const [batchProductValues, setBatchProductValues] = useState<Record<string, number>>({})
   const [batchProductNotes, setBatchProductNotes] = useState<Record<string, string>>({})
+  const [isBatchMode, setIsBatchMode] = useState(false) // true = không cần KH
+  const [batchEntryNote, setBatchEntryNote] = useState("")
 
   const filteredBatchCustomers = useMemo(() => {
     if (!batchCustomerSearch.trim()) return customers
@@ -87,22 +90,25 @@ function SalesPageContent() {
     setBatchSaleDate(new Date().toISOString().slice(0, 10))
     setBatchProductValues({})
     setBatchProductNotes({})
+    setIsBatchMode(false)
+    setBatchEntryNote("")
     setShowBatchModal(true)
   }
 
   const handleSaveBatchSales = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!batchCustomerId) {
-      toast.error("Vui lòng chọn khách hàng")
+
+    // Validate: nếu không phải batch mode, phải có KH
+    if (!isBatchMode && !batchCustomerId) {
+      toast.error("Vui lòng chọn khách hàng hoặc chọn 'Cập nhật theo lô'")
       return
     }
 
-    // Filter products with result_value > 0
     const salesToCreate = Object.entries(batchProductValues)
       .filter(([_, val]) => val > 0)
       .map(([productId, val]) => ({
         product_id: productId,
-        customer_id: batchCustomerId,
+        customer_id: isBatchMode ? null : batchCustomerId,
         agent_id: user?.id || "",
         status: "COMPLETED",
         sale_date: batchSaleDate,
@@ -117,18 +123,35 @@ function SalesPageContent() {
 
     try {
       setBatchLoading(true)
-      const promises = salesToCreate.map((sale) => createSalesRecord({
-        source_type: "PRODUCT",
-        customer_id: sale.customer_id,
-        agent_id: sale.agent_id,
-        status: sale.status,
-        sale_date: sale.sale_date,
-        note: sale.note,
-        product_id: sale.product_id,
-        result_value: sale.result_value,
-      }))
-      await Promise.all(promises)
-      toast.success(`Đã ghi nhận thành công ${salesToCreate.length} sản phẩm bán chéo cho khách hàng!`)
+      if (isBatchMode) {
+        // Ghi theo lô — không cần KH, lưu is_batch_entry = true
+        const promises = salesToCreate.map((sale) =>
+          createBatchSale({
+            product_id: sale.product_id,
+            agent_id: sale.agent_id,
+            status: sale.status,
+            sale_date: sale.sale_date,
+            result_value: sale.result_value,
+            batch_note: batchEntryNote || sale.note || undefined,
+          })
+        )
+        await Promise.all(promises)
+        toast.success(`Đã ghi lô ${salesToCreate.length} sản phẩm. Vào "Phân bổ lô" để gán vào từng KH sau.`)
+      } else {
+        // Ghi theo KH cụ thể
+        const promises = salesToCreate.map((sale) => createSalesRecord({
+          source_type: "PRODUCT",
+          customer_id: sale.customer_id!,
+          agent_id: sale.agent_id,
+          status: sale.status,
+          sale_date: sale.sale_date,
+          note: sale.note,
+          product_id: sale.product_id,
+          result_value: sale.result_value,
+        }))
+        await Promise.all(promises)
+        toast.success(`Đã ghi nhận thành công ${salesToCreate.length} sản phẩm bán chéo cho khách hàng!`)
+      }
       setShowBatchModal(false)
       loadData()
     } catch (err: any) {
@@ -389,6 +412,13 @@ function SalesPageContent() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href="/sales/batch-allocate"
+              className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 rounded-md hover:bg-slate-200 transition-colors text-sm font-medium border border-slate-200"
+              title="Phân bổ lô cuối ngày vào KH cụ thể"
+            >
+              <ArrowRight className="w-4 h-4" /> Phân bổ lô
+            </Link>
             <button
               onClick={handleOpenBatchModal}
               className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors text-sm font-medium shadow-sm"
@@ -620,69 +650,105 @@ function SalesPageContent() {
       {/* Batch Create Modal */}
       <Modal isOpen={showBatchModal} onClose={() => setShowBatchModal(false)} title="Ghi nhận nhanh kết quả bán chéo cuối ngày" maxWidth="max-w-4xl">
         <form onSubmit={handleSaveBatchSales} className="space-y-4">
-          <p className="text-xs text-slate-500">
-            Chọn một khách hàng và điền kết quả (KH, Triệu đồng, Tỷ đồng) cho toàn bộ các sản phẩm đã bán chéo thành công trong ngày hôm nay. Hệ thống sẽ tự động tạo các giao dịch thành công.
-          </p>
+          {/* Batch mode toggle */}
+          <div className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-50 border border-amber-200">
+            <input
+              type="checkbox"
+              id="batch-mode-toggle"
+              checked={isBatchMode}
+              onChange={(e) => setIsBatchMode(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+            />
+            <label htmlFor="batch-mode-toggle" className="cursor-pointer">
+              <p className="text-sm font-semibold text-amber-800">Cập nhật theo lô cuối ngày (không cần chọn KH cụ thể)</p>
+              <p className="text-xs text-amber-600 mt-0.5">Dùng khi cần ghi nhanh cho nhiều người. Sau đó phân bổ lại vào từng KH tại trang Phân bổ lô.</p>
+            </label>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Customer Select Autocomplete */}
-            <div className="space-y-1.5 relative">
-              <label className="text-sm font-medium text-slate-700">Khách hàng <span className="text-rose-500">*</span></label>
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          {isBatchMode ? (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-700">Ghi chú lô <span className="text-slate-400 font-normal">(Tùy chọn)</span></label>
+              <input
+                type="text"
+                placeholder="VD: Lô cuối ngày 30/05 - Nhóm KHDN1..."
+                value={batchEntryNote}
+                onChange={(e) => setBatchEntryNote(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-amber-500 outline-none"
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Customer Select Autocomplete */}
+              <div className="space-y-1.5 relative">
+                <label className="text-sm font-medium text-slate-700">Khách hàng <span className="text-rose-500">*</span></label>
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Gõ tên hoặc SĐT khách hàng..."
+                    value={batchCustomerSearch}
+                    onChange={(e) => {
+                      setBatchCustomerSearch(e.target.value)
+                      setBatchCustomerId("")
+                      setShowBatchCustomerDropdown(true)
+                    }}
+                    onFocus={() => setShowBatchCustomerDropdown(true)}
+                    className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-amber-500 w-full outline-none"
+                  />
+                </div>
+                {showBatchCustomerDropdown && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto z-50">
+                    {filteredBatchCustomers.length > 0 ? (
+                      filteredBatchCustomers.map((customer) => (
+                        <button
+                          key={customer.id}
+                          type="button"
+                          onClick={() => {
+                            setBatchCustomerId(customer.id)
+                            setBatchCustomerSearch(getCustomerFullName(customer))
+                            setShowBatchCustomerDropdown(false)
+                          }}
+                          className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm transition-colors border-b border-slate-50 last:border-0 flex items-center justify-between"
+                        >
+                          <span className="font-medium text-slate-800">{getCustomerFullName(customer)}</span>
+                          {customer.phone && <span className="text-xs text-slate-400 font-mono">{customer.phone}</span>}
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-3 py-4 text-sm text-center text-slate-500">Không tìm thấy khách hàng.</div>
+                    )}
+                  </div>
+                )}
+                {showBatchCustomerDropdown && <div className="fixed inset-0 z-0" onClick={() => setShowBatchCustomerDropdown(false)}></div>}
+              </div>
+
+              {/* Sale Date Input */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700">Ngày giao dịch <span className="text-rose-500">*</span></label>
                 <input
-                  type="text"
-                  placeholder="Gõ tên hoặc SĐT khách hàng..."
-                  value={batchCustomerSearch}
-                  onChange={(e) => {
-                    setBatchCustomerSearch(e.target.value)
-                    setBatchCustomerId("") // Reset selection
-                    setShowBatchCustomerDropdown(true)
-                  }}
-                  onFocus={() => setShowBatchCustomerDropdown(true)}
-                  className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-amber-500 w-full outline-none"
+                  type="date"
+                  value={batchSaleDate}
+                  onChange={(e) => setBatchSaleDate(e.target.value)}
+                  className="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-amber-500 w-full outline-none"
                   required
                 />
               </div>
-
-              {showBatchCustomerDropdown && (
-                <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto z-50">
-                  {filteredBatchCustomers.length > 0 ? (
-                    filteredBatchCustomers.map((customer) => (
-                      <button
-                        key={customer.id}
-                        type="button"
-                        onClick={() => {
-                          setBatchCustomerId(customer.id)
-                          setBatchCustomerSearch(getCustomerFullName(customer))
-                          setShowBatchCustomerDropdown(false)
-                        }}
-                        className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm transition-colors border-b border-slate-50 last:border-0 flex items-center justify-between"
-                      >
-                        <span className="font-medium text-slate-800">{getCustomerFullName(customer)}</span>
-                        {customer.phone && <span className="text-xs text-slate-400 font-mono">{customer.phone}</span>}
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-3 py-4 text-sm text-center text-slate-500">Không tìm thấy khách hàng.</div>
-                  )}
-                </div>
-              )}
-              {showBatchCustomerDropdown && <div className="fixed inset-0 z-0" onClick={() => setShowBatchCustomerDropdown(false)}></div>}
             </div>
+          )}
 
-            {/* Sale Date Input */}
+          {/* Date for batch mode */}
+          {isBatchMode && (
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-slate-700">Ngày giao dịch <span className="text-rose-500">*</span></label>
               <input
                 type="date"
                 value={batchSaleDate}
                 onChange={(e) => setBatchSaleDate(e.target.value)}
-                className="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-amber-500 w-full outline-none"
+                className="px-3 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-amber-500 w-64 outline-none"
                 required
               />
             </div>
-          </div>
+          )}
 
           {/* Products Grid Table */}
           <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[45vh] overflow-y-auto">

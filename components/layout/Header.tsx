@@ -114,7 +114,7 @@ export function Header({ title = "Trang Tổng Quan CRM", onMenuClick }: HeaderP
         <button onClick={onMenuClick} className="md:hidden text-slate-500 hover:text-slate-700 focus:outline-none shrink-0">
           <Menu className="w-6 h-6" />
         </button>
-        <h1 className="text-lg md:text-xl font-semibold text-slate-800 truncate">{title}</h1>
+        <span className="text-lg md:text-xl font-semibold text-slate-800 truncate">{title}</span>
       </div>
       <div className="flex items-center gap-2 md:gap-4 shrink-0">
         {/* Notification Bell */}

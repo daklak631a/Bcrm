@@ -92,7 +92,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       case 'completed':
         return <span className="px-2 py-1 bg-teal-100 text-teal-700 rounded-full text-xs font-medium">Thành công</span>
       case 'interested':
-        return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">Quan tâm</span>
+        return <span className="px-2 py-1 bg-cyan-100 text-cyan-700 rounded-full text-xs font-medium">Quan tâm</span>
       default:
         return <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium">{status || 'N/A'}</span>
     }

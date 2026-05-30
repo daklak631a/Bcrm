@@ -44,6 +44,7 @@ function parseNumberCell(value: any) {
 
 export default function CustomersPage() {
   const { user } = useAuthStore()
+  const isAdmin = user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADMIN_LEVEL_2'
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [customers, setCustomers] = useState<any[]>([])
@@ -339,8 +340,6 @@ export default function CustomersPage() {
     }
     reader.readAsBinaryString(file)
   }
-
-  const isAdmin = user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADMIN_LEVEL_2'
 
   return (
     <DashboardLayout title="Danh Sách Khách Hàng">

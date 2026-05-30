@@ -846,6 +846,32 @@ export async function fetchProductSales() {
   const { data, error } = await supabase
     .from('cross_sell_records')
     .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
+    .eq('is_batch_entry', false)
+    .order('sale_date', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function fetchProductSalesByAgentId(agentId: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('cross_sell_records')
+    .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
+    .eq('agent_id', agentId)
+    .eq('is_batch_entry', false)
+    .order('sale_date', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function fetchProductSalesByAgentIds(agentIds: string[]) {
+  if (agentIds.length === 0) return []
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('cross_sell_records')
+    .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
+    .in('agent_id', agentIds)
+    .eq('is_batch_entry', false)
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
@@ -857,9 +883,71 @@ export async function fetchProductSalesByCustomer(customerId: string) {
     .from('cross_sell_records')
     .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
     .eq('customer_id', customerId)
+    .eq('is_batch_entry', false)
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
+}
+
+export async function fetchBatchSales(agentId?: string) {
+  const supabase = getSupabase()
+  let query = supabase
+    .from('cross_sell_records')
+    .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), profiles:agent_id(id, full_name)')
+    .eq('is_batch_entry', true)
+    .eq('is_allocated', false)
+    .order('sale_date', { ascending: false })
+  if (agentId) {
+    query = query.eq('agent_id', agentId)
+  }
+  const { data, error } = await query
+  if (error) throw error
+  return data || []
+}
+
+export async function createBatchSale(sale: {
+  product_id: string
+  agent_id: string
+  status?: string
+  sale_date?: string
+  result_value?: number
+  batch_note?: string
+}) {
+  const supabase = getSupabase()
+  const payload = {
+    product_id: sale.product_id,
+    agent_id: sale.agent_id,
+    customer_id: null,
+    status: sale.status || 'COMPLETED',
+    sale_date: extractDateOnly(sale.sale_date) || new Date().toISOString().slice(0, 10),
+    result_value: Number(sale.result_value || 0),
+    batch_note: sale.batch_note || null,
+    is_batch_entry: true,
+    is_allocated: false,
+  }
+  const { data, error } = await supabase
+    .from('cross_sell_records')
+    .insert(payload)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function allocateBatchSale(recordId: string, customerId: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('cross_sell_records')
+    .update({
+      customer_id: customerId,
+      is_allocated: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', recordId)
+    .select()
+    .single()
+  if (error) throw error
+  return data
 }
 
 export async function createProductSale(sale: {
@@ -914,6 +1002,46 @@ export async function fetchSalesRecords() {
   return sortSalesRecords([
     ...loans.map(mapLoanToSalesRecord),
     ...deposits.map(mapDepositToSalesRecord),
+    ...productSales.map(mapProductSaleToSalesRecord),
+  ])
+}
+
+export async function fetchSalesRecordsByAgent(agentId: string) {
+  const supabase = getSupabase()
+  const [productSales, loansData, depositsData] = await Promise.all([
+    fetchProductSalesByAgentId(agentId),
+    supabase
+      .from('loans')
+      .select('*, customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id)')
+      .eq('customers.assigned_manager_id', agentId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('deposits')
+      .select('*, customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id)')
+      .eq('customers.assigned_manager_id', agentId)
+      .order('created_at', { ascending: false }),
+  ])
+  const loans = (loansData.data || []).filter((l: any) => l.customers?.assigned_manager_id === agentId)
+  const deposits = (depositsData.data || []).filter((d: any) => d.customers?.assigned_manager_id === agentId)
+  return sortSalesRecords([
+    ...loans.map(mapLoanToSalesRecord),
+    ...deposits.map(mapDepositToSalesRecord),
+    ...productSales.map(mapProductSaleToSalesRecord),
+  ])
+}
+
+export async function fetchSalesRecordsByAgents(agentIds: string[]) {
+  if (agentIds.length === 0) return []
+  const [loans, deposits, productSales] = await Promise.all([
+    fetchLoans(),
+    fetchDeposits(),
+    fetchProductSalesByAgentIds(agentIds),
+  ])
+  const filteredLoans = loans.filter((l: any) => agentIds.includes(l.customers?.assigned_manager_id))
+  const filteredDeposits = deposits.filter((d: any) => agentIds.includes(d.customers?.assigned_manager_id))
+  return sortSalesRecords([
+    ...filteredLoans.map(mapLoanToSalesRecord),
+    ...filteredDeposits.map(mapDepositToSalesRecord),
     ...productSales.map(mapProductSaleToSalesRecord),
   ])
 }

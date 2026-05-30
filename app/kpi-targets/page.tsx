@@ -6,9 +6,10 @@ import { TableSkeleton } from "@/components/skeletons"
 import { createPlan, fetchPlanAssignments, fetchPlans, fetchProfiles, upsertPlanAssignment } from "@/lib/supabase/api"
 import { useAuthStore } from "@/store/useAuthStore"
 import { Plan, PlanAssignment, Profile } from "@/types/models"
-import { BarChart3, Building2, CalendarDays, CheckCircle2, Layers3, Loader2, Plus, Save, Search, Sparkles, Target, Users2 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { BarChart3, Building2, CalendarDays, CheckCircle2, Download, FileSpreadsheet, Layers3, Loader2, Plus, Save, Search, Sparkles, Target, Upload, Users2 } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
+import * as XLSX from 'xlsx'
 
 type AssignmentDraft = {
   target_loans_amount: number
@@ -85,21 +86,21 @@ function getFieldGroup(key: keyof AssignmentDraft) {
 function getFieldHeaderClass(key: keyof AssignmentDraft) {
   const group = getFieldGroup(key)
   if (group === "core") return "bg-emerald-50 text-emerald-900"
-  if (group === "product") return "bg-violet-50 text-violet-900"
+  if (group === "product") return "bg-blue-50 text-blue-900"
   return "bg-amber-50 text-amber-900"
 }
 
 function getFieldInputTone(key: keyof AssignmentDraft) {
   const group = getFieldGroup(key)
   if (group === "core") return "border-emerald-200 bg-emerald-50/60 group-hover:border-emerald-300"
-  if (group === "product") return "border-violet-200 bg-violet-50/55 group-hover:border-violet-300"
+  if (group === "product") return "border-blue-200 bg-blue-50/55 group-hover:border-blue-300"
   return "border-amber-200 bg-amber-50/60 group-hover:border-amber-300"
 }
 
 function getFieldChipClass(key: keyof AssignmentDraft) {
   const group = getFieldGroup(key)
   if (group === "core") return "bg-emerald-100 text-emerald-700"
-  if (group === "product") return "bg-violet-100 text-violet-700"
+  if (group === "product") return "bg-blue-100 text-blue-700"
   return "bg-amber-100 text-amber-700"
 }
 
@@ -177,6 +178,8 @@ export default function KpiTargetsPage() {
   const [copySourceUserId, setCopySourceUserId] = useState("")
   const [copyTargetUserIds, setCopyTargetUserIds] = useState<string[]>([])
   const [pasteMatrix, setPasteMatrix] = useState("")
+  const [importingExcel, setImportingExcel] = useState(false)
+  const excelInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -401,6 +404,95 @@ export default function KpiTargetsPage() {
     }
   }
 
+  const handleDownloadKpiTemplate = () => {
+    const header = [
+      'Chuyên viên',
+      'Chỉ tiêu vay (VNĐ)',
+      'Chỉ tiêu gửi (VNĐ)',
+      'Chỉ tiêu gọi (Cuộc)',
+      'CIF mới (KH)',
+      'BIDV Direct (KH)',
+      'BH nhân thọ (Triệu)',
+      'BH khoản vay (Triệu)',
+      'Cấp mới HMTD (KH)',
+      'Huy động tăng ròng (VNĐ)',
+      'Dư nợ ngắn hạn tăng ròng (VNĐ)',
+      'Dư nợ trung dài hạn tăng ròng (VNĐ)',
+    ]
+    const sampleData = visibleUsers.map(p => ({
+      'Chuyên viên': p.full_name,
+      'Chỉ tiêu vay (VNĐ)': 0,
+      'Chỉ tiêu gửi (VNĐ)': 0,
+      'Chỉ tiêu gọi (Cuộc)': 0,
+      'CIF mới (KH)': 0,
+      'BIDV Direct (KH)': 0,
+      'BH nhân thọ (Triệu)': 0,
+      'BH khoản vay (Triệu)': 0,
+      'Cấp mới HMTD (KH)': 0,
+      'Huy động tăng ròng (VNĐ)': 0,
+      'Dư nợ ngắn hạn tăng ròng (VNĐ)': 0,
+      'Dư nợ trung dài hạn tăng ròng (VNĐ)': 0,
+    }))
+    const ws = XLSX.utils.json_to_sheet(sampleData, { header })
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'KPI_Template')
+    XLSX.writeFile(wb, `mau_kpi_${selectedPlan?.title || 'template'}.xlsx`)
+  }
+
+  const handleImportKpiExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!selectedPlanId) {
+      toast.error('Vui lòng chọn kỳ KPI trước khi import')
+      return
+    }
+    setImportingExcel(true)
+    const reader = new FileReader()
+    reader.onload = async (evt) => {
+      try {
+        const data = evt.target?.result
+        if (!data) return
+        const wb = XLSX.read(data, { type: 'binary' })
+        const ws = wb.Sheets[wb.SheetNames[0]]
+        const rows = XLSX.utils.sheet_to_json<any>(ws)
+        if (rows.length === 0) { toast.error('File không có dữ liệu'); return }
+
+        // Build slugify helper
+        const slugify = (s: string) => s.toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '')
+
+        let applied = 0
+        const nextDrafts: Record<string, AssignmentDraft> = { ...drafts }
+        for (const row of rows) {
+          const name = String(row['Chuyên viên'] || '').trim()
+          const match = visibleUsers.find(p => slugify(p.full_name) === slugify(name))
+          if (!match) continue
+          nextDrafts[match.id] = {
+            target_loans_amount: Number(row['Chỉ tiêu vay (VNĐ)'] || 0),
+            target_deposits_amount: Number(row['Chỉ tiêu gửi (VNĐ)'] || 0),
+            target_calls: Number(row['Chỉ tiêu gọi (Cuộc)'] || 0),
+            target_cif_moi: Number(row['CIF mới (KH)'] || 0),
+            target_bidv_direct: Number(row['BIDV Direct (KH)'] || 0),
+            target_bh_nhan_tho: Number(row['BH nhân thọ (Triệu)'] || 0),
+            target_bh_khoan_vay: Number(row['BH khoản vay (Triệu)'] || 0),
+            target_cap_moi_hmtd: Number(row['Cấp mới HMTD (KH)'] || 0),
+            target_huy_dong_tang_rong: Number(row['Huy động tăng ròng (VNĐ)'] || 0),
+            target_du_no_ngan_han_tang_rong: Number(row['Dư nợ ngắn hạn tăng ròng (VNĐ)'] || 0),
+            target_du_no_trung_han_tang_rong: Number(row['Dư nợ trung dài hạn tăng ròng (VNĐ)'] || 0),
+          }
+          applied++
+        }
+        setDrafts(nextDrafts)
+        toast.success(`Đã đọc KPI cho ${applied}/${rows.length} chuyên viên. Kiểm tra lại và nhấn Lưu tất cả.`)
+      } catch (err: any) {
+        toast.error('Lỗi đọc file: ' + err.message)
+      } finally {
+        setImportingExcel(false)
+        if (excelInputRef.current) excelInputRef.current.value = ''
+      }
+    }
+    reader.readAsBinaryString(file)
+  }
+
   const handleSaveUser = async (profile: Profile) => {
     if (!selectedPlanId) {
       toast.error("Bạn cần tạo hoặc chọn kỳ KPI trước")
@@ -525,7 +617,7 @@ export default function KpiTargetsPage() {
             <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">{visibleUsers.length}</p>
           </div>
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-3 inline-flex rounded-2xl bg-violet-50 p-2 text-violet-600">
+            <div className="mb-3 inline-flex rounded-2xl bg-blue-50 p-2 text-blue-600">
               <CheckCircle2 className="h-5 w-5" />
             </div>
             <p className="text-sm text-slate-500">Đã giao trong kỳ</p>
@@ -616,19 +708,37 @@ export default function KpiTargetsPage() {
                 </div>
               </div>
             </div>
-            <div className="rounded-[28px] border border-amber-200 bg-[linear-gradient(135deg,_rgba(254,243,199,0.72),_rgba(255,255,255,0.92))] p-6 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-amber-500/15 p-2.5 text-amber-700">
-                  <Sparkles className="h-5 w-5" />
+            <div className="rounded-[28px] border border-emerald-200 bg-[linear-gradient(135deg,_rgba(209,250,229,0.6),_rgba(255,255,255,0.95))] p-6 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="rounded-2xl bg-emerald-100 p-2.5 text-emerald-700">
+                  <FileSpreadsheet className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-slate-900">Lưu ý khi mở rộng KPI</p>
-                  <p className="text-sm text-slate-600">Target chi tiết theo sản phẩm cần migration mới trong `plan_assignments`.</p>
+                  <p className="text-sm font-semibold text-slate-900">Upload KPI từ Excel</p>
+                  <p className="text-sm text-slate-500">Tải file mẫu, điền KPI và import lại.</p>
                 </div>
               </div>
-              <div className="mt-4 rounded-2xl bg-white/80 p-4 text-sm leading-6 text-slate-600 ring-1 ring-white/70">
-                Nếu bạn vừa thêm các cột target mới, hãy chạy file `migration_plan_assignment_product_targets.sql` trước khi bấm lưu để tránh lỗi schema.
+              <div className="flex flex-col gap-3">
+                <input type="file" accept=".xlsx,.xls" ref={excelInputRef} className="hidden" onChange={handleImportKpiExcel} />
+                <button
+                  type="button"
+                  disabled={!selectedPlanId || visibleUsers.length === 0}
+                  onClick={handleDownloadKpiTemplate}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-emerald-300 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Download className="h-4 w-4" /> Tải file mẫu KPI
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedPlanId || importingExcel}
+                  onClick={() => excelInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {importingExcel ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {importingExcel ? 'Đang đọc...' : 'Import file Excel'}
+                </button>
               </div>
+              <p className="text-xs text-slate-400 mt-3">Sau khi import, kiểm tra lại bảng và nhấn <b>Lưu tất cả</b> để lưu vào hệ thống.</p>
             </div>
           </section>
         )}
@@ -637,7 +747,7 @@ export default function KpiTargetsPage() {
           <section className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.1fr_0.9fr]">
             <div className="rounded-[30px] border border-slate-200/80 bg-white p-5 shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
               <div className="flex items-start gap-3">
-                <div className="rounded-2xl bg-violet-50 p-2.5 text-violet-700">
+                <div className="rounded-2xl bg-blue-50 p-2.5 text-blue-700">
                   <Target className="h-5 w-5" />
                 </div>
                 <div>
@@ -652,7 +762,7 @@ export default function KpiTargetsPage() {
                   <select
                     value={copySourceUserId}
                     onChange={(event) => setCopySourceUserId(event.target.value)}
-                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-100"
                   >
                     {filteredUsers.map((profile) => (
                       <option key={profile.id} value={profile.id}>
@@ -690,12 +800,12 @@ export default function KpiTargetsPage() {
                         .map((profile) => {
                           const checked = copyTargetUserIds.includes(profile.id)
                           return (
-                            <label key={profile.id} className={clsx("flex items-start gap-3 rounded-2xl border px-3 py-3 transition", checked ? "border-violet-200 bg-violet-50" : "border-slate-200 bg-white hover:border-slate-300") }>
+                            <label key={profile.id} className={clsx("flex items-start gap-3 rounded-2xl border px-3 py-3 transition", checked ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white hover:border-slate-300") }>
                               <input
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => handleToggleCopyTarget(profile.id)}
-                                className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500"
+                                className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                               />
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-medium text-slate-900">{profile.full_name}</p>
@@ -714,7 +824,7 @@ export default function KpiTargetsPage() {
                 <button
                   type="button"
                   onClick={handleApplyCopyTargets}
-                  className="inline-flex items-center justify-center rounded-2xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-700"
+                  className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
                 >
                   Sao chép KPI hàng loạt
                 </button>
@@ -785,7 +895,7 @@ export default function KpiTargetsPage() {
               <div className="flex flex-wrap gap-2">
                 <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{filteredUsers.length} nhân sự</span>
                 <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">{CORE_FIELDS.length} cột trọng tâm</span>
-                <span className="inline-flex items-center rounded-full bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">{PRODUCT_FIELDS.length} cột sản phẩm</span>
+                <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">{PRODUCT_FIELDS.length} cột sản phẩm</span>
                 <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">{GROWTH_FIELDS.length} cột tăng ròng</span>
               </div>
             </div>
@@ -803,7 +913,7 @@ export default function KpiTargetsPage() {
                     <th colSpan={CORE_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-emerald-900 bg-emerald-900 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-emerald-50">
                       Chỉ tiêu trọng tâm
                     </th>
-                    <th colSpan={PRODUCT_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-violet-900 bg-violet-900 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-violet-50">
+                    <th colSpan={PRODUCT_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-blue-900 bg-blue-900 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-blue-50">
                       Chỉ tiêu sản phẩm
                     </th>
                     <th colSpan={GROWTH_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-amber-700 bg-amber-600 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-amber-50">
