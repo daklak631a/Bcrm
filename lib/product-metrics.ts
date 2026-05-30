@@ -20,7 +20,7 @@ export function getProductMetricDefinition(product?: ProductMetricSource | null)
   const upperName = `${product?.name || ""}`.toUpperCase()
   const upperType = `${product?.type || ""}`.toUpperCase()
 
-  if (upperName.includes("BẢO HIỂM") || upperType === "BẢO HIỂM") {
+  if (upperName.includes("BẢO HIỂM") || upperType === "BẢO HIỂM" || upperName.includes("BH ") || upperName.includes("LIFE")) {
     return { metricType: "AMOUNT", unitLabel: "Triệu đồng" }
   }
 

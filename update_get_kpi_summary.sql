@@ -40,7 +40,6 @@ BEGIN
      JOIN cross_sell_products csp ON csr.product_id = csp.id
      WHERE csr.agent_id = p.id 
        AND csr.status = 'COMPLETED'
-       AND (csr.is_batch_entry = false OR csr.is_allocated = true)
        AND UPPER(csp.name) LIKE '%DIRECT%'
        AND csr.sale_date BETWEEN start_date AND end_date),
      
@@ -50,7 +49,6 @@ BEGIN
      JOIN cross_sell_products csp ON csr.product_id = csp.id
      WHERE csr.agent_id = p.id 
        AND csr.status = 'COMPLETED'
-       AND (csr.is_batch_entry = false OR csr.is_allocated = true)
        AND (UPPER(csp.name) LIKE '%NHÂN THỌ%' OR UPPER(csp.name) LIKE '%LIFE%')
        AND csr.sale_date BETWEEN start_date AND end_date),
      
@@ -60,7 +58,6 @@ BEGIN
      JOIN cross_sell_products csp ON csr.product_id = csp.id
      WHERE csr.agent_id = p.id 
        AND csr.status = 'COMPLETED'
-       AND (csr.is_batch_entry = false OR csr.is_allocated = true)
        AND (UPPER(csp.name) LIKE '%KHOẢN VAY%' OR UPPER(csp.name) LIKE '%NON-LIFE%')
        AND csr.sale_date BETWEEN start_date AND end_date),
      
@@ -124,7 +121,6 @@ BEGIN
      JOIN cross_sell_products csp ON csr.product_id = csp.id
      WHERE csr.agent_id = p.id 
        AND csr.status = 'COMPLETED'
-       AND (csr.is_batch_entry = false OR csr.is_allocated = true)
        AND UPPER(csp.name) LIKE '%HMTD%'
        AND csr.sale_date BETWEEN start_date AND end_date)
 
