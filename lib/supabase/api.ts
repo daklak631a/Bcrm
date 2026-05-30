@@ -846,7 +846,7 @@ export async function fetchProductSales() {
   const { data, error } = await supabase
     .from('cross_sell_records')
     .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
-    .eq('is_batch_entry', false)
+    .or('is_batch_entry.eq.false,is_allocated.eq.true')
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
@@ -858,7 +858,7 @@ export async function fetchProductSalesByAgentId(agentId: string) {
     .from('cross_sell_records')
     .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
     .eq('agent_id', agentId)
-    .eq('is_batch_entry', false)
+    .or('is_batch_entry.eq.false,is_allocated.eq.true')
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
@@ -871,7 +871,7 @@ export async function fetchProductSalesByAgentIds(agentIds: string[]) {
     .from('cross_sell_records')
     .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
     .in('agent_id', agentIds)
-    .eq('is_batch_entry', false)
+    .or('is_batch_entry.eq.false,is_allocated.eq.true')
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []
@@ -883,7 +883,7 @@ export async function fetchProductSalesByCustomer(customerId: string) {
     .from('cross_sell_records')
     .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
     .eq('customer_id', customerId)
-    .eq('is_batch_entry', false)
+    .or('is_batch_entry.eq.false,is_allocated.eq.true')
     .order('sale_date', { ascending: false })
   if (error) throw error
   return data || []

@@ -6,6 +6,7 @@ import { fetchCustomerById, fetchInteractionsByCustomer, fetchSalesRecordsByCust
 import { ArrowLeft, Edit, Save, X, Phone, Mail, MapPin, Calendar, FileText, Briefcase, CreditCard, ShoppingCart, Loader2, ArrowRight, Plus } from "lucide-react"
 import Link from "next/link"
 import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
+import { toast } from "sonner"
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   // Unpack params since it's a promise in newer Next.js versions
@@ -22,6 +23,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<any>({})
+  
+  const [notesDraft, setNotesDraft] = useState("")
+  const [savingNotes, setSavingNotes] = useState(false)
 
   const loadData = useCallback(async () => {
     try {
@@ -33,6 +37,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       ])
       setCustomer(cust)
       setEditForm(cust)
+      setNotesDraft(cust?.note || "")
       setSalesRecords(sales)
       setInteractions(ints)
     } catch (err) {
@@ -71,6 +76,22 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       alert('Có lỗi xảy ra khi cập nhật thông tin!')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSaveNotes = async () => {
+    try {
+      setSavingNotes(true)
+      await updateCustomer(customerId, {
+        note: notesDraft
+      })
+      toast.success("Đã cập nhật ghi chú khách hàng thành công!")
+      setCustomer((prev: any) => prev ? { ...prev, note: notesDraft } : null)
+    } catch (err) {
+      console.error('Error saving customer notes:', err)
+      toast.error('Có lỗi xảy ra khi cập nhật ghi chú!')
+    } finally {
+      setSavingNotes(false)
     }
   }
 
@@ -236,15 +257,6 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                           rows={2}
                         />
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-slate-500 mb-1">Ghi chú</label>
-                        <textarea 
-                          value={editForm.note || ''} 
-                          onChange={e => setEditForm({...editForm, note: e.target.value})}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                          rows={3}
-                        />
-                      </div>
                       <div className="flex gap-2 pt-2 border-t border-slate-100">
                         <button 
                           onClick={handleCancelEdit}
@@ -285,16 +297,37 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                           <p className="text-sm font-medium text-slate-800">{customer.address || 'Chưa cập nhật'}</p>
                         </div>
                       </div>
-                      <div className="flex items-start gap-3">
-                        <FileText className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-xs font-medium text-slate-500">Ghi chú</p>
-                          <p className="text-sm text-slate-700 whitespace-pre-wrap">{customer.note || 'Không có ghi chú'}</p>
-                        </div>
-                      </div>
                     </>
                   )}
                 </div>
+              </div>
+
+              {/* Dedicated Notes Card */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-emerald-600" />
+                    Ghi chú khách hàng
+                  </h3>
+                  {notesDraft !== (customer?.note || '') && (
+                    <button
+                      type="button"
+                      onClick={handleSaveNotes}
+                      disabled={savingNotes}
+                      className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs font-semibold flex items-center gap-1 transition-all shadow-sm"
+                    >
+                      {savingNotes ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                      Lưu nhanh
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={notesDraft}
+                  onChange={(e) => setNotesDraft(e.target.value)}
+                  placeholder="Ghi chú thêm về khách hàng (lịch sử cuộc gọi, thói quen giao dịch, nhu cầu vốn...)"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50/30 focus:bg-white transition-all resize-y min-h-[100px] outline-none"
+                  rows={4}
+                />
               </div>
 
               {/* Summary Stats */}
@@ -334,15 +367,28 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     <ShoppingCart className="w-5 h-5 text-amber-500" />
                     Bán Hàng
                   </h3>
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2.5 shrink-0 flex-wrap justify-end">
+                    <Link
+                      href={`/sales?create=1&type=LOAN&customerId=${customerId}`}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors text-xs font-bold shadow-sm"
+                    >
+                      <Plus className="w-3 h-3" /> Cấp vay
+                    </Link>
+                    <Link
+                      href={`/sales?create=1&type=DEPOSIT&customerId=${customerId}`}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-xs font-bold shadow-sm"
+                    >
+                      <Plus className="w-3 h-3" /> Nhận tiền gửi
+                    </Link>
                     <Link
                       href={`/sales?create=1&type=PRODUCT&customerId=${customerId}`}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors text-xs font-semibold shadow-sm"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors text-xs font-bold shadow-sm"
                     >
-                      <Plus className="w-3.5 h-3.5" /> Bán SP chéo
+                      <Plus className="w-3 h-3" /> Bán SP chéo
                     </Link>
-                    <Link href={`/sales?customerId=${customerId}`} className="text-sm font-medium text-amber-600 hover:text-amber-700 flex items-center gap-1">
-                      Xem tất cả <ArrowRight className="w-4 h-4" />
+                    <div className="h-5 w-px bg-slate-200 hidden sm:block mx-1" />
+                    <Link href={`/sales?customerId=${customerId}`} className="text-xs font-bold text-slate-500 hover:text-slate-700 flex items-center gap-1 border border-slate-200 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 transition-colors">
+                      Xem tất cả <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   </div>
                 </div>

@@ -24,14 +24,14 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
 });
 
 const products = [
-  { name: 'CIF MỚI', type: 'Tài khoản', description: 'Mở mới CIF khách hàng', target: 100 },
-  { name: 'BIDV DIRECT', type: 'Dịch vụ khác', description: 'Đăng ký dịch vụ BIDV Direct', target: 100 },
-  { name: 'BẢO HIỂM NHÂN THỌ', type: 'Bảo hiểm', description: 'Bảo hiểm nhân thọ (Triệu đồng)', target: 500 },
-  { name: 'BẢO HIỂM KHOẢN VAY', type: 'Bảo hiểm', description: 'Bảo hiểm khoản vay (Triệu đồng)', target: 500 },
-  { name: 'HUY ĐỘNG VỐN TĂNG RÒNG', type: 'Huy động vốn', description: 'Huy động vốn tăng ròng (Tỷ đồng)', target: 10 },
-  { name: 'DƯ NỢ TÍN DỤNG TĂNG RÒNG (Ngắn hạn)', type: 'Tín dụng', description: 'Dư nợ tín dụng tăng ròng ngắn hạn (Tỷ đồng)', target: 10 },
-  { name: 'DƯ NỢ TÍN DỤNG TĂNG RÒNG (Trung dài hạn)', type: 'Tín dụng', description: 'Dư nợ tín dụng tăng ròng trung dài hạn (Tỷ đồng)', target: 10 },
-  { name: 'CẤP MỚI HMTD', type: 'Tín dụng', description: 'Cấp mới hạn mức tín dụng (Mục tiêu SL KH)', target: 50 }
+  { name: 'CIF MỚI', type: 'Tài khoản', description: 'Mở mới CIF khách hàng', target: 100, metric_type: 'QUANTITY', unit_label: 'KH' },
+  { name: 'BIDV DIRECT', type: 'Dịch vụ khác', description: 'Đăng ký dịch vụ BIDV Direct', target: 100, metric_type: 'QUANTITY', unit_label: 'KH' },
+  { name: 'BẢO HIỂM NHÂN THỌ', type: 'Bảo hiểm', description: 'Bảo hiểm nhân thọ (Triệu đồng)', target: 500, metric_type: 'AMOUNT', unit_label: 'Triệu đồng' },
+  { name: 'BẢO HIỂM KHOẢN VAY', type: 'Bảo hiểm', description: 'Bảo hiểm khoản vay (Triệu đồng)', target: 500, metric_type: 'AMOUNT', unit_label: 'Triệu đồng' },
+  { name: 'HUY ĐỘNG VỐN TĂNG RÒNG', type: 'Huy động vốn', description: 'Huy động vốn tăng ròng (Tỷ đồng)', target: 10, metric_type: 'AMOUNT', unit_label: 'Tỷ đồng' },
+  { name: 'DƯ NỢ TÍN DỤNG TĂNG RÒNG (Ngắn hạn)', type: 'Tín dụng', description: 'Dư nợ tín dụng tăng ròng ngắn hạn (Tỷ đồng)', target: 10, metric_type: 'AMOUNT', unit_label: 'Tỷ đồng' },
+  { name: 'DƯ NỢ TÍN DỤNG TĂNG RÒNG (Trung dài hạn)', type: 'Tín dụng', description: 'Dư nợ tín dụng tăng ròng trung dài hạn (Tỷ đồng)', target: 10, metric_type: 'AMOUNT', unit_label: 'Tỷ đồng' },
+  { name: 'CẤP MỚI HMTD', type: 'Tín dụng', description: 'Cấp mới hạn mức tín dụng (Mục tiêu SL KH)', target: 50, metric_type: 'QUANTITY', unit_label: 'KH' }
 ];
 
 async function main() {

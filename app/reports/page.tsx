@@ -311,20 +311,22 @@ export default function ReportsPage() {
     }
 
     // 5. Product metrics (BIDV Direct, BH nhân thọ, BH khoản vay, Cấp mới HMTD)
-    const productMapping: Record<string, string> = {
-      target_bidv_direct: 'BIDV Direct',
-      target_bh_nhan_tho: 'BH nhân thọ',
-      target_bh_khoan_vay: 'BH khoản vay',
-      target_cap_moi_hmtd: 'Cấp mới HMTD'
-    }
+    const productKeys = ['target_bidv_direct', 'target_bh_nhan_tho', 'target_bh_khoan_vay', 'target_cap_moi_hmtd']
 
-    if (productMapping[fieldKey]) {
-      const productName = productMapping[fieldKey]
+    if (productKeys.includes(fieldKey)) {
       const filteredSales = crossSellRecords.filter(s => {
         const sDate = s.sale_date || (s.created_at ? s.created_at.slice(0, 10) : '')
         const pName = s.cross_sell_products?.name || ''
+        const nameUpper = pName.toUpperCase()
+        
+        let isMatch = false
+        if (fieldKey === 'target_bidv_direct') isMatch = nameUpper.includes("DIRECT")
+        else if (fieldKey === 'target_bh_nhan_tho') isMatch = nameUpper.includes("NHÂN THỌ") || nameUpper.includes("LIFE")
+        else if (fieldKey === 'target_bh_khoan_vay') isMatch = nameUpper.includes("KHOẢN VAY") || nameUpper.includes("NON-LIFE")
+        else if (fieldKey === 'target_cap_moi_hmtd') isMatch = nameUpper.includes("HMTD")
+
         return (
-          pName.toLowerCase().includes(productName.toLowerCase()) &&
+          isMatch &&
           sDate >= startDateStr &&
           sDate <= endDateStr &&
           targetUserIds.includes(s.agent_id)
