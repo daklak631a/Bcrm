@@ -262,6 +262,7 @@ export function SalesSupportKanban() {
   }
 
   const moveItemOptimistically = (item: WorkItem, nextStatus: KanbanStatus) => {
+    const today = new Date().toISOString().slice(0, 10)
     setWorkItems((current) => {
       if (nextStatus === "DONE") return current.filter((entry) => entry.id !== item.id)
       return current.map((entry) => entry.id === item.id
@@ -270,6 +271,7 @@ export function SalesSupportKanban() {
             statusKey: nextStatus,
             badge: nextStatus === "FOLLOW_UP" ? "Theo dõi" : "Đang xử lý",
             tone: nextStatus === "FOLLOW_UP" ? "teal" : "amber",
+            date: entry.statusKey === "OVERDUE" ? today : entry.date,
           }
         : entry)
     })
@@ -289,7 +291,11 @@ export function SalesSupportKanban() {
       setUpdatingItemId(item.id)
       if (item.sourceType === "INTERACTION") {
         const nextResult = status === "DONE" ? "SUCCESS" : status === "FOLLOW_UP" ? "FOLLOW_UP" : "PENDING"
-        await updateInteraction(item.sourceId, { result: nextResult })
+        const nextUpdates: Record<string, any> = { result: nextResult }
+        if (item.statusKey === "OVERDUE" && status !== "DONE") {
+          nextUpdates.follow_up_date = new Date().toISOString().slice(0, 10)
+        }
+        await updateInteraction(item.sourceId, nextUpdates)
       } else if (item.sourceType === "PRODUCT") {
         const nextStatus = status === "DONE" ? "COMPLETED" : status === "FOLLOW_UP" ? "INTERESTED" : "PENDING"
         await updateProductSale(item.sourceId, { status: nextStatus })
