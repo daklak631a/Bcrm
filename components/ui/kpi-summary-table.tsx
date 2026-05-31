@@ -68,7 +68,7 @@ export function KPISummaryTable() {
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <Link href="/reports" className="group flex items-center gap-2">
           <CardTitle className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[#006b68] to-[#33b7ab] group-hover:opacity-80 transition-all cursor-pointer flex items-center gap-2">
-            ĐỘNG LỰC PHÒNG NGÀY
+            KPI ngày
             <span className="text-xs font-bold text-teal-600 bg-teal-50 border border-teal-100 rounded-full px-2 py-0.5 opacity-0 group-hover:opacity-100 transition-all">
               Xem chi tiết →
             </span>

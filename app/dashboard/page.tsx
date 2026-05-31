@@ -112,11 +112,7 @@ export default function DashboardPage() {
       <Link href="/sales-support" className="mb-6 block rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-900/5 transition hover:-translate-y-0.5 hover:shadow-md">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#006b68]">Sales support board</p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Mở Kanban hỗ trợ bán hàng</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Theo dõi việc dang dở, cảnh báo quá hẹn và phân bổ nhập lô trên một trang riêng.
-            </p>
+            <h2 className="text-xl font-semibold tracking-tight text-slate-900">Kanban bán hàng</h2>
           </div>
           <div className="inline-flex items-center gap-2 rounded-2xl bg-[#006b68] px-4 py-2 text-sm font-semibold text-white">
             Mở Kanban

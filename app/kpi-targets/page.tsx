@@ -1005,17 +1005,8 @@ export default function KpiTargetsPage() {
           <div className="absolute -right-10 -top-16 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />
           <div className="absolute left-1/3 top-0 h-28 w-28 rounded-full bg-cyan-400/10 blur-3xl" />
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl space-y-4">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200 backdrop-blur-xl">
-                <Sparkles className="h-3.5 w-3.5" />
-                Admin KPI orchestration
-              </div>
-              <div className="space-y-2">
-                <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Phân bổ KPI hàng loạt theo ma trận nhân sự x chỉ tiêu</h1>
-                <p className="max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
-                  Nhập trực tiếp trên bảng ma trận để giao chỉ tiêu nhanh cho nhiều chuyên viên trong một lần thao tác, bao gồm cả chỉ tiêu sản phẩm, dư nợ tăng ròng và huy động tăng ròng.
-                </p>
-              </div>
+            <div className="max-w-3xl">
+              <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Phân bổ KPI</h1>
             </div>
             <div className="flex flex-wrap gap-3">
               {canManage && (

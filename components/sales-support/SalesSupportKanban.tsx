@@ -444,11 +444,7 @@ export function SalesSupportKanban() {
     <div className="rounded-[30px] bg-white p-5 shadow-sm ring-1 ring-slate-900/5">
       <div className="mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#006b68]">Sales support board</p>
-          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Kanban việc dang dở & cảnh báo bán hàng</h2>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500">
-            Desktop kéo-thả để đổi trạng thái; trên điện thoại dùng các nút nhanh trong từng thẻ. Nhập lô cuối ngày được gom theo người phụ trách.
-          </p>
+          <h2 className="text-2xl font-semibold tracking-tight text-slate-950">Kanban bán hàng</h2>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 ring-1 ring-amber-100">

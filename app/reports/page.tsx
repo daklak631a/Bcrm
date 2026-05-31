@@ -3,7 +3,7 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
-import { Calendar, Download, Loader2, Users, Building2, User, Target, TrendingUp, CalendarDays, Sparkles, CheckCircle2 } from "lucide-react"
+import { Calendar, Download, Loader2, Users, Building2, User, Target, TrendingUp, CalendarDays, CheckCircle2 } from "lucide-react"
 import { getSupabase } from "@/lib/supabase/client"
 import { useAuthStore } from "@/store/useAuthStore"
 import * as XLSX from 'xlsx'
@@ -481,17 +481,8 @@ export default function ReportsPage() {
           <div className="absolute -right-10 -top-16 h-40 w-40 rounded-full bg-emerald-400/20 blur-3xl" />
           <div className="absolute left-1/3 top-0 h-28 w-28 rounded-full bg-cyan-400/10 blur-3xl" />
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-4">
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200 backdrop-blur-xl">
-                <Sparkles className="h-3.5 w-3.5" />
-                Động Lực Phát Triển Chi Nhánh
-              </div>
-              <div className="space-y-2">
-                <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Báo Cáo Tổng Hợp KPI & Kết Quả</h1>
-                <p className="max-w-2xl text-sm leading-6 text-slate-300">
-                  Đối chiếu chỉ tiêu được giao và kết quả thực hiện lũy kế cấp <span className="text-emerald-300 font-semibold">Tháng</span>, <span className="text-emerald-300 font-semibold">Tuần</span>, và <span className="text-emerald-300 font-semibold">Ngày</span>.
-                </p>
-              </div>
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Báo cáo KPI</h1>
             </div>
             <div className="flex flex-wrap gap-3 shrink-0">
               <Link
