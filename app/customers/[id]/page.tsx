@@ -9,6 +9,7 @@ import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/l
 import { toast } from "sonner"
 import { useAuthStore } from "@/store/useAuthStore"
 import { canAccessOwner } from "@/lib/access-control"
+import CustomerTimeline from "@/components/customer/CustomerTimeline"
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { user } = useAuthStore()
@@ -453,48 +454,8 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 </div>
               </div>
 
-              {/* Interactions Section */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                  <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-emerald-500" />
-                    Lịch Sử Tương Tác
-                  </h3>
-                </div>
-                <div className="p-0">
-                  {interactions.length === 0 ? (
-                    <div className="py-8 text-center text-slate-500 text-sm">Chưa có lịch sử tương tác nào.</div>
-                  ) : (
-                    <div className="divide-y divide-slate-100">
-                      {interactions.slice(0, 5).map(interaction => (
-                        <div key={interaction.id} className="p-4 flex flex-col gap-2 hover:bg-slate-50 transition-colors">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded text-xs font-medium">
-                                {interaction.type}
-                              </span>
-                              <span className="text-sm font-medium text-slate-800">{interaction.purpose}</span>
-                            </div>
-                            <span className="text-xs text-slate-500 font-medium">
-                              {interaction.interaction_date ? new Date(interaction.interaction_date).toLocaleDateString('vi-VN') : 'N/A'}
-                            </span>
-                          </div>
-                          <p className="text-sm text-slate-600">{interaction.notes}</p>
-                          <div className="flex items-center gap-4 mt-1 text-xs text-slate-500">
-                            <span>Thực hiện bởi: {interaction.profiles?.full_name || 'Hệ thống'}</span>
-                            {interaction.result && (
-                              <span className="flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                Kết quả: {interaction.result}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+              {/* Interactions Section - Now as a Timeline */}
+              <CustomerTimeline customerId={customerId} />
 
             </div>
           </div>
