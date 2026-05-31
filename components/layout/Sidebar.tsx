@@ -12,7 +12,8 @@ import {
   ShoppingCart,
   Target,
   X,
-  Settings
+  Settings,
+  ClipboardList
 } from "lucide-react"
 
 import { useAuthStore } from "@/store/useAuthStore"
@@ -47,6 +48,7 @@ export function Sidebar({ onClose }: SidebarProps) {
 
   const links = [
     { href: "/dashboard", label: "Tổng Quan", icon: PieChart },
+    { href: "/sales-support", label: "Kanban Bán Hàng", icon: ClipboardList },
     { href: "/sales", label: "Bảng Bán Hàng", icon: ShoppingCart },
     { href: "/customers", label: "Khách Hàng", icon: Users },
     { href: "/reports", label: "Báo Cáo Tổng Hợp", icon: PieChart },

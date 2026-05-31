@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/sidebar';
 import { useAuthStore } from '@/store/useAuthStore';
 import { getSupabase } from '@/lib/supabase/client';
-import { Building2, LayoutDashboard, Users, CalendarClock, BarChart3, Package, UserCog, LogOut, Pencil, X, Check, Loader2, ShoppingCart } from 'lucide-react';
+import { Building2, LayoutDashboard, Users, CalendarClock, BarChart3, Package, UserCog, LogOut, Pencil, X, Check, Loader2, ShoppingCart, ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -63,6 +63,7 @@ export function AppSidebar() {
 
   const navItems = [
     { name: 'Tổng Quan', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Kanban Bán Hàng', href: '/sales-support', icon: ClipboardList },
     { name: 'Bảng Bán Hàng', href: '/sales', icon: ShoppingCart },
     { name: 'Khách Hàng', href: '/customers', icon: Users },
     { name: 'Tương Tác', href: '/interactions', icon: CalendarClock },
