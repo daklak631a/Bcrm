@@ -7,10 +7,11 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { Suspense, useEffect, useState, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { fetchDeposits, createDeposit, fetchCustomers, formatCurrency, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
+import { fetchDeposits, createDeposit, fetchCustomers, fetchProfiles, formatCurrency, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 import { Check } from "lucide-react"
+import { filterCustomerRecordsByAccess, filterCustomersByAccess } from "@/lib/access-control"
 
 const ITEMS_PER_PAGE = 10
 
@@ -22,6 +23,7 @@ function DepositsPageContent() {
   const [loading, setLoading] = useState(true)
   const [deposits, setDeposits] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
+  const [profiles, setProfiles] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -36,17 +38,23 @@ function DepositsPageContent() {
   const [customerType, setCustomerType] = useState("INDIVIDUAL")
 
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch.trim()) return customers
+    const scopedCustomers = filterCustomersByAccess(customers, profiles, user)
+    if (!customerSearch.trim()) return scopedCustomers
     const q = customerSearch.toLowerCase()
-    return customers.filter(c => getCustomerFullName(c).toLowerCase().includes(q))
-  }, [customers, customerSearch])
+    return scopedCustomers.filter(c => getCustomerFullName(c).toLowerCase().includes(q))
+  }, [customers, customerSearch, profiles, user])
+
+  const selectedCustomer = useMemo(() => {
+    return filterCustomersByAccess(customers, profiles, user).find(c => c.id === selectedCustomerId)
+  }, [customers, profiles, selectedCustomerId, user])
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [depositsData, customersData] = await Promise.all([fetchDeposits(), fetchCustomers()])
+      const [depositsData, customersData, profilesData] = await Promise.all([fetchDeposits(), fetchCustomers(), fetchProfiles()])
       setDeposits(depositsData)
       setCustomers(customersData)
+      setProfiles(profilesData)
     } catch (err: any) {
       toast.error('Lỗi tải dữ liệu: ' + err.message)
     } finally {
@@ -57,30 +65,35 @@ function DepositsPageContent() {
   useEffect(() => { setMounted(true); loadData() }, [loadData])
 
   useEffect(() => {
-    if (!customerIdParam || customers.length === 0) return
-    const customer = customers.find(c => c.id === customerIdParam)
+    const scopedCustomers = filterCustomersByAccess(customers, profiles, user)
+    if (!customerIdParam || scopedCustomers.length === 0) return
+    const customer = scopedCustomers.find(c => c.id === customerIdParam)
     if (!customer) return
     setSelectedCustomerId(customer.id)
     setCustomerSearch(getCustomerFullName(customer))
     setSearchQuery(getCustomerFullName(customer))
-  }, [customerIdParam, customers])
+  }, [customerIdParam, customers, profiles, user])
+
+  const visibleDeposits = useMemo(() => {
+    return filterCustomerRecordsByAccess(deposits, profiles, user)
+  }, [deposits, profiles, user])
 
   const filteredDeposits = useMemo(() => {
-    if (!searchQuery.trim()) return deposits
+    if (!searchQuery.trim()) return visibleDeposits
     const q = searchQuery.toLowerCase().trim()
-    return deposits.filter((d: any) => {
+    return visibleDeposits.filter((d: any) => {
       const name = d.customers ? getCustomerFullName(d.customers) : ''
       return d.account_number?.toLowerCase().includes(q) || name.toLowerCase().includes(q)
     })
-  }, [deposits, searchQuery])
+  }, [visibleDeposits, searchQuery])
 
   useEffect(() => { setCurrentPage(1) }, [searchQuery])
 
   const totalPages = Math.max(1, Math.ceil(filteredDeposits.length / ITEMS_PER_PAGE))
   const paginatedDeposits = filteredDeposits.slice((currentPage-1)*ITEMS_PER_PAGE, currentPage*ITEMS_PER_PAGE)
-  const activeDeposits = deposits.filter((d: any) => d.status === 'ACTIVE')
+  const activeDeposits = visibleDeposits.filter((d: any) => d.status === 'ACTIVE')
   const totalAmount = activeDeposits.reduce((sum: number, d: any) => sum + Number(d.amount || 0), 0)
-  const pendingDeposits = deposits.filter((d: any) => d.status === 'PENDING')
+  const pendingDeposits = visibleDeposits.filter((d: any) => d.status === 'PENDING')
   const createDepositHref = customerIdParam
     ? `/sales?create=1&type=DEPOSIT&customerId=${customerIdParam}`
     : '/sales?create=1&type=DEPOSIT'
@@ -91,6 +104,10 @@ function DepositsPageContent() {
     e.preventDefault()
     if (!selectedCustomerId) {
       toast.error('Vui lòng chọn khách hàng')
+      return
+    }
+    if (!selectedCustomer) {
+      toast.error('Không thể tạo sổ tiền gửi cho khách hàng ngoài phạm vi quản lý')
       return
     }
     const form = new FormData(e.currentTarget)

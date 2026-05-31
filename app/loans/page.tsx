@@ -7,9 +7,10 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { Suspense, useEffect, useState, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { fetchLoans, createLoan, fetchCustomers, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
+import { fetchLoans, createLoan, fetchCustomers, fetchProfiles, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
+import { filterCustomerRecordsByAccess, filterCustomersByAccess } from "@/lib/access-control"
 
 const ITEMS_PER_PAGE = 10
 
@@ -37,6 +38,7 @@ function LoansPageContent() {
   const [loading, setLoading] = useState(true)
   const [loans, setLoans] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
+  const [profiles, setProfiles] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -52,11 +54,12 @@ function LoansPageContent() {
   const [preFilledSearch, setPreFilledSearch] = useState("")
 
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch.trim()) return customers
+    const scopedCustomers = filterCustomersByAccess(customers, profiles, user)
+    if (!customerSearch.trim()) return scopedCustomers
     const qText = customerSearch.toLowerCase().trim()
     const qPhone = customerSearch.replace(/\D/g, '')
 
-    return customers.filter(c => {
+    return scopedCustomers.filter(c => {
       const nameMatch = getCustomerFullName(c).toLowerCase().includes(qText)
       if (nameMatch) return true
 
@@ -66,18 +69,19 @@ function LoansPageContent() {
       }
       return false
     })
-  }, [customers, customerSearch])
+  }, [customers, customerSearch, profiles, user])
 
   const selectedCustomer = useMemo(() => {
-    return customers.find(c => c.id === selectedCustomerId)
-  }, [customers, selectedCustomerId])
+    return filterCustomersByAccess(customers, profiles, user).find(c => c.id === selectedCustomerId)
+  }, [customers, profiles, selectedCustomerId, user])
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [loansData, customersData] = await Promise.all([fetchLoans(), fetchCustomers()])
+      const [loansData, customersData, profilesData] = await Promise.all([fetchLoans(), fetchCustomers(), fetchProfiles()])
       setLoans(loansData)
       setCustomers(customersData)
+      setProfiles(profilesData)
     } catch (err: any) {
       console.error('Error loading loans:', err)
       toast.error('Lỗi tải dữ liệu: ' + err.message)
@@ -92,24 +96,29 @@ function LoansPageContent() {
   }, [loadData])
 
   useEffect(() => {
-    if (!customerIdParam || customers.length === 0) return
-    const customer = customers.find(c => c.id === customerIdParam)
+    const scopedCustomers = filterCustomersByAccess(customers, profiles, user)
+    if (!customerIdParam || scopedCustomers.length === 0) return
+    const customer = scopedCustomers.find(c => c.id === customerIdParam)
     if (!customer) return
     setSelectedCustomerId(customer.id)
     setCustomerSearch(getCustomerFullName(customer))
     setSearchQuery(getCustomerFullName(customer))
-  }, [customerIdParam, customers])
+  }, [customerIdParam, customers, profiles, user])
+
+  const visibleLoans = useMemo(() => {
+    return filterCustomerRecordsByAccess(loans, profiles, user)
+  }, [loans, profiles, user])
 
   const filteredLoans = useMemo(() => {
-    if (!searchQuery.trim()) return loans
+    if (!searchQuery.trim()) return visibleLoans
     const q = searchQuery.toLowerCase().trim()
-    return loans.filter((l: any) => {
+    return visibleLoans.filter((l: any) => {
       const customerName = l.customers ? getCustomerFullName(l.customers) : ''
       return l.account_number?.toLowerCase().includes(q) ||
         customerName.toLowerCase().includes(q) ||
         l.id.toLowerCase().includes(q)
     })
-  }, [loans, searchQuery])
+  }, [visibleLoans, searchQuery])
 
   useEffect(() => { setCurrentPage(1) }, [searchQuery])
 
@@ -117,8 +126,8 @@ function LoansPageContent() {
   const paginatedLoans = filteredLoans.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
   // Stats
-  const activeLoans = loans.filter((l: any) => l.status === 'ACTIVE')
-  const pendingLoans = loans.filter((l: any) => l.status === 'PENDING')
+  const activeLoans = visibleLoans.filter((l: any) => l.status === 'ACTIVE')
+  const pendingLoans = visibleLoans.filter((l: any) => l.status === 'PENDING')
   const totalBalance = activeLoans.reduce((sum: number, l: any) => sum + Number(l.balance || 0), 0)
   const createLoanHref = customerIdParam
     ? `/sales?create=1&type=LOAN&customerId=${customerIdParam}`
@@ -130,6 +139,10 @@ function LoansPageContent() {
     e.preventDefault()
     if (!selectedCustomerId) {
       toast.error('Vui lòng chọn khách hàng')
+      return
+    }
+    if (!selectedCustomer) {
+      toast.error('Không thể tạo khoản vay cho khách hàng ngoài phạm vi quản lý')
       return
     }
     const form = new FormData(e.currentTarget)

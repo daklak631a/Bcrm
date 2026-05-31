@@ -5,9 +5,10 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { ArrowLeft, Loader2, Search, Package, CheckCircle2, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
-import { fetchBatchSales, fetchCustomers, allocateBatchSale, getCustomerFullName } from "@/lib/supabase/api"
+import { fetchBatchSales, fetchCustomers, fetchProfiles, allocateBatchSale, getCustomerFullName } from "@/lib/supabase/api"
 import { useAuthStore } from "@/store/useAuthStore"
 import { formatMetricNumber } from "@/lib/product-metrics"
+import { filterAgentRecordsByAccess, filterCustomersByAccess } from "@/lib/access-control"
 
 export default function BatchAllocatePage() {
   const { user } = useAuthStore()
@@ -15,6 +16,7 @@ export default function BatchAllocatePage() {
   const [loading, setLoading] = useState(true)
   const [batchSales, setBatchSales] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
+  const [profiles, setProfiles] = useState<any[]>([])
   const [allocating, setAllocating] = useState<string | null>(null)
   const [customerSearch, setCustomerSearch] = useState<Record<string, string>>({})
   const [showDropdown, setShowDropdown] = useState<string | null>(null)
@@ -26,12 +28,14 @@ export default function BatchAllocatePage() {
     if (!user) return
     try {
       setLoading(true)
-      const [batches, cust] = await Promise.all([
+      const [batches, cust, profileRows] = await Promise.all([
         fetchBatchSales(isAdmin ? undefined : user.id),
         fetchCustomers(),
+        fetchProfiles(),
       ])
-      setBatchSales(batches)
-      setCustomers(cust)
+      setProfiles(profileRows)
+      setBatchSales(filterAgentRecordsByAccess(batches, profileRows, user))
+      setCustomers(filterCustomersByAccess(cust, profileRows, user))
     } catch (err: any) {
       toast.error("Lỗi tải dữ liệu: " + err.message)
     } finally {
@@ -42,10 +46,11 @@ export default function BatchAllocatePage() {
   useEffect(() => { setMounted(true); loadData() }, [loadData])
 
   const getFilteredCustomers = (recordId: string) => {
+    const scopedCustomers = filterCustomersByAccess(customers, profiles, user)
     const q = (customerSearch[recordId] || '').toLowerCase().trim()
-    if (!q) return customers.slice(0, 20) // Show first 20 by default
+    if (!q) return scopedCustomers.slice(0, 20) // Show first 20 by default
     const qPhone = q.replace(/\D/g, '')
-    return customers.filter(c => {
+    return scopedCustomers.filter(c => {
       const nameMatch = getCustomerFullName(c).toLowerCase().includes(q)
       if (nameMatch) return true
       if (!qPhone) return false
@@ -57,6 +62,10 @@ export default function BatchAllocatePage() {
     const customerId = selectedCustomer[recordId]
     if (!customerId) {
       toast.error("Vui lòng chọn khách hàng trước khi phân bổ")
+      return
+    }
+    if (!filterCustomersByAccess(customers, profiles, user).some((customer) => customer.id === customerId)) {
+      toast.error("Không thể phân bổ cho khách hàng ngoài phạm vi quản lý")
       return
     }
     try {

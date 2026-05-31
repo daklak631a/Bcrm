@@ -2,13 +2,16 @@
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useState, useEffect, useCallback, use } from "react"
-import { fetchCustomerById, fetchInteractionsByCustomer, fetchSalesRecordsByCustomer, getCustomerFullName, formatCurrency, updateCustomer } from "@/lib/supabase/api"
+import { fetchCustomerById, fetchInteractionsByCustomer, fetchProfiles, fetchSalesRecordsByCustomer, getCustomerFullName, formatCurrency, updateCustomer } from "@/lib/supabase/api"
 import { ArrowLeft, Edit, Save, X, Phone, Mail, MapPin, Calendar, FileText, Briefcase, CreditCard, ShoppingCart, Loader2, ArrowRight, Plus } from "lucide-react"
 import Link from "next/link"
 import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
 import { toast } from "sonner"
+import { useAuthStore } from "@/store/useAuthStore"
+import { canAccessOwner } from "@/lib/access-control"
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { user } = useAuthStore()
   // Unpack params since it's a promise in newer Next.js versions
   const resolvedParams = use(params)
   const customerId = resolvedParams.id
@@ -30,8 +33,19 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [cust, sales, ints] = await Promise.all([
+      const [cust, profiles] = await Promise.all([
         fetchCustomerById(customerId),
+        fetchProfiles(),
+      ])
+      if (!cust || !canAccessOwner(cust.assigned_manager_id, profiles, user)) {
+        setCustomer(null)
+        setEditForm({})
+        setNotesDraft("")
+        setSalesRecords([])
+        setInteractions([])
+        return
+      }
+      const [sales, ints] = await Promise.all([
         fetchSalesRecordsByCustomer(customerId),
         fetchInteractionsByCustomer(customerId)
       ])
@@ -45,7 +59,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     } finally {
       setLoading(false)
     }
-  }, [customerId])
+  }, [customerId, user])
 
   useEffect(() => {
     setMounted(true)
