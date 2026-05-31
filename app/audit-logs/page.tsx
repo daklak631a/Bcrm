@@ -13,6 +13,7 @@ export default function AuditLogsPage() {
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  const [pageSize, setPageSize] = useState(20)
 
   useEffect(() => {
     // Only allow Admin
@@ -23,7 +24,8 @@ export default function AuditLogsPage() {
 
     const loadData = async () => {
       try {
-        const data = await fetchAuditLogs(200)
+        setLoading(true)
+        const data = await fetchAuditLogs(pageSize)
         setLogs(data)
       } catch (err) {
         console.error('Failed to fetch audit logs', err)
@@ -33,7 +35,7 @@ export default function AuditLogsPage() {
     }
 
     loadData()
-  }, [user, router])
+  }, [user, router, pageSize])
 
   const filteredLogs = logs.filter(log => {
     if (!searchQuery) return true
@@ -77,6 +79,20 @@ export default function AuditLogsPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 w-full outline-none"
             />
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <span>Hiển thị</span>
+            <select
+              value={pageSize}
+              onChange={(event) => setPageSize(Number(event.target.value))}
+              className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500"
+              aria-label="Số dòng lịch sử hệ thống"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={100}>100</option>
+            </select>
+            <span>dòng mới nhất</span>
           </div>
         </div>
 

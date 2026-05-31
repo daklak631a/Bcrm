@@ -214,15 +214,33 @@ export default function CustomersPage() {
     }
   }
 
+  const maskMiddleText = (value: string) => {
+    const normalized = value.trim().replace(/\s+/g, ' ')
+    if (!normalized) return ''
+    const parts = normalized.split(' ')
+    if (parts.length >= 2) {
+      return `${parts[0]} xxxxx ${parts[parts.length - 1]}`
+    }
+    if (normalized.length <= 2) return `${normalized[0] || ''}xxxxx`
+    return `${normalized[0]}xxxxx${normalized[normalized.length - 1]}`
+  }
+
+  const maskPhone = (value: string) => {
+    const normalized = value.trim()
+    if (!normalized) return ''
+    if (normalized.length <= 5) return 'xxxxx'
+    return `${normalized.slice(0, 3)}xxxxx${normalized.slice(-2)}`
+  }
+
   const handleExportData = () => {
     const exportData = filteredCustomers.map((c: any) => ({
       "Mã KH": c.id,
       "Mã CIF": c.cif_code || '',
       "Loại KH": c.customer_type === 'ENTERPRISE' ? 'Doanh nghiệp' : 'Cá nhân',
-      "Tên Khách Hàng / Doanh Nghiệp": getCustomerFullName(c),
+      "Tên Khách Hàng / Doanh Nghiệp": maskMiddleText(getCustomerFullName(c)),
       "Mã Số Thuế": c.tax_code || '',
       "Người Đại Diện": c.representative_name || '',
-      "Số điện thoại": c.phone || '',
+      "Số điện thoại": maskPhone(c.phone || ''),
       "Email": c.email || '',
       "Địa chỉ": c.address || '',
       "Ghi chú": c.note || '',
