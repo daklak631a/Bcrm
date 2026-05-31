@@ -84,17 +84,28 @@ export default function CustomersPage() {
     loadData()
   }, [loadData])
 
+  const visibleProfiles = useMemo(() => {
+    if (user?.role === 'ADMIN_LEVEL_1') return profiles
+    if (user?.role === 'ADMIN_LEVEL_2') return profiles.filter((profile: any) => profile.department_id === user.department_id)
+    return profiles.filter((profile: any) => profile.id === user?.id)
+  }, [profiles, user?.department_id, user?.id, user?.role])
+
+  const visibleProfileIds = useMemo(() => new Set(visibleProfiles.map((profile: any) => profile.id)), [visibleProfiles])
+  const visibleCustomers = useMemo(() => {
+    return customers.filter((customer: any) => visibleProfileIds.has(customer.assigned_manager_id))
+  }, [customers, visibleProfileIds])
+
   const filteredCustomers = useMemo(() => {
-    if (!searchQuery.trim()) return customers
+    if (!searchQuery.trim()) return visibleCustomers
     const q = searchQuery.toLowerCase().trim()
-    return customers.filter((c: any) => {
+    return visibleCustomers.filter((c: any) => {
       const fullName = getCustomerFullName(c).toLowerCase()
       return fullName.includes(q) ||
         (c.phone || '').toLowerCase().includes(q) ||
         (c.email || '').toLowerCase().includes(q) ||
         c.id.toLowerCase().includes(q)
     })
-  }, [customers, searchQuery])
+  }, [visibleCustomers, searchQuery])
 
   useEffect(() => { setCurrentPage(1); setSelectedIds([]) }, [searchQuery])
   useEffect(() => { setSelectedIds([]) }, [currentPage])
@@ -311,7 +322,7 @@ export default function CustomersPage() {
             const managerName = String(item["Chuyên viên"] || item["Chuyen vien"] || item.assigned_manager_id || "").trim()
             if (managerName && isAdmin) {
                const sluggedName = slugify(managerName)
-               const matchedProfile = profiles.find(p => slugify(p.full_name) === sluggedName)
+               const matchedProfile = visibleProfiles.find(p => slugify(p.full_name) === sluggedName || p.id === managerName)
                if (matchedProfile) {
                   managerId = matchedProfile.id
                }
@@ -606,7 +617,7 @@ export default function CustomersPage() {
                 aria-label="Chọn chuyên viên để phân giao hàng loạt"
               >
                 <option value="">Chọn chuyên viên...</option>
-                {profiles.map((p: any) => (
+                {visibleProfiles.map((p: any) => (
                   <option key={p.id} value={p.id}>{p.full_name}</option>
                 ))}
               </select>
@@ -671,10 +682,10 @@ export default function CustomersPage() {
           <FormField label="Địa chỉ">
             <FormInput name="address" placeholder="123 Đường ABC, Quận XYZ" />
           </FormField>
-          {isAdmin && profiles.length > 0 && (
+          {isAdmin && visibleProfiles.length > 0 && (
             <FormField label="Chuyên viên phụ trách">
               <FormSelect name="assigned_manager_id" defaultValue={user?.id}>
-                {profiles.map((p: any) => (
+                {visibleProfiles.map((p: any) => (
                   <option key={p.id} value={p.id}>{p.full_name}</option>
                 ))}
               </FormSelect>

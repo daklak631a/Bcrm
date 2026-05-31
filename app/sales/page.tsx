@@ -9,7 +9,7 @@ import Link from "next/link"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { formatMetricValue, getProductMetricDefinition, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
-import { createSalesRecord, createBatchSale, fetchCustomers, fetchProducts, fetchSalesRecords, fetchSalesRecordsByCustomer, formatCurrency, getCustomerFullName, updateProductSale } from "@/lib/supabase/api"
+import { createSalesRecord, createBatchSale, fetchCustomers, fetchProducts, fetchProfiles, fetchSalesRecords, fetchSalesRecordsByCustomer, formatCurrency, getCustomerFullName, updateProductSale } from "@/lib/supabase/api"
 import { useAuthStore } from "@/store/useAuthStore"
 import { SalesRecord } from "@/types/models"
 
@@ -47,6 +47,7 @@ function SalesPageContent() {
   const [formLoading, setFormLoading] = useState(false)
   const [records, setRecords] = useState<SalesRecord[]>([])
   const [customers, setCustomers] = useState<any[]>([])
+  const [profiles, setProfiles] = useState<any[]>([])
   const [products, setProducts] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<"ALL" | SalesRecord["source_type"]>("ALL")
@@ -69,20 +70,6 @@ function SalesPageContent() {
   const [isBatchMode, setIsBatchMode] = useState(false) // true = không cần KH
   const [batchEntryNote, setBatchEntryNote] = useState("")
   const [isSingleBatchMode, setIsSingleBatchMode] = useState(false)
-
-  const filteredBatchCustomers = useMemo(() => {
-    if (!batchCustomerSearch.trim()) return customers
-    const qText = batchCustomerSearch.toLowerCase().trim()
-    const qPhone = batchCustomerSearch.replace(/\D/g, "")
-
-    return customers.filter((customer) => {
-      const nameMatch = getCustomerFullName(customer).toLowerCase().includes(qText)
-      if (nameMatch) return true
-      if (!qPhone) return false
-      const normalizedPhone = customer.phone ? customer.phone.replace(/\D/g, "") : ""
-      return normalizedPhone.includes(qPhone)
-    })
-  }, [customers, batchCustomerSearch])
 
   const handleOpenBatchModal = () => {
     setBatchCustomerId("")
@@ -173,14 +160,16 @@ function SalesPageContent() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [salesData, customersData, productsData] = await Promise.all([
+      const [salesData, customersData, productsData, profilesData] = await Promise.all([
         customerIdParam ? fetchSalesRecordsByCustomer(customerIdParam) : fetchSalesRecords(),
         fetchCustomers(),
         fetchProducts(),
+        fetchProfiles(),
       ])
       setRecords(salesData)
       setCustomers(customersData)
       setProducts(productsData)
+      setProfiles(profilesData)
     } catch (err: any) {
       toast.error("Lỗi tải dữ liệu: " + err.message)
     } finally {
@@ -193,14 +182,42 @@ function SalesPageContent() {
     loadData()
   }, [loadData])
 
+  const visibleProfiles = useMemo(() => {
+    if (user?.role === "ADMIN_LEVEL_1") return profiles
+    if (user?.role === "ADMIN_LEVEL_2") return profiles.filter((profile: any) => profile.department_id === user.department_id)
+    return profiles.filter((profile: any) => profile.id === user?.id)
+  }, [profiles, user?.department_id, user?.id, user?.role])
+
+  const visibleProfileIds = useMemo(() => new Set(visibleProfiles.map((profile: any) => profile.id)), [visibleProfiles])
+  const visibleCustomers = useMemo(() => {
+    return customers.filter((customer: any) => visibleProfileIds.has(customer.assigned_manager_id))
+  }, [customers, visibleProfileIds])
+  const visibleRecords = useMemo(() => {
+    return records.filter((record) => record.agent_id && visibleProfileIds.has(record.agent_id))
+  }, [records, visibleProfileIds])
+
+  const filteredBatchCustomers = useMemo(() => {
+    if (!batchCustomerSearch.trim()) return visibleCustomers
+    const qText = batchCustomerSearch.toLowerCase().trim()
+    const qPhone = batchCustomerSearch.replace(/\D/g, "")
+
+    return visibleCustomers.filter((customer) => {
+      const nameMatch = getCustomerFullName(customer).toLowerCase().includes(qText)
+      if (nameMatch) return true
+      if (!qPhone) return false
+      const normalizedPhone = customer.phone ? customer.phone.replace(/\D/g, "") : ""
+      return normalizedPhone.includes(qPhone)
+    })
+  }, [visibleCustomers, batchCustomerSearch])
+
   useEffect(() => {
-    if (!customerIdParam || customers.length === 0) return
-    const customer = customers.find((c) => c.id === customerIdParam)
+    if (!customerIdParam || visibleCustomers.length === 0) return
+    const customer = visibleCustomers.find((c) => c.id === customerIdParam)
     if (!customer) return
     setSelectedCustomerId(customer.id)
     setCustomerSearch(getCustomerFullName(customer))
     setSearchQuery(getCustomerFullName(customer))
-  }, [customerIdParam, customers])
+  }, [customerIdParam, visibleCustomers])
 
   useEffect(() => {
     if (!mounted || routePresetApplied) return
@@ -222,18 +239,18 @@ function SalesPageContent() {
   }, [mounted, routePresetApplied, presetSaleType, productIdParam, createParam])
 
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch.trim()) return customers
+    if (!customerSearch.trim()) return visibleCustomers
     const qText = customerSearch.toLowerCase().trim()
     const qPhone = customerSearch.replace(/\D/g, "")
 
-    return customers.filter((customer) => {
+    return visibleCustomers.filter((customer) => {
       const nameMatch = getCustomerFullName(customer).toLowerCase().includes(qText)
       if (nameMatch) return true
       if (!qPhone) return false
       const normalizedPhone = customer.phone ? customer.phone.replace(/\D/g, "") : ""
       return normalizedPhone.includes(qPhone)
     })
-  }, [customers, customerSearch])
+  }, [visibleCustomers, customerSearch])
 
   const selectedProduct = useMemo(() => {
     return products.find((product) => product.id === selectedProductId) || null
@@ -245,7 +262,7 @@ function SalesPageContent() {
 
   const filteredRecords = useMemo(() => {
     const q = searchQuery.trim().toLowerCase()
-    return records.filter((record) => {
+    return visibleRecords.filter((record) => {
       const matchesType = typeFilter === "ALL" || record.source_type === typeFilter
       if (!matchesType) return false
       if (!q) return true
@@ -257,7 +274,7 @@ function SalesPageContent() {
         record.account_number || "",
       ].some((value) => value.toLowerCase().includes(q))
     })
-  }, [records, searchQuery, typeFilter])
+  }, [visibleRecords, searchQuery, typeFilter])
 
   useEffect(() => {
     setCurrentPage(1)
@@ -267,17 +284,17 @@ function SalesPageContent() {
   const paginatedRecords = filteredRecords.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
 
   const stats = useMemo(() => {
-    const loans = records.filter((record) => record.source_type === "LOAN")
-    const deposits = records.filter((record) => record.source_type === "DEPOSIT")
-    const productTransactions = records.filter((record) => record.source_type === "PRODUCT").length
+    const loans = visibleRecords.filter((record) => record.source_type === "LOAN")
+    const deposits = visibleRecords.filter((record) => record.source_type === "DEPOSIT")
+    const productTransactions = visibleRecords.filter((record) => record.source_type === "PRODUCT").length
 
     return {
-      totalCount: records.length,
+      totalCount: visibleRecords.length,
       loanAmount: loans.reduce((sum, record) => sum + Number(record.amount || 0), 0),
       depositAmount: deposits.reduce((sum, record) => sum + Number(record.amount || 0), 0),
       productTransactions,
     }
-  }, [records])
+  }, [visibleRecords])
 
   if (!mounted) return null
 

@@ -6,7 +6,7 @@ import { Search, Plus, MessageSquare, PhoneCall, CalendarDays, Mail, Loader2, Ch
 import { useAuthStore } from "@/store/useAuthStore"
 import { Suspense, useEffect, useState, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { fetchInteractions, createInteraction, fetchCustomers, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
+import { fetchInteractions, createInteraction, fetchCustomers, fetchProfiles, getCustomerFullName, createCustomer } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, FormTextarea, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 import { Check } from "lucide-react"
@@ -21,6 +21,7 @@ function InteractionsPageContent() {
   const [loading, setLoading] = useState(true)
   const [interactions, setInteractions] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
+  const [profiles, setProfiles] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -34,18 +35,29 @@ function InteractionsPageContent() {
   const [quickAddLoading, setQuickAddLoading] = useState(false)
   const [customerType, setCustomerType] = useState("INDIVIDUAL")
 
+  const visibleProfiles = useMemo(() => {
+    if (user?.role === "ADMIN_LEVEL_1") return profiles
+    if (user?.role === "ADMIN_LEVEL_2") return profiles.filter((profile: any) => profile.department_id === user.department_id)
+    return profiles.filter((profile: any) => profile.id === user?.id)
+  }, [profiles, user?.department_id, user?.id, user?.role])
+
+  const visibleProfileIds = useMemo(() => new Set(visibleProfiles.map((profile: any) => profile.id)), [visibleProfiles])
+  const visibleCustomers = useMemo(() => customers.filter((customer: any) => visibleProfileIds.has(customer.assigned_manager_id)), [customers, visibleProfileIds])
+  const visibleInteractions = useMemo(() => interactions.filter((interaction: any) => visibleProfileIds.has(interaction.manager_id)), [interactions, visibleProfileIds])
+
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch.trim()) return customers
+    if (!customerSearch.trim()) return visibleCustomers
     const q = customerSearch.toLowerCase()
-    return customers.filter(c => getCustomerFullName(c).toLowerCase().includes(q))
-  }, [customers, customerSearch])
+    return visibleCustomers.filter(c => getCustomerFullName(c).toLowerCase().includes(q))
+  }, [visibleCustomers, customerSearch])
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [interactionsData, customersData] = await Promise.all([fetchInteractions(), fetchCustomers()])
+      const [interactionsData, customersData, profilesData] = await Promise.all([fetchInteractions(), fetchCustomers(), fetchProfiles()])
       setInteractions(interactionsData)
       setCustomers(customersData)
+      setProfiles(profilesData)
     } catch (err: any) {
       toast.error('Lỗi tải dữ liệu: ' + err.message)
     } finally {
@@ -56,13 +68,13 @@ function InteractionsPageContent() {
   useEffect(() => { setMounted(true); loadData() }, [loadData])
 
   useEffect(() => {
-    if (!customerIdParam || customers.length === 0) return
-    const customer = customers.find(c => c.id === customerIdParam)
+    if (!customerIdParam || visibleCustomers.length === 0) return
+    const customer = visibleCustomers.find(c => c.id === customerIdParam)
     if (!customer) return
     setSelectedCustomerId(customer.id)
     setCustomerSearch(getCustomerFullName(customer))
     setSearchQuery(getCustomerFullName(customer))
-  }, [customerIdParam, customers])
+  }, [customerIdParam, visibleCustomers])
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -96,22 +108,22 @@ function InteractionsPageContent() {
   }
 
   const filteredInteractions = useMemo(() => {
-    if (!searchQuery.trim()) return interactions
+    if (!searchQuery.trim()) return visibleInteractions
     const q = searchQuery.toLowerCase().trim()
-    return interactions.filter((i: any) => {
+    return visibleInteractions.filter((i: any) => {
       const name = i.customers ? getCustomerFullName(i.customers) : ''
       return name.toLowerCase().includes(q) || (i.purpose || '').toLowerCase().includes(q)
     })
-  }, [interactions, searchQuery])
+  }, [visibleInteractions, searchQuery])
 
   useEffect(() => { setCurrentPage(1) }, [searchQuery])
   const totalPages = Math.max(1, Math.ceil(filteredInteractions.length / ITEMS_PER_PAGE))
   const paginatedInteractions = filteredInteractions.slice((currentPage-1)*ITEMS_PER_PAGE, currentPage*ITEMS_PER_PAGE)
 
   // Stats
-  const callCount = interactions.filter((i: any) => i.type === 'CALL').length
-  const meetingCount = interactions.filter((i: any) => i.type === 'MEETING').length
-  const pendingCount = interactions.filter((i: any) => i.result === 'PENDING').length
+  const callCount = visibleInteractions.filter((i: any) => i.type === 'CALL').length
+  const meetingCount = visibleInteractions.filter((i: any) => i.type === 'MEETING').length
+  const pendingCount = visibleInteractions.filter((i: any) => i.result === 'PENDING').length
 
   if (!mounted) return null
 
