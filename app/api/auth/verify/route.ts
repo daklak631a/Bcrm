@@ -23,18 +23,15 @@ export async function POST(request: Request) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // If no service role key, fall back to anon key (less secure but works if RLS is open)
-    const supabaseKey = serviceRoleKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error('[Auth Verify] Missing Supabase credentials');
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('[Auth Verify] Missing Supabase credentials or SERVICE_ROLE_KEY');
       return NextResponse.json(
-        { error: 'Server configuration error' },
+        { error: 'Server configuration error: SERVICE_ROLE_KEY required' },
         { status: 500 }
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey, {
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import dayjs from 'dayjs'
+import { checkRateLimit, getClientIp } from '@/lib/middleware/rate-limit'
 
 const TARGET_FIELDS = [
   'target_cif_moi',
@@ -14,6 +15,22 @@ const TARGET_FIELDS = [
 ] as const
 
 export async function GET(request: Request) {
+  // Rate limiting
+  const ip = getClientIp(request);
+  const rateLimit = checkRateLimit(ip, '/api/reports/kpi-summary', 'default');
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Try again later.' },
+      { 
+        status: 429,
+        headers: {
+          'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+          'X-RateLimit-Reset': rateLimit.resetAt.toString(),
+        }
+      }
+    );
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const period = searchParams.get('period') || 'week' // day, week, month, quarter, year
