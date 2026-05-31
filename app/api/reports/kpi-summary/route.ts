@@ -32,6 +32,21 @@ export async function GET(request: Request) {
       }
     })
 
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: currentProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, role, department_id')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError || !currentProfile) {
+      return NextResponse.json({ error: profileError?.message || 'Profile not found' }, { status: 403 })
+    }
+
     const endDate = dayjs().format('YYYY-MM-DD')
     let startDate = dayjs().format('YYYY-MM-DD')
 
@@ -107,7 +122,29 @@ export async function GET(request: Request) {
       }
     }
 
-    const mergedData = data?.map((row: any) => {
+    let visibleManagerIds: Set<string> | null = null
+
+    if (currentProfile.role === 'USER') {
+      visibleManagerIds = new Set([currentProfile.id])
+    } else if (currentProfile.role === 'ADMIN_LEVEL_2') {
+      const { data: departmentProfiles, error: departmentError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('department_id', currentProfile.department_id)
+        .eq('is_active', true)
+
+      if (departmentError) {
+        return NextResponse.json({ error: departmentError.message }, { status: 500 })
+      }
+
+      visibleManagerIds = new Set((departmentProfiles || []).map((profile) => profile.id))
+    }
+
+    const roleFilteredData = visibleManagerIds
+      ? (data || []).filter((row: any) => visibleManagerIds?.has(row.manager_id))
+      : (data || [])
+
+    const mergedData = roleFilteredData.map((row: any) => {
       const target = targetsByUser.get(row.manager_id)
       return {
         ...row,

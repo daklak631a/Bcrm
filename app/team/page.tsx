@@ -50,6 +50,7 @@ export default function TeamPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [dialogMode, setDialogMode] = useState<DialogMode>(null)
   const [editingEntry, setEditingEntry] = useState<AllowedEmail | null>(null)
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null)
   const [formData, setFormData] = useState<FormData>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -95,7 +96,7 @@ export default function TeamPage() {
   const filteredActive = activeUsers.filter(p => {
     if (!searchQuery.trim()) return true
     const q = searchQuery.toLowerCase()
-    return p.full_name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)
+    return p.full_name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q) || (p.department_id || '').toLowerCase().includes(q)
   })
 
   const filteredPending = pendingEmails.filter(ae => {
@@ -107,6 +108,7 @@ export default function TeamPage() {
   const openAdd = () => {
     setFormData(EMPTY_FORM)
     setEditingEntry(null)
+    setEditingProfile(null)
     setDialogMode('add')
     setError(null)
   }
@@ -119,6 +121,20 @@ export default function TeamPage() {
       department_id: entry.department_id || '',
     })
     setEditingEntry(entry)
+    setEditingProfile(null)
+    setDialogMode('edit')
+    setError(null)
+  }
+
+  const openEditProfile = (profile: Profile) => {
+    setFormData({
+      email: profile.email,
+      full_name: profile.full_name,
+      role: profile.role,
+      department_id: profile.department_id || '',
+    })
+    setEditingEntry(allowedEmails.find(ae => ae.email === profile.email) || null)
+    setEditingProfile(profile)
     setDialogMode('edit')
     setError(null)
   }
@@ -126,6 +142,7 @@ export default function TeamPage() {
   const closeDialog = () => {
     setDialogMode(null)
     setEditingEntry(null)
+    setEditingProfile(null)
     setError(null)
   }
 
@@ -156,26 +173,45 @@ export default function TeamPage() {
         setSaving(false)
         return
       }
-    } else if (dialogMode === 'edit' && editingEntry) {
-      const { error: updateError } = await supabase
-        .from('allowed_emails')
-        .update({
-          full_name: formData.full_name.trim(),
-          role: formData.role,
-          department_id: formData.department_id.trim() || null,
-        })
-        .eq('id', editingEntry.id)
-
-      if (updateError) {
-        setError(`Lỗi: ${updateError.message}`)
-        setSaving(false)
-        return
+    } else if (dialogMode === 'edit') {
+      const allowedPayload = {
+        email: formData.email.trim().toLowerCase(),
+        full_name: formData.full_name.trim(),
+        role: formData.role,
+        department_id: formData.department_id.trim() || null,
+        is_active: true,
       }
 
-      // Also update profile if user already logged in
-      const matchingProfile = profiles.find(p => p.email === editingEntry.email)
+      if (editingEntry) {
+        const { error: updateError } = await supabase
+          .from('allowed_emails')
+          .update({
+            full_name: allowedPayload.full_name,
+            role: allowedPayload.role,
+            department_id: allowedPayload.department_id,
+          })
+          .eq('id', editingEntry.id)
+
+        if (updateError) {
+          setError(`Lỗi: ${updateError.message}`)
+          setSaving(false)
+          return
+        }
+      } else {
+        const { error: insertAllowedError } = await supabase
+          .from('allowed_emails')
+          .insert(allowedPayload)
+
+        if (insertAllowedError) {
+          setError(`Lỗi: ${insertAllowedError.message}`)
+          setSaving(false)
+          return
+        }
+      }
+
+      const matchingProfile = editingProfile || profiles.find(p => p.email === formData.email)
       if (matchingProfile) {
-        await supabase
+        const { error: profileUpdateError } = await supabase
           .from('profiles')
           .update({
             full_name: formData.full_name.trim(),
@@ -184,6 +220,12 @@ export default function TeamPage() {
             updated_at: new Date().toISOString(),
           })
           .eq('id', matchingProfile.id)
+
+        if (profileUpdateError) {
+          setError(`Lỗi: ${profileUpdateError.message}`)
+          setSaving(false)
+          return
+        }
       }
     }
 
@@ -300,12 +342,13 @@ export default function TeamPage() {
           ) : (
             <div className="overflow-x-auto">
               {activeTab === 'active' ? (
-                <table className="w-full text-left border-collapse min-w-[700px]">
+                <table className="w-full text-left border-collapse min-w-[800px]">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr className="text-sm text-slate-600 font-medium">
                       <th className="py-3 px-4 font-semibold">Nhân Sự</th>
                       <th className="py-3 px-4 font-semibold">Email</th>
                       <th className="py-3 px-4 font-semibold">Vai Trò</th>
+                      <th className="py-3 px-4 font-semibold">Phòng Ban</th>
                       <th className="py-3 px-4 font-semibold">Trạng Thái</th>
                       <th className="py-3 px-4 font-semibold text-right">Thao Tác</th>
                     </tr>
@@ -331,25 +374,31 @@ export default function TeamPage() {
                               {ROLE_LABELS[profile.role]}
                             </span>
                           </td>
+                          <td className="py-3 px-4 text-sm text-slate-600">{profile.department_id || '—'}</td>
                           <td className="py-3 px-4">
                             <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
                               {isActive ? 'Hoạt động' : 'Vô hiệu'}
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right">
-                            <button
-                              onClick={() => handleToggleProfileActive(profile)}
-                              className={`p-1.5 rounded-md transition-colors ${isActive ? 'text-slate-400 hover:text-amber-600 hover:bg-amber-50' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
-                              title={isActive ? 'Vô hiệu hóa' : 'Kích hoạt lại'}
-                            >
-                              {isActive ? <X className="w-4 h-4" /> : <Check className="w-4 h-4" />}
-                            </button>
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => openEditProfile(profile)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors" title="Sửa tên, vai trò, phòng ban">
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleToggleProfileActive(profile)}
+                                className={`p-1.5 rounded-md transition-colors ${isActive ? 'text-slate-400 hover:text-amber-600 hover:bg-amber-50' : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'}`}
+                                title={isActive ? 'Vô hiệu hóa' : 'Kích hoạt lại'}
+                              >
+                                {isActive ? <X className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       )
                     })}
                     {filteredActive.length === 0 && (
-                      <tr><td colSpan={5} className="py-8 text-center text-slate-500">Chưa có nhân sự đăng nhập.</td></tr>
+                      <tr><td colSpan={6} className="py-8 text-center text-slate-500">Chưa có nhân sự đăng nhập.</td></tr>
                     )}
                   </tbody>
                 </table>
