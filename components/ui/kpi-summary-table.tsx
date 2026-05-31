@@ -71,12 +71,47 @@ export function KPISummaryTable() {
     if (!tableRef.current) return
     try {
       setIsCapturing(true)
-      // Add a slight delay to ensure UI updates before capturing
-      await new Promise(resolve => setTimeout(resolve, 100))
-      const canvas = await html2canvas(tableRef.current, {
+      
+      const element = tableRef.current
+      const originalWidth = element.style.width
+      
+      // Force container width to match the inner table's full scrollWidth
+      const tableInner = element.querySelector('table')
+      // Padding adjustment
+      const fullWidth = tableInner ? tableInner.scrollWidth + 32 : element.scrollWidth
+      
+      element.style.width = `${fullWidth}px`
+      
+      // Temporarily remove overflow constraints so html2canvas doesn't crop
+      const scrollContainers = element.querySelectorAll('.overflow-x-auto, .overflow-hidden')
+      const originalOverflows = Array.from(scrollContainers).map((el: any) => ({
+        el,
+        overflow: el.style.overflow,
+        overflowX: el.style.overflowX
+      }))
+      
+      scrollContainers.forEach((el: any) => {
+        el.style.overflow = 'visible'
+        el.style.overflowX = 'visible'
+      })
+
+      // Wait for DOM to repaint
+      await new Promise(resolve => setTimeout(resolve, 150))
+      
+      const canvas = await html2canvas(element, {
         scale: 2,
         backgroundColor: '#ffffff',
+        width: fullWidth,
+        windowWidth: fullWidth
       })
+      
+      // Restore styles
+      element.style.width = originalWidth
+      originalOverflows.forEach(({ el, overflow, overflowX }) => {
+        el.style.overflow = overflow
+        el.style.overflowX = overflowX
+      })
+
       const url = canvas.toDataURL('image/png')
       const link = document.createElement('a')
       link.download = `kpi-summary-${period}-${new Date().toISOString().slice(0, 10)}.png`
