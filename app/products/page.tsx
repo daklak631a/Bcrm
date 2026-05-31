@@ -8,10 +8,11 @@ import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import clsx from "clsx"
 import { formatMetricValue, getProductMetricDefinition, getProductMetricValue } from "@/lib/product-metrics"
-import { fetchProducts, fetchProductSales, createProduct, deleteProduct, fetchCustomers, createProductSale, getCustomerFullName, createCustomer, fetchPlans, fetchPlanAssignments } from "@/lib/supabase/api"
+import { fetchProducts, fetchProductSales, createProduct, deleteProduct, fetchCustomers, fetchProfiles, createProductSale, getCustomerFullName, createCustomer, fetchPlans, fetchPlanAssignments } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 import { ProductMetricType } from "@/types/models"
+import { filterAgentRecordsByAccess, filterCustomersByAccess } from "@/lib/access-control"
 
 function ProductsPageContent() {
   const { user } = useAuthStore()
@@ -25,6 +26,7 @@ function ProductsPageContent() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [customers, setCustomers] = useState<any[]>([])
+  const [profiles, setProfiles] = useState<any[]>([])
   const [planAssignments, setPlanAssignments] = useState<any[]>([])
 
   const getProductTargetField = (productName: string): string | null => {
@@ -59,11 +61,12 @@ function ProductsPageContent() {
   const [productMetricTouched, setProductMetricTouched] = useState(false)
 
   const filteredCustomers = useMemo(() => {
-    if (!customerSearch.trim()) return customers
+    const scopedCustomers = filterCustomersByAccess(customers, profiles, user)
+    if (!customerSearch.trim()) return scopedCustomers
     const qText = customerSearch.toLowerCase().trim()
     const qPhone = customerSearch.replace(/\D/g, '')
 
-    return customers.filter(c => {
+    return scopedCustomers.filter(c => {
       const nameMatch = getCustomerFullName(c).toLowerCase().includes(qText)
       if (nameMatch) return true
 
@@ -73,11 +76,11 @@ function ProductsPageContent() {
       }
       return false
     })
-  }, [customers, customerSearch])
+  }, [customers, customerSearch, profiles, user])
 
   const selectedCustomer = useMemo(() => {
-    return customers.find(c => c.id === selectedCustomerId)
-  }, [customers, selectedCustomerId])
+    return filterCustomersByAccess(customers, profiles, user).find(c => c.id === selectedCustomerId)
+  }, [customers, profiles, selectedCustomerId, user])
 
   const selectedProductMetric = useMemo(() => {
     return getProductMetricDefinition(selectedProduct)
@@ -91,15 +94,17 @@ function ProductsPageContent() {
 
     try {
       setLoading(true)
-      const [productsData, salesData, customersData, plansData] = await Promise.all([
+      const [productsData, salesData, customersData, profilesData, plansData] = await Promise.all([
         fetchProducts(),
         fetchProductSales(),
         fetchCustomers(),
+        fetchProfiles(),
         fetchPlans()
       ])
       setProducts(productsData)
       setSales(salesData)
       setCustomers(customersData)
+      setProfiles(profilesData)
 
       if (plansData && plansData.length > 0) {
         const latestPlan = plansData[0]
@@ -115,17 +120,18 @@ function ProductsPageContent() {
     } finally {
       setLoading(false)
     }
-  }, [user?.role])
+  }, [user])
 
   useEffect(() => { setMounted(true); loadData() }, [loadData])
 
   useEffect(() => {
-    if (!customerIdParam || customers.length === 0) return
-    const customer = customers.find(c => c.id === customerIdParam)
+    const scopedCustomers = filterCustomersByAccess(customers, profiles, user)
+    if (!customerIdParam || scopedCustomers.length === 0) return
+    const customer = scopedCustomers.find(c => c.id === customerIdParam)
     if (!customer) return
     setSelectedCustomerId(customer.id)
     setCustomerSearch(getCustomerFullName(customer))
-  }, [customerIdParam, customers])
+  }, [customerIdParam, customers, profiles, user])
 
   useEffect(() => {
     if (productMetricTouched) return
@@ -137,7 +143,7 @@ function ProductsPageContent() {
   const productPerformanceMap = useMemo(() => {
     const performanceMap = new Map<string, { metricValue: number; completedCount: number }>()
 
-    sales.forEach((sale: any) => {
+    filterAgentRecordsByAccess(sales, profiles, user).forEach((sale: any) => {
       if (!sale.product_id || String(sale.status || '').toUpperCase() !== 'COMPLETED') return
 
       const current = performanceMap.get(sale.product_id) || { metricValue: 0, completedCount: 0 }
@@ -147,7 +153,7 @@ function ProductsPageContent() {
     })
 
     return performanceMap
-  }, [sales])
+  }, [profiles, sales, user])
 
   const getProductTarget = useCallback((product: any) => {
     const targetField = getProductTargetField(product.name)
@@ -258,6 +264,10 @@ function ProductsPageContent() {
       toast.error('Vui lòng chọn khách hàng và sản phẩm')
       return
     }
+    if (!selectedCustomer) {
+      toast.error('Không thể ghi nhận cho khách hàng ngoài phạm vi quản lý')
+      return
+    }
     const form = new FormData(e.currentTarget)
     const resultValue = Number(form.get('result_value') || 0)
 
@@ -344,10 +354,6 @@ function ProductsPageContent() {
           )}
         </div>
 
-        <div className="bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-xl px-4 py-3 text-sm">
-          Giao dịch bán sản phẩm mới nên được ghi nhận tại <Link href={customerIdParam ? `/sales?customerId=${customerIdParam}` : '/sales'} className="font-semibold underline underline-offset-2">Bảng Bán Hàng</Link>. Trang này tiếp tục dùng để quản lý danh mục sản phẩm và theo dõi hiệu suất.
-        </div>
-
         {loading ? (
           <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-emerald-600" /><span className="ml-2 text-slate-500">Đang tải...</span></div>
         ) : filteredProducts.length === 0 ? (
@@ -420,7 +426,7 @@ function ProductsPageContent() {
                               onClick={() => {
                                 setSelectedProduct(product)
                                 if (customerIdParam) {
-                                  const presetCustomer = customers.find(c => c.id === customerIdParam)
+                                  const presetCustomer = filterCustomersByAccess(customers, profiles, user).find(c => c.id === customerIdParam)
                                   if (presetCustomer) {
                                     setSelectedCustomerId(presetCustomer.id)
                                     setCustomerSearch(getCustomerFullName(presetCustomer))
