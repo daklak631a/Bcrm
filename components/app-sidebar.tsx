@@ -66,7 +66,7 @@ export function AppSidebar() {
     { name: 'Bảng Bán Hàng', href: '/sales', icon: ShoppingCart },
     { name: 'Khách Hàng', href: '/customers', icon: Users },
     { name: 'Tương Tác', href: '/interactions', icon: CalendarClock },
-    { name: 'Danh Mục Sản Phẩm', href: '/products', icon: Package },
+    ...(user?.role !== 'USER' ? [{ name: 'Danh Mục Sản Phẩm', href: '/products', icon: Package }] : []),
     { name: 'Báo Cáo', href: '/reports', icon: BarChart3 },
   ];
 

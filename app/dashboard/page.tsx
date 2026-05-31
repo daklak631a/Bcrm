@@ -1,10 +1,11 @@
 "use client"
 
 import clsx from "clsx"
+import Link from "next/link"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
-import { MessageSquare, Package, TrendingUp, Loader2 } from "lucide-react"
+import { AlertTriangle, ArrowRight, Clock3, Loader2, MessageSquare, Package, TrendingUp, UserRound, UsersRound, type LucideIcon } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { KPISummaryTable } from "@/components/ui/kpi-summary-table"
 import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
 import { fetchCustomers, fetchInteractions, fetchProfiles, fetchSalesRecords, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
@@ -44,6 +45,134 @@ export default function DashboardPage() {
   const activeDeposits = salesRecords.filter((record: any) => record.source_type === 'DEPOSIT' && record.status === 'ACTIVE')
   const totalDepositAmount = activeDeposits.reduce((sum: number, record: any) => sum + Number(record.amount || 0), 0)
   const pendingInteractions = interactions.filter((i: any) => i.result === 'PENDING')
+  const profileById = useMemo(() => new Map(profiles.map((profile: any) => [profile.id, profile])), [profiles])
+  const departmentUserIds = useMemo(() => {
+    if (!user?.department_id) return new Set<string>()
+    return new Set(profiles.filter((profile: any) => profile.department_id === user.department_id).map((profile: any) => profile.id))
+  }, [profiles, user?.department_id])
+
+  const workItems = useMemo(() => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const isPastDate = (value?: string | null) => {
+      if (!value) return false
+      const date = new Date(value)
+      if (Number.isNaN(date.getTime())) return false
+      date.setHours(0, 0, 0, 0)
+      return date < today
+    }
+
+    const getOwnerName = (ownerId?: string | null) => {
+      if (!ownerId) return 'Chưa rõ phụ trách'
+      return profileById.get(ownerId)?.full_name || 'Chưa rõ phụ trách'
+    }
+
+    const interactionItems = interactions
+      .filter((interaction: any) => interaction.result === 'PENDING' || interaction.result === 'FOLLOW_UP')
+      .map((interaction: any) => {
+        const dueDate = interaction.follow_up_date || interaction.interaction_date
+        const overdue = isPastDate(dueDate)
+        return {
+          id: `interaction:${interaction.id}`,
+          ownerId: interaction.manager_id,
+          ownerName: getOwnerName(interaction.manager_id),
+          title: interaction.purpose || 'Tương tác cần xử lý',
+          customerName: interaction.customers ? getCustomerFullName(interaction.customers) : '—',
+          href: interaction.customer_id ? `/interactions?customerId=${interaction.customer_id}` : '/interactions',
+          salesHref: interaction.customer_id ? `/sales?create=1&type=PRODUCT&customerId=${interaction.customer_id}` : null,
+          date: dueDate,
+          badge: overdue ? 'Quá hẹn' : 'Đang chờ',
+          tone: overdue ? 'rose' : 'amber',
+          icon: overdue ? AlertTriangle : MessageSquare,
+        }
+      })
+
+    const salesItems = salesRecords
+      .filter((sale: any) => sale.status === 'PENDING' || (sale.raw?.is_batch_entry && !sale.raw?.is_allocated))
+      .map((sale: any) => ({
+        id: `sale:${sale.id}`,
+        ownerId: sale.agent_id,
+        ownerName: getOwnerName(sale.agent_id),
+        title: sale.raw?.is_batch_entry && !sale.raw?.is_allocated ? 'Bán hàng nhập lô chưa phân bổ' : (sale.title || 'Giao dịch cần xử lý'),
+        customerName: sale.customer_name || '—',
+        href: sale.raw?.is_batch_entry && !sale.raw?.is_allocated ? '/sales/batch-allocate' : (sale.source_href || '/sales'),
+        salesHref: null,
+        date: sale.sale_date,
+        badge: sale.raw?.is_batch_entry && !sale.raw?.is_allocated ? 'Cần phân bổ' : 'Đang xử lý',
+        tone: sale.raw?.is_batch_entry && !sale.raw?.is_allocated ? 'sky' : 'amber',
+        icon: Package,
+      }))
+
+    return [...interactionItems, ...salesItems].sort((a, b) => {
+      const aTime = a.date ? new Date(a.date).getTime() : 0
+      const bTime = b.date ? new Date(b.date).getTime() : 0
+      return aTime - bTime
+    })
+  }, [interactions, profileById, salesRecords])
+
+  const personalWorkItems = workItems.filter((item) => item.ownerId === user?.id)
+  const overdueWorkItems = personalWorkItems.filter((item) => item.badge === 'Quá hẹn')
+  const departmentWorkItems = user?.role === 'ADMIN_LEVEL_2'
+    ? workItems.filter((item) => !!item.ownerId && departmentUserIds.has(item.ownerId))
+    : []
+
+  const WorkItemCard = ({ item }: { item: any }) => {
+    const Icon = item.icon
+    const toneClass = item.tone === 'rose'
+      ? 'bg-rose-50 text-rose-700 border-rose-100'
+      : item.tone === 'sky'
+        ? 'bg-sky-50 text-sky-700 border-sky-100'
+        : 'bg-amber-50 text-amber-700 border-amber-100'
+
+    return (
+      <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+        <Link href={item.href} className="block">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className={clsx("flex h-9 w-9 items-center justify-center rounded-xl border", toneClass)}>
+                <Icon className="h-4 w-4" />
+              </span>
+              <span className={clsx("rounded-full border px-2 py-0.5 text-[11px] font-semibold", toneClass)}>{item.badge}</span>
+            </div>
+            <ArrowRight className="h-4 w-4 text-slate-300" />
+          </div>
+          <h3 className="mt-3 line-clamp-2 text-sm font-semibold leading-5 text-slate-900">{item.title}</h3>
+          <p className="mt-2 text-xs text-slate-500">KH: <b>{item.customerName}</b></p>
+          <p className="mt-1 text-xs text-slate-400">Phụ trách: {item.ownerName}</p>
+          {item.date && <p className="mt-1 text-xs text-slate-400">Hạn/Ngày: {new Date(item.date).toLocaleDateString('vi-VN')}</p>}
+        </Link>
+        {item.salesHref && (
+          <Link href={item.salesHref} className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[#006b68] px-3 py-2 text-xs font-semibold text-white hover:bg-[#005451]">
+            Ghi nhận SP bán
+          </Link>
+        )}
+      </div>
+    )
+  }
+
+  const WorkColumn = ({ title, description, items, icon: Icon }: { title: string; description: string; items: any[]; icon: LucideIcon }) => (
+    <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-4">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <Icon className="h-4 w-4 text-[#006b68]" />
+            <h3 className="text-sm font-bold text-slate-900">{title}</h3>
+          </div>
+          <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+        </div>
+        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-slate-200">{items.length}</span>
+      </div>
+      <div className="space-y-3">
+        {items.slice(0, 6).map((item) => <WorkItemCard key={item.id} item={item} />)}
+        {items.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-5 text-center text-sm text-slate-500">
+            Chưa có việc dang dở.
+          </div>
+        )}
+      </div>
+    </div>
+  )
 
   const getSaleMeta = (sale: any) => {
     switch (sale.source_type) {
@@ -96,6 +225,29 @@ export default function DashboardPage() {
       {/* KPI Summary Table */}
       <div className="mb-6">
         <KPISummaryTable />
+      </div>
+
+      <div className="mb-6 rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-900/5">
+        <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-end">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#006b68]">Sales support board</p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Việc dang dở & cảnh báo bán hàng</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Theo dõi lịch hẹn chờ xử lý, việc quá hẹn và giao dịch bán hàng cần phân bổ.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 ring-1 ring-amber-100">
+            <Clock3 className="h-4 w-4" />
+            {personalWorkItems.length} việc của tôi
+          </div>
+        </div>
+        <div className={clsx("grid gap-4", user?.role === 'ADMIN_LEVEL_2' ? "lg:grid-cols-3" : "lg:grid-cols-2")}>
+          <WorkColumn title="Của tôi" description="Các đầu việc đang chờ bạn xử lý." items={personalWorkItems} icon={UserRound} />
+          <WorkColumn title="Quá hẹn" description="Ưu tiên gọi lại/chốt trạng thái trong ngày." items={overdueWorkItems} icon={AlertTriangle} />
+          {user?.role === 'ADMIN_LEVEL_2' && (
+            <WorkColumn title="Cả phòng" description="Danh sách việc dang dở của cán bộ cùng phòng." items={departmentWorkItems} icon={UsersRound} />
+          )}
+        </div>
       </div>
 
       {/* Team Activity (for admin) */}

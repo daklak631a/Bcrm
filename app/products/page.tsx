@@ -84,6 +84,11 @@ function ProductsPageContent() {
   }, [selectedProduct])
 
   const loadData = useCallback(async () => {
+    if (user?.role === 'USER') {
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
       const [productsData, salesData, customersData, plansData] = await Promise.all([
@@ -110,7 +115,7 @@ function ProductsPageContent() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user?.role])
 
   useEffect(() => { setMounted(true); loadData() }, [loadData])
 
@@ -169,6 +174,25 @@ function ProductsPageContent() {
   }, [planAssignments, user])
 
   if (!mounted) return null
+
+  if (user?.role === 'USER') {
+    return (
+      <DashboardLayout title="Danh Mục Sản Phẩm">
+        <div className="mx-auto max-w-xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+            <PackageSearch className="h-7 w-7" />
+          </div>
+          <h2 className="mt-5 text-xl font-semibold tracking-tight text-slate-900">Không có quyền truy cập</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Danh mục sản phẩm được ẩn với tài khoản chuyên viên. Bạn vẫn có thể ghi nhận bán hàng tại Bảng Bán Hàng.
+          </p>
+          <Link href="/sales" className="mt-6 inline-flex items-center justify-center rounded-xl bg-[#006b68] px-4 py-2 text-sm font-semibold text-white hover:bg-[#005451]">
+            Mở Bảng Bán Hàng
+          </Link>
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   const isAdmin = user?.role === 'ADMIN_LEVEL_1'
 

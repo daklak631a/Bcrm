@@ -49,10 +49,13 @@ export function Sidebar({ onClose }: SidebarProps) {
     { href: "/dashboard", label: "Tổng Quan", icon: PieChart },
     { href: "/sales", label: "Bảng Bán Hàng", icon: ShoppingCart },
     { href: "/customers", label: "Khách Hàng", icon: Users },
-    { href: "/products", label: "Danh Mục Sản Phẩm", icon: Package },
     { href: "/reports", label: "Báo Cáo Tổng Hợp", icon: PieChart },
     { href: "/interactions", label: "Tương Tác", icon: MessageSquare },
   ]
+
+  if (user?.role !== 'USER') {
+    links.splice(3, 0, { href: "/products", label: "Danh Mục Sản Phẩm", icon: Package })
+  }
 
   if (user?.role === 'ADMIN_LEVEL_1') {
     links.push({ href: "/team", label: "Phân Bổ Nhân Sự", icon: Users })
