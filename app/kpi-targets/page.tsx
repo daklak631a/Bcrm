@@ -1195,7 +1195,7 @@ export default function KpiTargetsPage() {
               <table className="min-w-[2650px] w-full border-separate border-spacing-0">
                 <thead>
                   <tr>
-                    <th rowSpan={2} className="sticky left-0 top-0 z-50 min-w-[320px] border-b border-r border-[#001f1e] bg-[#002625] px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-white">
+                    <th rowSpan={2} className="max-md:static sticky left-0 top-0 z-50 min-w-[320px] max-md:min-w-[150px] border-b border-r border-[#001f1e] bg-[#002625] px-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-white">
                       Nhân sự
                     </th>
                     <th colSpan={3} className="sticky top-0 z-40 border-b border-r border-[#001f1e] bg-[#002625] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-slate-100">
@@ -1210,7 +1210,7 @@ export default function KpiTargetsPage() {
                     <th colSpan={GROWTH_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-[#004744] bg-[#005c58] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-50">
                       Chỉ tiêu tăng ròng
                     </th>
-                    <th rowSpan={2} className="sticky right-0 top-0 z-50 min-w-[180px] border-b border-l border-[#001f1e] bg-[#002625] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-white">
+                    <th rowSpan={2} className="max-md:static sticky right-0 top-0 z-50 min-w-[180px] max-md:min-w-[120px] border-b border-l border-[#001f1e] bg-[#002625] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-white">
                       Tác vụ
                     </th>
                   </tr>
@@ -1245,7 +1245,7 @@ export default function KpiTargetsPage() {
 
                     return (
                       <tr key={profile.id} className="group">
-                        <td className={clsx("sticky left-0 z-20 border-b border-r border-slate-200 px-4 py-4 align-top", rowBackground)}>
+                        <td className={clsx("max-md:static sticky left-0 z-20 border-b border-r border-slate-200 px-4 py-4 align-top", rowBackground)}>
                           <div className="flex items-start gap-3">
                             <div className={clsx("mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold text-white shadow-sm", dirty ? "bg-amber-500" : "bg-slate-900")}>
                               {profile.full_name.charAt(0)}
@@ -1301,7 +1301,7 @@ export default function KpiTargetsPage() {
                           </td>
                         ))}
 
-                        <td className={clsx("sticky right-0 z-20 border-b border-l border-slate-200 px-4 py-4 align-top", rowBackground)}>
+                        <td className={clsx("max-md:static sticky right-0 z-20 border-b border-l border-slate-200 px-4 py-4 align-top", rowBackground)}>
                           <div className="flex min-w-[150px] flex-col gap-2">
                             <span className={clsx("inline-flex items-center justify-center rounded-full px-2.5 py-1 text-[11px] font-semibold", dirty ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>
                               {dirty ? "Chưa lưu" : "Đã đồng bộ"}
