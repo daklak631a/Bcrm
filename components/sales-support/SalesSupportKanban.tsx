@@ -277,11 +277,7 @@ export function SalesSupportKanban() {
     })
   }
 
-  const handleDropToColumn = async (status: KanbanStatus) => {
-    if (!draggingItemId) return
-    const item = visibleItems.find((entry) => entry.id === draggingItemId)
-    setDraggingItemId(null)
-    setActiveColumn(null)
+  const updateItemStatus = async (item: WorkItem, status: KanbanStatus) => {
     if (!item || item.statusKey === status || !canMoveItem(item)) return
 
     const previousItems = workItems
@@ -309,9 +305,22 @@ export function SalesSupportKanban() {
     }
   }
 
+  const handleDropToColumn = async (status: KanbanStatus) => {
+    if (!draggingItemId) return
+    const item = visibleItems.find((entry) => entry.id === draggingItemId)
+    setDraggingItemId(null)
+    setActiveColumn(null)
+    if (!item) return
+    await updateItemStatus(item, status)
+  }
+
   const WorkItemCard = ({ item }: { item: WorkItem }) => {
     const Icon = item.icon
     const toneClass = getToneClass(item.tone)
+    const quickActions = KANBAN_COLUMNS.filter((column) => {
+      if (column.key === "OVERDUE" || column.key === "UNALLOCATED") return false
+      return column.key !== item.statusKey
+    })
 
     return (
       <article
@@ -351,6 +360,28 @@ export function SalesSupportKanban() {
           <Link href={item.salesHref} className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[#006b68] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#005451]">
             Ghi nhận SP bán
           </Link>
+        )}
+        {item.sourceType === "BATCH_GROUP" ? (
+          <Link href={item.href} className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-sky-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-sky-700 md:hidden">
+            Đi phân bổ lô
+          </Link>
+        ) : (
+          <div className="mt-3 grid grid-cols-3 gap-1.5 md:hidden">
+            {quickActions.map((action) => (
+              <button
+                key={action.key}
+                type="button"
+                disabled={updatingItemId === item.id}
+                onClick={() => updateItemStatus(item, action.key)}
+                className={clsx(
+                  "rounded-xl border px-2 py-2 text-[11px] font-semibold transition active:scale-[0.98] disabled:opacity-60",
+                  action.tone
+                )}
+              >
+                {action.key === "DONE" ? "Xong" : action.title}
+              </button>
+            ))}
+          </div>
         )}
       </article>
     )
@@ -416,7 +447,7 @@ export function SalesSupportKanban() {
           <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#006b68]">Sales support board</p>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Kanban việc dang dở & cảnh báo bán hàng</h2>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
-            Kéo thả để đổi trạng thái tức thì, không reload trang. Nhập lô cuối ngày được gom theo người phụ trách để dễ phân bổ.
+            Desktop kéo-thả để đổi trạng thái; trên điện thoại dùng các nút nhanh trong từng thẻ. Nhập lô cuối ngày được gom theo người phụ trách.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

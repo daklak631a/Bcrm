@@ -38,11 +38,21 @@ export default function DashboardPage() {
 
   useEffect(() => { setMounted(true); loadData() }, [loadData])
 
-  const activeLoans = salesRecords.filter((record: any) => record.source_type === 'LOAN' && record.status === 'ACTIVE')
+  const visibleProfiles = user?.role === 'ADMIN_LEVEL_1'
+    ? profiles
+    : user?.role === 'ADMIN_LEVEL_2'
+      ? profiles.filter((profile: any) => profile.department_id === user.department_id)
+      : profiles.filter((profile: any) => profile.id === user?.id)
+  const visibleProfileIds = new Set(visibleProfiles.map((profile: any) => profile.id))
+  const visibleCustomers = customers.filter((customer: any) => visibleProfileIds.has(customer.assigned_manager_id))
+  const visibleSalesRecords = salesRecords.filter((record: any) => record.agent_id && visibleProfileIds.has(record.agent_id))
+  const visibleInteractions = interactions.filter((interaction: any) => interaction.manager_id && visibleProfileIds.has(interaction.manager_id))
+
+  const activeLoans = visibleSalesRecords.filter((record: any) => record.source_type === 'LOAN' && record.status === 'ACTIVE')
   const totalLoanBalance = activeLoans.reduce((sum: number, record: any) => sum + Number(record.amount || 0), 0)
-  const activeDeposits = salesRecords.filter((record: any) => record.source_type === 'DEPOSIT' && record.status === 'ACTIVE')
+  const activeDeposits = visibleSalesRecords.filter((record: any) => record.source_type === 'DEPOSIT' && record.status === 'ACTIVE')
   const totalDepositAmount = activeDeposits.reduce((sum: number, record: any) => sum + Number(record.amount || 0), 0)
-  const pendingInteractions = interactions.filter((i: any) => i.result === 'PENDING')
+  const pendingInteractions = visibleInteractions.filter((i: any) => i.result === 'PENDING')
 
   const getSaleMeta = (sale: any) => {
     switch (sale.source_type) {
@@ -74,7 +84,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
           <p className="text-sm font-medium text-slate-500 mb-1">Khách Hàng Đang QL</p>
-          <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{customers.length}</h3>
+          <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{visibleCustomers.length}</h3>
         </div>
         <div className="bg-white p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
           <p className="text-sm font-medium text-slate-500 mb-1">Dư Nợ Cho Vay</p>
@@ -116,14 +126,14 @@ export default function DashboardPage() {
       </Link>
 
       {/* Team Activity (for admin) */}
-      {(user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADMIN_LEVEL_2') && profiles.length > 1 && (
+      {(user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADMIN_LEVEL_2') && visibleProfiles.length > 1 && (
         <div className="bg-white rounded-2xl ring-1 ring-slate-900/5 shadow-sm p-6 mb-6">
           <h2 className="text-lg font-semibold text-slate-800 mb-4 tracking-tight">Đội Ngũ Nhân Viên</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {profiles.map((agent: any) => {
-              const agentCustomers = customers.filter((c: any) => c.assigned_manager_id === agent.id).length
-              const agentInteractions = interactions.filter((i: any) => i.manager_id === agent.id).length
-              const agentSales = salesRecords.filter((sale: any) => sale.agent_id === agent.id).length
+            {visibleProfiles.map((agent: any) => {
+              const agentCustomers = visibleCustomers.filter((c: any) => c.assigned_manager_id === agent.id).length
+              const agentInteractions = visibleInteractions.filter((i: any) => i.manager_id === agent.id).length
+              const agentSales = visibleSalesRecords.filter((sale: any) => sale.agent_id === agent.id).length
               return (
                 <div key={agent.id} className="p-4 border border-slate-100 rounded-xl bg-slate-50 flex items-start gap-4 hover:bg-slate-100/50 transition-colors">
                   <div className="w-11 h-11 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-sm shrink-0">
@@ -154,14 +164,14 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {customers.slice(0, 5).map((row: any) => (
+                {visibleCustomers.slice(0, 5).map((row: any) => (
                   <tr key={row.id} className="border-b last:border-0 hover:bg-slate-50 transition-colors">
                     <td className="py-3 px-4 font-medium text-slate-700">{getCustomerFullName(row)}</td>
                     <td className="py-3 px-4 text-sm text-slate-600">{row.phone || row.email || '—'}</td>
                     <td className="py-3 px-4 text-slate-500 text-sm">{row.profiles?.full_name || '—'}</td>
                   </tr>
                 ))}
-                {customers.length === 0 && (
+                {visibleCustomers.length === 0 && (
                   <tr><td colSpan={3} className="py-8 text-center text-slate-500">Chưa có khách hàng</td></tr>
                 )}
               </tbody>
@@ -198,7 +208,7 @@ export default function DashboardPage() {
           <TrendingUp className="w-5 h-5 text-[#006b68]" /> Kết Quả Bán Hàng Gần Đây
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {salesRecords.slice(0, 8).map((sale: any) => {
+          {visibleSalesRecords.slice(0, 8).map((sale: any) => {
             const meta = getSaleMeta(sale)
             return (
               <div key={sale.id} className="p-4 border border-slate-100 rounded-xl bg-slate-50 relative overflow-hidden group">
@@ -225,7 +235,7 @@ export default function DashboardPage() {
               </div>
             )
           })}
-          {salesRecords.length === 0 && (
+          {visibleSalesRecords.length === 0 && (
             <div className="col-span-full py-8 text-center text-slate-500">Chưa có dữ liệu bán hàng.</div>
           )}
         </div>
