@@ -3,12 +3,65 @@
 import clsx from "clsx"
 import Link from "next/link"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
-import { AlertTriangle, ArrowRight, Clock3, Loader2, MessageSquare, Package, TrendingUp, UserRound, UsersRound, type LucideIcon } from "lucide-react"
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Loader2, MessageSquare, Package, TrendingUp, UserRound, UsersRound, type LucideIcon } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useCallback, useMemo } from "react"
+import { toast } from "sonner"
 import { KPISummaryTable } from "@/components/ui/kpi-summary-table"
 import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
-import { fetchCustomers, fetchInteractions, fetchProfiles, fetchSalesRecords, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
+import { fetchCustomers, fetchInteractions, fetchProfiles, fetchSalesRecords, formatCurrency, getCustomerFullName, updateInteraction, updateProductSale } from "@/lib/supabase/api"
+
+type KanbanStatus = 'OVERDUE' | 'PENDING' | 'FOLLOW_UP' | 'UNALLOCATED' | 'DONE'
+
+const KANBAN_COLUMNS: Array<{
+  key: KanbanStatus
+  title: string
+  description: string
+  icon: LucideIcon
+  tone: string
+  rail: string
+}> = [
+  {
+    key: 'OVERDUE',
+    title: 'Quá hẹn',
+    description: 'Cần ưu tiên xử lý trước.',
+    icon: AlertTriangle,
+    tone: 'border-rose-200 bg-rose-50 text-rose-700',
+    rail: 'from-rose-500 to-orange-400',
+  },
+  {
+    key: 'PENDING',
+    title: 'Đang xử lý',
+    description: 'Việc đang mở trong pipeline.',
+    icon: Clock3,
+    tone: 'border-amber-200 bg-amber-50 text-amber-700',
+    rail: 'from-amber-400 to-yellow-300',
+  },
+  {
+    key: 'FOLLOW_UP',
+    title: 'Cần theo dõi',
+    description: 'Đã liên hệ, cần chăm lại.',
+    icon: MessageSquare,
+    tone: 'border-teal-200 bg-teal-50 text-teal-700',
+    rail: 'from-[#006b68] to-teal-400',
+  },
+  {
+    key: 'UNALLOCATED',
+    title: 'Chờ phân bổ',
+    description: 'Bán hàng nhập lô chưa gán KH.',
+    icon: Package,
+    tone: 'border-sky-200 bg-sky-50 text-sky-700',
+    rail: 'from-sky-500 to-cyan-300',
+  },
+  {
+    key: 'DONE',
+    title: 'Hoàn thành',
+    description: 'Thả vào đây để chốt trạng thái.',
+    icon: CheckCircle2,
+    tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    rail: 'from-emerald-500 to-lime-300',
+  },
+]
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
@@ -18,6 +71,8 @@ export default function DashboardPage() {
   const [salesRecords, setSalesRecords] = useState<any[]>([])
   const [interactions, setInteractions] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
+  const [draggingItemId, setDraggingItemId] = useState<string | null>(null)
+  const [updatingItemId, setUpdatingItemId] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -37,8 +92,6 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => { setMounted(true); loadData() }, [loadData])
-
-  if (!mounted) return null
 
   const activeLoans = salesRecords.filter((record: any) => record.source_type === 'LOAN' && record.status === 'ACTIVE')
   const totalLoanBalance = activeLoans.reduce((sum: number, record: any) => sum + Number(record.amount || 0), 0)
@@ -75,6 +128,9 @@ export default function DashboardPage() {
         const overdue = isPastDate(dueDate)
         return {
           id: `interaction:${interaction.id}`,
+          sourceId: interaction.id,
+          sourceType: 'INTERACTION',
+          statusKey: overdue ? 'OVERDUE' : interaction.result,
           ownerId: interaction.manager_id,
           ownerName: getOwnerName(interaction.manager_id),
           title: interaction.purpose || 'Tương tác cần xử lý',
@@ -89,9 +145,12 @@ export default function DashboardPage() {
       })
 
     const salesItems = salesRecords
-      .filter((sale: any) => sale.status === 'PENDING' || (sale.raw?.is_batch_entry && !sale.raw?.is_allocated))
+      .filter((sale: any) => sale.status === 'PENDING' || sale.status === 'INTERESTED' || (sale.raw?.is_batch_entry && !sale.raw?.is_allocated))
       .map((sale: any) => ({
         id: `sale:${sale.id}`,
+        sourceId: sale.source_id,
+        sourceType: sale.source_type,
+        statusKey: sale.raw?.is_batch_entry && !sale.raw?.is_allocated ? 'UNALLOCATED' : sale.status,
         ownerId: sale.agent_id,
         ownerName: getOwnerName(sale.agent_id),
         title: sale.raw?.is_batch_entry && !sale.raw?.is_allocated ? 'Bán hàng nhập lô chưa phân bổ' : (sale.title || 'Giao dịch cần xử lý'),
@@ -116,6 +175,57 @@ export default function DashboardPage() {
   const departmentWorkItems = user?.role === 'ADMIN_LEVEL_2'
     ? workItems.filter((item) => !!item.ownerId && departmentUserIds.has(item.ownerId))
     : []
+  const visibleKanbanItems = user?.role === 'ADMIN_LEVEL_1'
+    ? workItems
+    : user?.role === 'ADMIN_LEVEL_2'
+      ? departmentWorkItems
+      : personalWorkItems
+
+  const getColumnItems = (status: KanbanStatus) => {
+    if (status === 'DONE') return []
+    return visibleKanbanItems.filter((item: any) => item.statusKey === status)
+  }
+
+  const canMoveItem = (item: any) => {
+    return user?.role !== 'USER' || item.ownerId === user?.id
+  }
+
+  const handleDropToColumn = async (status: KanbanStatus) => {
+    if (!draggingItemId) return
+    const item = visibleKanbanItems.find((entry: any) => entry.id === draggingItemId)
+    setDraggingItemId(null)
+    if (!item || item.statusKey === status || !canMoveItem(item)) return
+
+    if (item.statusKey === 'UNALLOCATED') {
+      if (status === 'DONE') {
+        window.location.href = item.href
+      } else {
+        toast.info('Bản ghi nhập lô cần phân bổ vào khách hàng trước khi đổi trạng thái.')
+      }
+      return
+    }
+
+    try {
+      setUpdatingItemId(item.id)
+      if (item.sourceType === 'INTERACTION') {
+        const nextResult = status === 'DONE' ? 'SUCCESS' : status === 'FOLLOW_UP' ? 'FOLLOW_UP' : 'PENDING'
+        await updateInteraction(item.sourceId, { result: nextResult })
+        toast.success(status === 'DONE' ? 'Đã hoàn thành tương tác.' : 'Đã cập nhật trạng thái tương tác.')
+      } else if (item.sourceType === 'PRODUCT') {
+        const nextStatus = status === 'DONE' ? 'COMPLETED' : status === 'FOLLOW_UP' ? 'INTERESTED' : 'PENDING'
+        await updateProductSale(item.sourceId, { status: nextStatus })
+        toast.success(status === 'DONE' ? 'Đã ghi nhận hoàn thành sản phẩm bán.' : 'Đã cập nhật trạng thái bán hàng.')
+      } else {
+        toast.info('Khoản vay/tiền gửi cần cập nhật tại Bảng Bán Hàng.')
+        return
+      }
+      await loadData()
+    } catch (err: any) {
+      toast.error('Không cập nhật được trạng thái: ' + err.message)
+    } finally {
+      setUpdatingItemId(null)
+    }
+  }
 
   const WorkItemCard = ({ item }: { item: any }) => {
     const Icon = item.icon
@@ -126,7 +236,17 @@ export default function DashboardPage() {
         : 'bg-amber-50 text-amber-700 border-amber-100'
 
     return (
-      <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div
+        draggable={canMoveItem(item) && updatingItemId !== item.id}
+        onDragStart={() => setDraggingItemId(item.id)}
+        onDragEnd={() => setDraggingItemId(null)}
+        className={clsx(
+          "group rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md",
+          canMoveItem(item) ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+          draggingItemId === item.id && "scale-[0.98] opacity-60",
+          updatingItemId === item.id && "pointer-events-none opacity-60"
+        )}
+      >
         <Link href={item.href} className="block">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -151,28 +271,43 @@ export default function DashboardPage() {
     )
   }
 
-  const WorkColumn = ({ title, description, items, icon: Icon }: { title: string; description: string; items: any[]; icon: LucideIcon }) => (
-    <div className="rounded-[24px] border border-slate-200 bg-slate-50/70 p-4">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Icon className="h-4 w-4 text-[#006b68]" />
-            <h3 className="text-sm font-bold text-slate-900">{title}</h3>
-          </div>
-          <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
-        </div>
-        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-slate-200">{items.length}</span>
-      </div>
-      <div className="space-y-3">
-        {items.slice(0, 6).map((item) => <WorkItemCard key={item.id} item={item} />)}
-        {items.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-5 text-center text-sm text-slate-500">
-            Chưa có việc dang dở.
-          </div>
+  const WorkColumn = ({ column, items }: { column: (typeof KANBAN_COLUMNS)[number]; items: any[] }) => {
+    const Icon = column.icon
+    const isDropTarget = draggingItemId !== null
+
+    return (
+      <div
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={() => handleDropToColumn(column.key)}
+        className={clsx(
+          "relative min-h-[360px] rounded-[26px] border bg-slate-50/80 p-4 transition duration-200",
+          isDropTarget ? "border-dashed border-[#006b68]/50 bg-teal-50/40" : "border-slate-200"
         )}
+      >
+        <div className={clsx("absolute inset-x-4 top-3 h-1 rounded-full bg-gradient-to-r", column.rail)} />
+        <div className="mb-4 mt-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={clsx("flex h-8 w-8 items-center justify-center rounded-xl border", column.tone)}>
+                <Icon className="h-4 w-4" />
+              </span>
+              <h3 className="text-sm font-bold text-slate-900">{column.title}</h3>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-slate-500">{column.description}</p>
+          </div>
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-slate-200">{items.length}</span>
+        </div>
+        <div className="space-y-3">
+          {items.slice(0, 6).map((item) => <WorkItemCard key={item.id} item={item} />)}
+          {items.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-5 text-center text-sm leading-6 text-slate-500">
+              {column.key === 'DONE' ? 'Kéo thẻ vào đây để chốt hoàn thành.' : 'Không có thẻ ở trạng thái này.'}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   const getSaleMeta = (sale: any) => {
     switch (sale.source_type) {
@@ -184,6 +319,8 @@ export default function DashboardPage() {
         return { label: 'Sản phẩm', color: 'bg-amber-100 text-amber-700' }
     }
   }
+
+  if (!mounted) return null
 
   if (loading) {
     return (
@@ -231,22 +368,28 @@ export default function DashboardPage() {
         <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-end">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#006b68]">Sales support board</p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Việc dang dở & cảnh báo bán hàng</h2>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Kanban việc dang dở & cảnh báo bán hàng</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Theo dõi lịch hẹn chờ xử lý, việc quá hẹn và giao dịch bán hàng cần phân bổ.
+              Kéo thẻ giữa các cột để cập nhật trạng thái; thả vào Hoàn thành để chốt tương tác hoặc sản phẩm bán.
             </p>
           </div>
-          <div className="flex items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 ring-1 ring-amber-100">
-            <Clock3 className="h-4 w-4" />
-            {personalWorkItems.length} việc của tôi
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 ring-1 ring-amber-100">
+              <UserRound className="h-4 w-4" />
+              {personalWorkItems.length} việc của tôi
+            </div>
+            {user?.role === 'ADMIN_LEVEL_2' && (
+              <div className="flex items-center gap-2 rounded-2xl bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-700 ring-1 ring-teal-100">
+                <UsersRound className="h-4 w-4" />
+                {departmentWorkItems.length} việc cả phòng
+              </div>
+            )}
           </div>
         </div>
-        <div className={clsx("grid gap-4", user?.role === 'ADMIN_LEVEL_2' ? "lg:grid-cols-3" : "lg:grid-cols-2")}>
-          <WorkColumn title="Của tôi" description="Các đầu việc đang chờ bạn xử lý." items={personalWorkItems} icon={UserRound} />
-          <WorkColumn title="Quá hẹn" description="Ưu tiên gọi lại/chốt trạng thái trong ngày." items={overdueWorkItems} icon={AlertTriangle} />
-          {user?.role === 'ADMIN_LEVEL_2' && (
-            <WorkColumn title="Cả phòng" description="Danh sách việc dang dở của cán bộ cùng phòng." items={departmentWorkItems} icon={UsersRound} />
-          )}
+        <div className="grid gap-4 xl:grid-cols-5 md:grid-cols-2">
+          {KANBAN_COLUMNS.map((column) => (
+            <WorkColumn key={column.key} column={column} items={getColumnItems(column.key)} />
+          ))}
         </div>
       </div>
 
