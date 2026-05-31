@@ -169,7 +169,7 @@ export function SalesSupportKanban() {
         })
 
       const productItems: WorkItem[] = salesRecords
-        .filter((sale: any) => !sale.raw?.is_batch_entry && (sale.status === "PENDING" || sale.status === "INTERESTED"))
+        .filter((sale: any) => sale.source_type === "PRODUCT" && !sale.raw?.is_batch_entry && (sale.status === "PENDING" || sale.status === "INTERESTED"))
         .map((sale: any) => ({
           id: `sale:${sale.id}`,
           sourceId: sale.source_id,
