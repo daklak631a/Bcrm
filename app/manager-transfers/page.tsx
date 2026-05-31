@@ -12,12 +12,12 @@ import { vi } from 'date-fns/locale';
 interface TransferRequest {
   id: string;
   customer_id: string;
-  from_manager_id: string;
-  to_manager_id: string;
+  requester_id: string;
+  target_manager_id: string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   reason?: string | null;
-  requested_at: string;
-  decided_at?: string | null;
+  created_at: string;
+  updated_at?: string | null;
   from_manager?: { full_name: string };
   to_manager?: { full_name: string };
   customer?: { full_name: string; business_name?: string };
@@ -45,11 +45,11 @@ export default function ManagerTransfersPage() {
       .from('manager_transfer_requests')
       .select(`
         *,
-        from_manager:profiles!from_manager_id(full_name),
-        to_manager:profiles!to_manager_id(full_name),
+        from_manager:profiles!requester_id(full_name),
+        to_manager:profiles!target_manager_id(full_name),
         customer:customers(full_name, business_name)
       `)
-      .order('requested_at', { ascending: false });
+      .order('created_at', { ascending: false });
     setTransfers((data as any) || []);
     setLoading(false);
   }
@@ -58,7 +58,7 @@ export default function ManagerTransfersPage() {
     const supabase = getSupabase();
     await supabase
       .from('manager_transfer_requests')
-      .update({ status, decided_at: new Date().toISOString() })
+      .update({ status, updated_at: new Date().toISOString() })
       .eq('id', id);
     loadTransfers();
   }
@@ -101,7 +101,7 @@ export default function ManagerTransfersPage() {
                         {t.status}
                       </span>
                     </td>
-                    <td className="py-2 text-sm text-slate-600">{format(new Date(t.requested_at), 'dd/MM/yyyy HH:mm', { locale: vi })}</td>
+                    <td className="py-2 text-sm text-slate-600">{format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: vi })}</td>
                     <td className="py-2 text-right space-x-2">
                       {t.status === 'PENDING' && (
                         <>

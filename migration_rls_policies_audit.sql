@@ -252,27 +252,27 @@ CREATE POLICY "audit_logs_select_admin" ON audit_logs
 DROP POLICY IF EXISTS "transfer_requests_select" ON manager_transfer_requests;
 CREATE POLICY "transfer_requests_select" ON manager_transfer_requests
   FOR SELECT USING (
-    from_manager_id = auth.uid() OR
-    to_manager_id = auth.uid() OR
+    requester_id = auth.uid() OR
+    target_manager_id = auth.uid() OR
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('ADMIN_LEVEL_1', 'ADMIN_LEVEL_2'))
   );
 
 DROP POLICY IF EXISTS "transfer_requests_insert" ON manager_transfer_requests;
 CREATE POLICY "transfer_requests_insert" ON manager_transfer_requests
   FOR INSERT WITH CHECK (
-    from_manager_id = auth.uid() OR
+    requester_id = auth.uid() OR
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('ADMIN_LEVEL_1', 'ADMIN_LEVEL_2'))
   );
 
 DROP POLICY IF EXISTS "transfer_requests_update" ON manager_transfer_requests;
 CREATE POLICY "transfer_requests_update" ON manager_transfer_requests
   FOR UPDATE USING (
-    from_manager_id = auth.uid() OR
-    to_manager_id = auth.uid() OR
+    requester_id = auth.uid() OR
+    target_manager_id = auth.uid() OR
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('ADMIN_LEVEL_1', 'ADMIN_LEVEL_2'))
   ) WITH CHECK (
-    from_manager_id = auth.uid() OR
-    to_manager_id = auth.uid() OR
+    requester_id = auth.uid() OR
+    target_manager_id = auth.uid() OR
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('ADMIN_LEVEL_1', 'ADMIN_LEVEL_2'))
   );
 
