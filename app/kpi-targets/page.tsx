@@ -11,6 +11,7 @@ import { BarChart3, Building2, CalendarDays, CheckCircle2, Download, FileSpreads
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import * as XLSX from 'xlsx'
+import { formatShortName } from '@/lib/utils'
 
 export type AssignmentDraft = Record<string, number>
 
@@ -594,7 +595,7 @@ export default function KpiTargetsPage() {
     ]
     const sampleData = visibleUsers.map(p => {
       const row: any = {
-        'Chuyên viên': p.short_name || p.full_name,
+        'Chuyên viên': p.short_name || formatShortName(p.full_name || ''),
       }
       ALL_ASSIGNMENT_FIELDS.forEach(f => {
         row[`${f.label} (${f.unit})`] = 0
@@ -632,7 +633,7 @@ export default function KpiTargetsPage() {
         const nextDrafts: Record<string, AssignmentDraft> = { ...drafts }
         for (const row of rows) {
           const name = String(row['Chuyên viên'] || '').trim()
-          const match = visibleUsers.find(p => slugify(p.short_name || p.full_name) === slugify(name))
+          const match = visibleUsers.find(p => slugify(p.short_name || formatShortName(p.full_name || '')) === slugify(name))
           if (!match) continue
           
           const newDraft = buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)
@@ -1232,12 +1233,12 @@ export default function KpiTargetsPage() {
                         <td className={clsx("max-md:static sticky left-0 z-20 border-b border-r border-slate-200 px-4 py-4 align-top", rowBackground)}>
                           <div className="flex items-start gap-3">
                             <div className={clsx("mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold text-white shadow-sm", dirty ? "bg-amber-500" : "bg-slate-900")}>
-                              {profile.short_name ? profile.short_name.charAt(0) : profile.full_name.charAt(0)}
+                              {profile.short_name ? profile.short_name.charAt(0) : (formatShortName(profile.full_name || '') || profile.full_name.charAt(0)).charAt(0)}
                             </div>
                             <div className="min-w-0 space-y-2">
                               <div>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <p className="text-sm font-semibold text-slate-900">{profile.short_name || profile.full_name}</p>
+                                  <p className="text-sm font-semibold text-slate-900">{profile.short_name || formatShortName(profile.full_name || '')}</p>
                                   <span className={clsx("rounded-full px-2.5 py-1 text-[11px] font-semibold", dirty ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>
                                     {dirty ? "Chưa lưu" : "Đã đồng bộ"}
                                   </span>

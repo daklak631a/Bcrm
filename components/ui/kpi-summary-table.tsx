@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/useAuthStore'
 import Link from 'next/link'
 import { Download } from 'lucide-react'
 import html2canvas from 'html2canvas'
+import { formatShortName } from '@/lib/utils'
 
 interface KPISummary {
   manager_id: string
@@ -193,7 +194,7 @@ export function KPISummaryTable() {
                     <th className="py-3 px-4 text-center font-semibold text-[#005451] w-28 bg-[#d8efec] border-r border-[#ccedea]">Kết quả<br/>tháng</th>
                     {data.map((user) => (
                       <th key={user.manager_id} className="py-3 px-4 text-center font-semibold text-[#003e3b] min-w-[120px] border-r border-[#ccedea] whitespace-nowrap">
-                        {user.short_name || user.full_name}
+                        {user.short_name || formatShortName(user.full_name || '')}
                       </th>
                     ))}
                   </tr>
