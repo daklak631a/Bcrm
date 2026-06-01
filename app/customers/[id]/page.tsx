@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import { useAuthStore } from "@/store/useAuthStore"
 import { canAccessOwner } from "@/lib/access-control"
 import CustomerTimeline from "@/components/customer/CustomerTimeline"
+import clsx from "clsx"
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { user } = useAuthStore()
@@ -516,6 +517,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 </div>
               </div>
 
+
+              {/* Quick Interaction Section */}
+              <QuickInteractionPanel customerId={customerId} managerId={user?.id || ''} onSaved={loadData} />
+
               {/* Interactions Section - Now as a Timeline */}
               <CustomerTimeline customerId={customerId} />
 
@@ -526,3 +531,211 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
     </DashboardLayout>
   )
 }
+
+// ─── Quick Interaction Panel ────────────────────────────────────────────────
+function QuickInteractionPanel({
+  customerId,
+  managerId,
+  onSaved,
+}: {
+  customerId: string
+  managerId: string
+  onSaved: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    type: 'CALL',
+    purpose: '',
+    result: 'PENDING',
+    notes: '',
+    interaction_date: new Date().toISOString().slice(0, 10),
+    follow_up_date: '',
+    next_action: '',
+  })
+
+  const INTERACTION_TYPES = [
+    { value: 'CALL', label: '📞 Gọi điện' },
+    { value: 'MEETING', label: '🤝 Gặp mặt' },
+    { value: 'EMAIL', label: '✉️ Email' },
+    { value: 'SMS', label: '💬 SMS/Zalo' },
+    { value: 'VISIT', label: '🏢 Thăm văn phòng' },
+  ]
+
+  const RESULT_OPTIONS = [
+    { value: 'SUCCESS', label: '✅ Thành công' },
+    { value: 'PENDING', label: '⏳ Đang chờ' },
+    { value: 'FOLLOW_UP', label: '🔄 Cần theo dõi' },
+    { value: 'NO_ANSWER', label: '📵 Không nghe máy' },
+    { value: 'NOT_INTERESTED', label: '❌ Không quan tâm' },
+  ]
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.purpose.trim()) {
+      toast.error('Vui lòng nhập mục đích tương tác')
+      return
+    }
+    try {
+      setSaving(true)
+      const { createInteraction: apiCreateInteraction } = await import('@/lib/supabase/api')
+      await apiCreateInteraction({
+        customer_id: customerId,
+        manager_id: managerId,
+        type: form.type,
+        purpose: form.purpose.trim(),
+        result: form.result,
+        notes: form.notes.trim() || undefined,
+        interaction_date: form.interaction_date,
+        follow_up_date: form.follow_up_date || undefined,
+        next_action: form.next_action.trim() || undefined,
+      })
+      toast.success('Đã ghi nhận tương tác!')
+      setOpen(false)
+      setForm({
+        type: 'CALL',
+        purpose: '',
+        result: 'PENDING',
+        notes: '',
+        interaction_date: new Date().toISOString().slice(0, 10),
+        follow_up_date: '',
+        next_action: '',
+      })
+      onSaved()
+    } catch (err: any) {
+      toast.error('Lỗi: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="p-5 flex items-center justify-between gap-4 bg-slate-50/50 border-b border-slate-100">
+        <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+          <Phone className="w-4 h-4 text-sky-500" />
+          Ghi nhận tương tác
+        </h3>
+        <button
+          onClick={() => setOpen(o => !o)}
+          className={clsx(
+            'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm',
+            open
+              ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              : 'bg-sky-600 text-white hover:bg-sky-700'
+          )}
+        >
+          {open ? (
+            <><X className="w-4 h-4" /> Đóng</>
+          ) : (
+            <><Plus className="w-4 h-4" /> Thêm tương tác</>
+          )}
+        </button>
+      </div>
+
+      {open && (
+        <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Loại tương tác</label>
+              <select
+                value={form.type}
+                onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+              >
+                {INTERACTION_TYPES.map(t => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Kết quả</label>
+              <select
+                value={form.result}
+                onChange={e => setForm(f => ({ ...f, result: e.target.value }))}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+              >
+                {RESULT_OPTIONS.map(r => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">Mục đích <span className="text-rose-500">*</span></label>
+            <input
+              type="text"
+              value={form.purpose}
+              onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))}
+              placeholder="VD: Giới thiệu sản phẩm vay tín chấp, nhắc đáo hạn tiền gửi..."
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Ngày tương tác</label>
+              <input
+                type="date"
+                value={form.interaction_date}
+                onChange={e => setForm(f => ({ ...f, interaction_date: e.target.value }))}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Ngày theo dõi lại</label>
+              <input
+                type="date"
+                value={form.follow_up_date}
+                onChange={e => setForm(f => ({ ...f, follow_up_date: e.target.value }))}
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">Ghi chú</label>
+            <textarea
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="Nội dung trao đổi, phản hồi của KH..."
+              rows={2}
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">Hành động tiếp theo</label>
+            <input
+              type="text"
+              value={form.next_action}
+              onChange={e => setForm(f => ({ ...f, next_action: e.target.value }))}
+              placeholder="VD: Gửi hồ sơ vào thứ Hai, gọi lại sau 1 tuần..."
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2.5 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Lưu tương tác
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  )
+}
+
