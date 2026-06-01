@@ -347,7 +347,19 @@ export default function CustomersPage() {
                }
             }
 
-            const customerData = await createCustomer({
+            let existingCustomer = null
+            if (cif) {
+              existingCustomer = visibleCustomers.find(c => c.cif_code?.toLowerCase() === cif.toLowerCase())
+            }
+            if (!existingCustomer && tax && type === 'ENTERPRISE') {
+              existingCustomer = visibleCustomers.find(c => c.tax_code === tax)
+            }
+            if (!existingCustomer && item["Số điện thoại"] || item.phone) {
+              const p = String(item["Số điện thoại"] || item.phone || "").trim()
+              if (p) existingCustomer = visibleCustomers.find(c => c.phone === p)
+            }
+
+            const customerPayload = {
               customer_type: type,
               full_name: name,
               business_name: type === 'ENTERPRISE' ? name : '',
@@ -365,7 +377,14 @@ export default function CustomersPage() {
               the_tin_dung: parseBooleanCell(item["Thẻ Tín Dụng"]),
               chuyen_tien_ngoai: parseBooleanCell(item["Chuyển Tiền Ngoài"]),
               merchant_qr: parseBooleanCell(item["Merchant QR"]),
-            })
+            }
+
+            let customerData = null
+            if (existingCustomer) {
+              customerData = await updateCustomer(existingCustomer.id, customerPayload)
+            } else {
+              customerData = await createCustomer(customerPayload)
+            }
 
             const accNo = item["Số tài khoản"] ? String(item["Số tài khoản"]).trim() : ""
             const duNo = parseNumberCell(item["Dư nợ"])
@@ -475,38 +494,37 @@ export default function CustomersPage() {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[800px]">
+                <table className="w-full text-left border-collapse min-w-full">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr className="text-sm text-slate-600 font-medium">
                       {isAdmin && (
-                        <th className="py-3 px-4 w-10">
+                        <th className="py-3 px-4 w-12">
                           <input 
                             type="checkbox" 
                             checked={isAllPageSelected}
                             onChange={handleToggleSelectAllPage}
-                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-5 h-5"
                             aria-label="Chọn tất cả khách hàng trên trang"
                           />
                         </th>
                       )}
                       <th className="py-3 px-4 font-semibold">Họ Tên</th>
-                      <th className="py-3 px-4 font-semibold">Liên Hệ</th>
-                      <th className="py-3 px-4 font-semibold">Địa Chỉ</th>
-                      <th className="py-3 px-4 font-semibold">Sản Phẩm</th>
-                      <th className="py-3 px-4 font-semibold">Chuyên Viên</th>
-                      <th className="py-3 px-4 font-semibold text-right">Thao Tác</th>
+                      <th className="py-3 px-4 font-semibold">Bán Hàng</th>
+                      <th className="py-3 px-4 font-semibold hidden md:table-cell">Sản Phẩm</th>
+                      <th className="py-3 px-4 font-semibold hidden lg:table-cell">Chuyên Viên</th>
+                      <th className="py-3 px-4 font-semibold text-right w-16"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {paginatedCustomers.map((customer: any) => (
                       <tr key={customer.id} className={clsx("hover:bg-slate-50 transition-colors group", selectedIds.includes(customer.id) && "bg-slate-50/70")}>
                         {isAdmin && (
-                          <td className="py-3 px-4 w-10">
+                          <td className="py-3 px-4 w-12">
                             <input 
                               type="checkbox" 
                               checked={selectedIds.includes(customer.id)}
                               onChange={() => handleToggleSelect(customer.id)}
-                              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-5 h-5"
                               aria-label={`Chọn khách hàng ${getCustomerFullName(customer)}`}
                             />
                           </td>
@@ -530,13 +548,16 @@ export default function CustomersPage() {
                           {customer.note && <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{customer.note}</p>}
                         </td>
                         <td className="py-3 px-4">
-                          <div className="flex flex-col">
-                            <span className="text-sm text-slate-700">{customer.phone || '—'}</span>
-                            <span className="text-xs text-slate-500">{customer.email || ''}</span>
-                          </div>
+                          <Link
+                            href={`/sales?create=1&type=PRODUCT&customerId=${customer.id}`}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 text-sm font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all shadow-sm min-h-[44px] active:scale-95"
+                            title="Ghi nhận bán chéo sản phẩm"
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                            <span className="whitespace-nowrap">Bán SP</span>
+                          </Link>
                         </td>
-                        <td className="py-3 px-4 text-sm text-slate-600 max-w-[150px] truncate" title={customer.address}>{customer.address || '—'}</td>
-                        <td className="py-3 px-4">
+                        <td className="py-3 px-4 hidden md:table-cell">
                           <div className="flex flex-wrap gap-1.5 max-w-[200px]">
                             {PRODUCT_MAP.map(prod => {
                               const hasProduct = !!customer[prod.key]
@@ -562,23 +583,15 @@ export default function CustomersPage() {
                             })}
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-sm text-slate-700">{customer.profiles?.full_name || '—'}</td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-3 px-4 text-sm text-slate-700 hidden lg:table-cell">{customer.profiles?.full_name || '—'}</td>
+                        <td className="py-3 px-4 text-right w-16">
                           <div className="flex items-center justify-end gap-2">
                             <Link
-                              href={`/sales?create=1&type=PRODUCT&customerId=${customer.id}`}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800 border border-amber-200 rounded-md transition-all shadow-sm"
-                              title="Ghi nhận bán chéo sản phẩm"
-                            >
-                              <ShoppingCart className="w-3.5 h-3.5 text-amber-600" />
-                              <span>Bán SP</span>
-                            </Link>
-                            <Link
                               href={`/customers/${customer.id}`}
-                              className="inline-flex p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors border border-slate-100 bg-white"
+                              className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors border border-slate-200 bg-white shadow-sm active:scale-95"
                               title="Xem chi tiết hồ sơ"
                             >
-                              <ArrowRight className="w-4 h-4" />
+                              <ArrowRight className="w-5 h-5" />
                             </Link>
                           </div>
                         </td>

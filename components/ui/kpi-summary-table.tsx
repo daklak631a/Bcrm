@@ -37,6 +37,7 @@ const METRICS = [
 export function KPISummaryTable() {
   const [period, setPeriod] = useState('week')
   const [data, setData] = useState<KPISummary[]>([])
+  const [monthData, setMonthData] = useState<KPISummary[]>([])
   const [loading, setLoading] = useState(true)
   const [isCapturing, setIsCapturing] = useState(false)
   const tableRef = useRef<HTMLDivElement>(null)
@@ -48,16 +49,22 @@ export function KPISummaryTable() {
         const supabase = getSupabase()
         const { data: { session } } = await supabase.auth.getSession()
         
-        const response = await fetch(`/api/reports/kpi-summary?period=${period}`, {
-          headers: {
-            'Authorization': session ? `Bearer ${session.access_token}` : ''
-          }
-        })
+        const [response, monthResponse] = await Promise.all([
+          fetch(`/api/reports/kpi-summary?period=${period}`, { headers: { 'Authorization': session ? `Bearer ${session.access_token}` : '' } }),
+          period === 'month' ? Promise.resolve(null) : fetch(`/api/reports/kpi-summary?period=month`, { headers: { 'Authorization': session ? `Bearer ${session.access_token}` : '' } })
+        ])
         
         if (!response.ok) throw new Error('Lỗi khi tải dữ liệu KPI')
         
         const result = await response.json()
         setData(result.data || [])
+
+        if (period === 'month') {
+          setMonthData(result.data || [])
+        } else if (monthResponse && monthResponse.ok) {
+          const monthResult = await monthResponse.json()
+          setMonthData(monthResult.data || [])
+        }
       } catch (error) {
         console.error(error)
       } finally {
@@ -182,6 +189,8 @@ export function KPISummaryTable() {
                     <th className="py-3 px-4 text-left font-semibold text-[#003e3b] w-12 border-r border-[#ccedea]">STT</th>
                     <th className="py-3 px-4 text-left font-semibold text-[#003e3b] min-w-[200px] border-r border-[#ccedea]">HOẠT ĐỘNG/ CHỈ TIÊU</th>
                     <th className="py-3 px-4 text-center font-semibold text-[#003e3b] w-24 border-r border-[#ccedea]">Đơn vị</th>
+                    <th className="py-3 px-4 text-center font-semibold text-[#005451] w-28 bg-[#d8efec] border-r border-[#ccedea]">Chỉ tiêu<br/>tháng</th>
+                    <th className="py-3 px-4 text-center font-semibold text-[#005451] w-28 bg-[#d8efec] border-r border-[#ccedea]">Kết quả<br/>tháng</th>
                     {data.map((user) => (
                       <th key={user.manager_id} className="py-3 px-4 text-center font-semibold text-[#003e3b] min-w-[120px] border-r border-[#ccedea] whitespace-nowrap">
                         {user.short_name || user.full_name}
@@ -195,6 +204,31 @@ export function KPISummaryTable() {
                       <td className="py-3 px-4 text-center text-slate-500 font-medium border-r border-gray-100">{index + 1}</td>
                       <td className="py-3 px-4 font-medium text-slate-800 border-r border-gray-100">{metric.label}</td>
                       <td className="py-3 px-4 text-center text-xs font-semibold text-slate-500 bg-slate-50 border-r border-gray-100">{metric.unit}</td>
+                      
+                      {(() => {
+                        const formatCell = (val: number | undefined) => {
+                          if (!val) return val === 0 ? '-' : '0';
+                          const displayValue = metric.scale ? val / metric.scale : val;
+                          return new Intl.NumberFormat('vi-VN', {
+                            maximumFractionDigits: metric.scale ? 2 : 0,
+                          }).format(displayValue);
+                        }
+
+                        const monthTotalValue = monthData.reduce((sum, user) => sum + (user[metric.id as keyof typeof user] as number || 0), 0)
+                        const monthTotalTarget = monthData.reduce((sum, user) => sum + (user[`target_${metric.id}` as keyof typeof user] as number || 0), 0)
+
+                        return (
+                          <>
+                            <td className="py-3 px-4 text-center bg-[#f0f8f7] border-r border-[#e0f2f0] text-[#006b68]">
+                              <div className="font-bold">{formatCell(monthTotalTarget)}</div>
+                            </td>
+                            <td className="py-3 px-4 text-center bg-[#f0f8f7] border-r border-gray-100 text-[#006b68]">
+                              <div className="font-bold">{formatCell(monthTotalValue)}</div>
+                            </td>
+                          </>
+                        )
+                      })()}
+
                       {data.map((user) => {
                         const value = user[metric.id as keyof typeof user] as number;
                         const targetKey = `target_${metric.id}`;

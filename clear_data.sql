@@ -6,9 +6,9 @@ SET session_replication_role = 'replica';
 
 -- Truncate all transactional tables, keeping profiles, products, and system configurations
 TRUNCATE TABLE 
-    customers,
     loans,
     deposits,
+    cross_sales,
     cross_sell_records,
     interactions,
     plans,
@@ -19,7 +19,8 @@ TRUNCATE TABLE
     support_requests,
     role_delegations,
     notifications,
-    audit_logs
+    audit_logs,
+    daily_manager_snapshots
 CASCADE;
 
 -- Re-enable triggers

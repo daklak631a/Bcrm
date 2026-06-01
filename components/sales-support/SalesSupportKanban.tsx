@@ -27,11 +27,13 @@ import {
   getCustomerFullName,
   updateInteraction,
   updateProductSale,
+  updateLoan,
+  updateDeposit,
 } from "@/lib/supabase/api"
 import type { SupportRequest } from "@/types/models"
 
 type KanbanStatus = "OVERDUE" | "PENDING" | "FOLLOW_UP" | "UNALLOCATED" | "DONE"
-type WorkSourceType = "INTERACTION" | "PRODUCT" | "BATCH_GROUP"
+type WorkSourceType = "INTERACTION" | "PRODUCT" | "BATCH_GROUP" | "LOAN" | "DEPOSIT"
 
 interface WorkItem {
   id: string
@@ -198,13 +200,13 @@ export function SalesSupportKanban() {
         })
 
       const productItems: WorkItem[] = salesRecords
-        .filter((sale: any) => sale.source_type === "PRODUCT" && !sale.raw?.is_batch_entry && (sale.status === "PENDING" || sale.status === "INTERESTED"))
+        .filter((sale: any) => !sale.raw?.is_batch_entry && (sale.status === "PENDING" || sale.status === "INTERESTED"))
         .map((sale: any) => {
           const req = supportData.find((r: any) => r.item_id === sale.source_id)
           return {
             id: `sale:${sale.id}`,
             sourceId: sale.source_id,
-            sourceType: "PRODUCT",
+            sourceType: sale.source_type as WorkSourceType,
             statusKey: sale.status === "INTERESTED" ? "FOLLOW_UP" : "PENDING",
             ownerId: sale.agent_id,
             ownerName: getOwnerName(sale.agent_id),
@@ -325,9 +327,11 @@ export function SalesSupportKanban() {
           nextUpdates.follow_up_date = new Date().toISOString().slice(0, 10)
         }
         await updateInteraction(item.sourceId, nextUpdates)
-      } else if (item.sourceType === "PRODUCT") {
-        const nextStatus = status === "DONE" ? "COMPLETED" : status === "FOLLOW_UP" ? "INTERESTED" : "PENDING"
-        await updateProductSale(item.sourceId, { status: nextStatus })
+      } else if (item.sourceType === "PRODUCT" || item.sourceType === "LOAN" || item.sourceType === "DEPOSIT") {
+        const nextStatus = status === "DONE" ? (item.sourceType === "PRODUCT" ? "COMPLETED" : "ACTIVE") : status === "FOLLOW_UP" ? "INTERESTED" : "PENDING"
+        if (item.sourceType === "PRODUCT") await updateProductSale(item.sourceId, { status: nextStatus })
+        else if (item.sourceType === "LOAN") await updateLoan(item.sourceId, { status: nextStatus })
+        else if (item.sourceType === "DEPOSIT") await updateDeposit(item.sourceId, { status: nextStatus })
       }
       toast.success(status === "DONE" ? "Đã chốt hoàn thành." : "Đã cập nhật trạng thái.")
     } catch (err: any) {
@@ -399,7 +403,7 @@ export function SalesSupportKanban() {
           setActiveColumn(null)
         }}
         className={clsx(
-          "group rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition-[transform,box-shadow,opacity] duration-200 hover:-translate-y-0.5 hover:shadow-lg",
+          "group rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition-[transform,box-shadow,opacity] duration-200 hover:-translate-y-0.5 hover:shadow-lg shrink-0 w-[85vw] snap-center md:w-auto md:snap-align-none",
           canMoveItem(item) ? "cursor-grab active:cursor-grabbing" : "cursor-default",
           draggingItemId === item.id && "scale-[0.97] opacity-50",
           updatingItemId === item.id && "pointer-events-none opacity-60"
@@ -529,10 +533,10 @@ export function SalesSupportKanban() {
           </div>
           <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-slate-200">{items.length}</span>
         </div>
-        <div className="flex-1 space-y-3">
+        <div className="flex-1 flex flex-row gap-3 overflow-x-auto snap-x snap-mandatory pb-4 -mx-4 px-4 scrollbar-hide md:flex-col md:overflow-visible md:snap-none md:p-0 md:m-0 md:pb-0">
           {items.map((item) => <WorkItemCard key={item.id} item={item} />)}
           {items.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 p-5 text-center text-sm leading-6 text-slate-500">
+            <div className="w-full shrink-0 snap-center rounded-2xl border border-dashed border-slate-200 bg-white/70 p-5 text-center text-sm leading-6 text-slate-500">
               {column.key === "DONE" ? "Kéo thẻ vào đây để chốt hoàn thành." : "Không có thẻ ở trạng thái này."}
             </div>
           )}

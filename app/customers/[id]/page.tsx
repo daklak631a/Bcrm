@@ -2,8 +2,8 @@
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useState, useEffect, useCallback, use } from "react"
-import { fetchCustomerById, fetchInteractionsByCustomer, fetchProfiles, fetchSalesRecordsByCustomer, getCustomerFullName, formatCurrency, updateCustomer } from "@/lib/supabase/api"
-import { ArrowLeft, Edit, Save, X, Phone, Mail, MapPin, Calendar, FileText, Briefcase, CreditCard, ShoppingCart, Loader2, ArrowRight, Plus } from "lucide-react"
+import { fetchCustomerById, fetchInteractionsByCustomer, fetchProfiles, fetchSalesRecordsByCustomer, getCustomerFullName, formatCurrency, updateCustomer, fetchProducts } from "@/lib/supabase/api"
+import { ArrowLeft, Edit, Save, X, Phone, Mail, MapPin, Calendar, FileText, Briefcase, CreditCard, ShoppingCart, Loader2, ArrowRight, Plus, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
 import { toast } from "sonner"
@@ -24,6 +24,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const [customer, setCustomer] = useState<any>(null)
   const [salesRecords, setSalesRecords] = useState<any[]>([])
   const [interactions, setInteractions] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
   
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<any>({})
@@ -46,15 +47,17 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         setInteractions([])
         return
       }
-      const [sales, ints] = await Promise.all([
+      const [sales, ints, allProducts] = await Promise.all([
         fetchSalesRecordsByCustomer(customerId),
-        fetchInteractionsByCustomer(customerId)
+        fetchInteractionsByCustomer(customerId),
+        fetchProducts()
       ])
       setCustomer(cust)
       setEditForm(cust)
       setNotesDraft(cust?.note || "")
       setSalesRecords(sales)
       setInteractions(ints)
+      setProducts(allProducts)
     } catch (err) {
       console.error('Error loading customer details:', err)
     } finally {
@@ -148,6 +151,10 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const loanSalesCount = salesRecords.filter(record => record.source_type === 'LOAN').length
   const depositSalesCount = salesRecords.filter(record => record.source_type === 'DEPOSIT').length
   const productSalesCount = salesRecords.filter(record => record.source_type === 'PRODUCT').length
+
+  const unexploitedProducts = products.filter(p => {
+    return !salesRecords.some(r => r.source_type === 'PRODUCT' && (r.title === p.name || r.category === p.name))
+  })
 
   return (
     <DashboardLayout title={loading ? "Đang tải..." : `Chi tiết: ${getCustomerFullName(customer)}`}>
@@ -449,6 +456,29 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                           </div>
                         )
                       })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Unexploited Products Section */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4 bg-slate-50/50">
+                  <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-rose-500" />
+                    Gợi ý Bán chéo (Chưa khai thác)
+                  </h3>
+                </div>
+                <div className="p-5">
+                  {unexploitedProducts.length === 0 ? (
+                    <div className="text-center text-slate-500 text-sm">Khách hàng này đã khai thác toàn bộ sản phẩm.</div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      {unexploitedProducts.map(p => (
+                        <span key={p.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-700 rounded-lg text-sm font-medium border border-rose-100 shadow-sm cursor-default hover:bg-rose-100 transition-colors">
+                          <Plus className="w-3.5 h-3.5" /> {p.name}
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>
