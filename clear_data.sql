@@ -16,7 +16,6 @@ TRUNCATE TABLE
     weekly_plans,
     daily_plans,
     manager_transfer_requests,
-    support_requests,
     role_delegations,
     notifications,
     audit_logs,
