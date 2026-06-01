@@ -15,6 +15,7 @@ const ITEMS_PER_PAGE = 10
 
 function InteractionsPageContent() {
   const { user } = useAuthStore()
+  const canEdit = user?.role !== 'ADVISOR'
   const searchParams = useSearchParams()
   const customerIdParam = searchParams.get('customerId')
   const [mounted, setMounted] = useState(false)
@@ -36,8 +37,8 @@ function InteractionsPageContent() {
   const [customerType, setCustomerType] = useState("INDIVIDUAL")
 
   const visibleProfiles = useMemo(() => {
-    if (user?.role === "ADMIN_LEVEL_1") return profiles
-    if (user?.role === "ADMIN_LEVEL_2") return profiles.filter((profile: any) => profile.department_id === user.department_id)
+    if (user?.role === "ADMIN_LEVEL_1" || user?.role === "ADVISOR") return profiles
+    if (user?.role === "ADMIN_LEVEL_2" || user?.role === "ADMIN_LEVEL_3") return profiles.filter((profile: any) => profile.department_id === user.department_id)
     return profiles.filter((profile: any) => profile.id === user?.id)
   }, [profiles, user?.department_id, user?.id, user?.role])
 
@@ -219,9 +220,14 @@ function InteractionsPageContent() {
             <input type="text" placeholder="Tìm kiếm khách hàng, nội dung..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               className="pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 w-full outline-none" />
           </div>
-          <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm">
-            <Plus className="w-4 h-4" /> Thêm Tương Tác
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm"
+            >
+              <Plus className="w-4 h-4" /> Thêm Tương Tác
+            </button>
+          )}
         </div>
 
         {/* Table */}

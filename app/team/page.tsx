@@ -32,12 +32,16 @@ interface FormData {
 const ROLE_LABELS: Record<UserRole, string> = {
   'ADMIN_LEVEL_1': 'Admin Cấp 1',
   'ADMIN_LEVEL_2': 'Admin Cấp 2',
+  'ADMIN_LEVEL_3': 'Admin Cấp 3',
+  'ADVISOR': 'Cố Vấn / Giám Sát',
   'USER': 'Chuyên Viên',
 }
 
 const ROLE_ICONS: Record<UserRole, typeof Shield> = {
   'ADMIN_LEVEL_1': ShieldCheck,
   'ADMIN_LEVEL_2': Shield,
+  'ADMIN_LEVEL_3': UserCheck,
+  'ADVISOR': Search,
   'USER': UserCircle,
 }
 
@@ -81,19 +85,29 @@ export default function TeamPage() {
 
   if (!mounted) return <TableSkeleton title="Quản Lý Nhân Sự" />
 
-  if (user?.role !== 'ADMIN_LEVEL_1') {
+  if (user?.role !== 'ADMIN_LEVEL_1' && user?.role !== 'ADMIN_LEVEL_2') {
     return (
       <DashboardLayout title="Quản Lý Nhân Sự">
         <div className="flex items-center justify-center h-[50vh] text-slate-500">
-          Bạn không có quyền truy cập trang này. Chỉ Admin Cấp 1 được phép.
+          Bạn không có quyền truy cập trang này. Chỉ Admin được phép.
         </div>
       </DashboardLayout>
     )
   }
 
+  // Admin L2 should only see users in their own department (branchId)
+  const isL2 = user?.role === 'ADMIN_LEVEL_2'
+
   // Merge data: profiles = đã đăng nhập, allowed_emails chưa có profile = pending
-  const activeUsers = profiles
-  const pendingEmails = allowedEmails.filter(ae => !profiles.some(p => p.email === ae.email))
+  const activeUsers = isL2 
+    ? profiles.filter(p => p.department_id === user?.branchId)
+    : profiles
+    
+  const pendingEmails = allowedEmails.filter(ae => {
+    if (profiles.some(p => p.email === ae.email)) return false
+    if (isL2 && ae.department_id !== user?.branchId) return false
+    return true
+  })
 
   const filteredActive = activeUsers.filter(p => {
     if (!searchQuery.trim()) return true
@@ -533,8 +547,14 @@ export default function TeamPage() {
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
                 >
                   <option value="USER">Chuyên Viên</option>
-                  <option value="ADMIN_LEVEL_2">Admin Cấp 2 (Trưởng Chi Nhánh)</option>
-                  <option value="ADMIN_LEVEL_1">Admin Cấp 1 (Giám Đốc)</option>
+                  <option value="ADVISOR">Cố Vấn / Giám Sát</option>
+                  <option value="ADMIN_LEVEL_3">Admin Cấp 3 (Phó Phòng)</option>
+                  {user?.role === 'ADMIN_LEVEL_1' && (
+                    <>
+                      <option value="ADMIN_LEVEL_2">Admin Cấp 2 (Trưởng Phòng)</option>
+                      <option value="ADMIN_LEVEL_1">Admin Cấp 1 (Giám Đốc)</option>
+                    </>
+                  )}
                 </select>
               </div>
 

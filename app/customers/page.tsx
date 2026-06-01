@@ -44,7 +44,8 @@ function parseNumberCell(value: any) {
 
 export default function CustomersPage() {
   const { user } = useAuthStore()
-  const isAdmin = user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADMIN_LEVEL_2'
+  const isAdmin = user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADMIN_LEVEL_2' || user?.role === 'ADMIN_LEVEL_3'
+  const canEdit = user?.role !== 'ADVISOR'
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [customers, setCustomers] = useState<any[]>([])
@@ -85,8 +86,8 @@ export default function CustomersPage() {
   }, [loadData])
 
   const visibleProfiles = useMemo(() => {
-    if (user?.role === 'ADMIN_LEVEL_1') return profiles
-    if (user?.role === 'ADMIN_LEVEL_2') return profiles.filter((profile: any) => profile.department_id === user.department_id)
+    if (user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADVISOR') return profiles
+    if (user?.role === 'ADMIN_LEVEL_2' || user?.role === 'ADMIN_LEVEL_3') return profiles.filter((profile: any) => profile.department_id === user.department_id)
     return profiles.filter((profile: any) => profile.id === user?.id)
   }, [profiles, user?.department_id, user?.id, user?.role])
 
@@ -450,12 +451,11 @@ export default function CustomersPage() {
                 </div>
               </>
             )}
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shrink-0 shadow-sm"
-            >
-              <Plus className="w-4 h-4" /> Thêm KH
-            </button>
+            {canEdit && (
+              <button onClick={() => setShowAddModal(true)} className="px-4 py-2 bg-emerald-600 text-white rounded-lg flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-sm font-medium whitespace-nowrap">
+                <Plus className="w-4 h-4" /> Thêm KH
+              </button>
+            )}
           </div>
         </div>
 

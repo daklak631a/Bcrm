@@ -1,4 +1,4 @@
-export type UserRole = 'USER' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_1';
+export type UserRole = 'USER' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_3' | 'ADVISOR';
 export type InteractionType = 'CALL' | 'MEETING' | 'SMS' | 'EMAIL' | 'VISIT';
 export type InteractionResult = 'SUCCESS' | 'NO_ANSWER' | 'FOLLOW_UP' | 'NOT_INTERESTED' | 'PENDING';
 export type LoanStatus = 'ACTIVE' | 'CLOSED' | 'DEFAULTED' | 'PENDING';
@@ -9,12 +9,26 @@ export interface Profile {
   email: string;
   full_name: string;
   role: UserRole;
+  original_role?: UserRole; // Client-side addition for delegated L3
   department_id?: string;
   is_active?: boolean;
   full_name_slug?: string | null;
   short_name?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RoleDelegation {
+  id: string;
+  delegator_id: string;
+  delegatee_id: string;
+  delegated_role: UserRole;
+  start_date: string;
+  end_date: string;
+  status: 'ACTIVE' | 'REVOKED';
+  created_at: string;
+  delegatee?: Profile;
+  delegator?: Profile;
 }
 
 export interface Plan {

@@ -3,7 +3,7 @@
 import clsx from "clsx"
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Briefcase, Filter, Loader2, Package, PiggyBank, Plus, Search, TrendingUp, ArrowRight, AlertCircle } from "lucide-react"
+import { Briefcase, Filter, Loader2, Package, PiggyBank, Plus, Search, TrendingUp, ArrowRight, AlertCircle, Upload } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
@@ -37,6 +37,7 @@ const DEPOSIT_OPTIONS = [
 
 function SalesPageContent() {
   const { user } = useAuthStore()
+  const canEdit = user?.role !== 'ADVISOR'
   const searchParams = useSearchParams()
   const customerIdParam = searchParams.get("customerId")
   const createParam = searchParams.get("create")
@@ -181,7 +182,7 @@ function SalesPageContent() {
 
   const visibleProfiles = useMemo(() => {
     if (user?.role === "ADMIN_LEVEL_1") return profiles
-    if (user?.role === "ADMIN_LEVEL_2") return profiles.filter((profile: any) => profile.department_id === user.department_id)
+    if (user?.role === "ADMIN_LEVEL_2" || user?.role === "ADMIN_LEVEL_3") return profiles.filter((profile: any) => profile.department_id === user.department_id)
     return profiles.filter((profile: any) => profile.id === user?.id)
   }, [profiles, user?.department_id, user?.id, user?.role])
 
@@ -449,19 +450,23 @@ function SalesPageContent() {
             >
               <ArrowRight className="w-4 h-4" /> Phân bổ lô
             </Link>
-            <button
-              onClick={handleOpenBatchModal}
-              className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors text-sm font-medium shadow-sm"
-              title="Cập nhật nhanh kết quả cho các giao dịch bán chéo sản phẩm"
-            >
-              <TrendingUp className="w-4 h-4" /> Cập nhật cuối ngày
-            </button>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm"
-            >
-              <Plus className="w-4 h-4" /> Ghi nhận bán hàng
-            </button>
+            {canEdit && (
+              <button
+                onClick={handleOpenBatchModal}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 transition-colors text-sm font-medium shadow-sm"
+                title="Cập nhật nhanh kết quả cho các giao dịch bán chéo sản phẩm"
+              >
+                <Upload className="w-4 h-4" /> Ghi nhận theo lô
+              </button>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm"
+              >
+                <Plus className="w-4 h-4" /> Ghi nhận bán hàng
+              </button>
+            )}
           </div>
         </div>
 

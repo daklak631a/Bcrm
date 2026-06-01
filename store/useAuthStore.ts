@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { Profile } from '@/types/models'
 
-export type Role = 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_2' | 'USER'
+export type Role = 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_3' | 'USER' | 'ADVISOR'
 
 export interface User {
   id: string
@@ -9,6 +9,7 @@ export interface User {
   full_name?: string
   email?: string
   role: Role
+  original_role?: Role
   branchId: string
   department_id?: string
   is_active?: boolean
@@ -20,7 +21,8 @@ function profileToUser(profile: Profile): User {
     name: profile.full_name,
     full_name: profile.full_name,
     email: profile.email,
-    role: profile.role as Role,
+    role: (profile as any).effective_role || profile.role as Role,
+    original_role: profile.role as Role,
     branchId: profile.department_id || 'ALL',
     department_id: profile.department_id,
     is_active: profile.is_active ?? true,
@@ -46,7 +48,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       return
     }
     // If it's a Profile from Supabase, convert it
-    if ('role' in userData && typeof userData.role === 'string' && ['USER', 'ADMIN_LEVEL_1', 'ADMIN_LEVEL_2'].includes(userData.role)) {
+    if ('role' in userData && typeof userData.role === 'string') {
       set({ user: profileToUser(userData as Profile), isAuthenticated: true, isLoading: false })
     } else {
       set({ user: userData as User, isAuthenticated: true, isLoading: false })

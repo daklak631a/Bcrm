@@ -13,7 +13,8 @@ import {
   Target,
   X,
   Settings,
-  ClipboardList
+  ClipboardList,
+  Shield
 } from "lucide-react"
 
 import { useAuthStore } from "@/store/useAuthStore"
@@ -55,18 +56,26 @@ export function Sidebar({ onClose }: SidebarProps) {
     { href: "/interactions", label: "Tương Tác", icon: MessageSquare },
   ]
 
-  if (user?.role !== 'USER') {
+  if (user?.role !== 'USER' && user?.role !== 'ADVISOR') {
     links.splice(3, 0, { href: "/products", label: "Danh Mục Sản Phẩm", icon: Package })
   }
 
-  if (user?.role === 'ADMIN_LEVEL_1') {
+  if (['ADMIN_LEVEL_1', 'ADVISOR'].includes(user?.role || '')) {
     links.push({ href: "/team", label: "Phân Bổ Nhân Sự", icon: Users })
+  }
+  
+  if (user?.role === 'ADMIN_LEVEL_2') {
+    links.push({ href: "/team", label: "Đội Ngũ Chi Nhánh", icon: Users })
+  }
+
+  if (user?.role === 'ADMIN_LEVEL_1') {
     links.push({ href: "/audit-logs", label: "Lịch Sử Hệ Thống", icon: Package })
     links.push({ href: "/settings", label: "Cấu Hình Hệ Thống", icon: Settings })
   }
 
   if (user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADMIN_LEVEL_2') {
     links.push({ href: "/kpi-targets", label: "KPI Mục Tiêu", icon: Target })
+    links.push({ href: "/team/delegations", label: "Ủy Quyền Phó Phòng", icon: Shield })
   }
 
   return (

@@ -49,7 +49,26 @@ export async function POST(request: Request) {
           { status: 403 }
         );
       }
-      return NextResponse.json({ profile: existingProfile });
+      
+      let effectiveRole = existingProfile.role;
+      // If L3, check for active delegation
+      if (effectiveRole === 'ADMIN_LEVEL_3') {
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const { data: delegation } = await supabase
+          .from('role_delegations')
+          .select('delegated_role')
+          .eq('delegatee_id', userId)
+          .eq('status', 'ACTIVE')
+          .lte('start_date', today)
+          .gte('end_date', today)
+          .single();
+          
+        if (delegation && delegation.delegated_role) {
+          effectiveRole = delegation.delegated_role;
+        }
+      }
+
+      return NextResponse.json({ profile: { ...existingProfile, effective_role: effectiveRole } });
     }
 
     console.log(`[Auth Verify] No profile for ${userEmail}, checking allowed_emails...`);
