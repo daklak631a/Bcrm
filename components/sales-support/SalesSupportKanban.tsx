@@ -133,13 +133,6 @@ export function SalesSupportKanban() {
   const [selectedAdminId, setSelectedAdminId] = useState("")
   const [supportDate, setSupportDate] = useState(new Date().toISOString().slice(0, 10))
   const [busyAdminsCache, setBusyAdminsCache] = useState<Set<string>>(new Set())
-  const [activeCardIndexes, setActiveCardIndexes] = useState<Record<KanbanStatus, number>>({
-    OVERDUE: 0,
-    PENDING: 0,
-    FOLLOW_UP: 0,
-    UNALLOCATED: 0,
-    DONE: 0,
-  })
 
   const loadData = useCallback(async () => {
     try {
@@ -514,17 +507,6 @@ export function SalesSupportKanban() {
     const Icon = column.icon
     const isDropTarget = draggingItemId !== null && activeColumn === column.key
 
-    const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
-      const container = event.currentTarget
-      const scrollLeft = container.scrollLeft
-      const cardWidth = container.offsetWidth * 0.82 // w-[82vw]
-      const index = Math.round(scrollLeft / (cardWidth + 12)) // card width + gap-3
-      setActiveCardIndexes((prev) => ({
-        ...prev,
-        [column.key]: index,
-      }))
-    }
-
     return (
       <section
         onDragOver={(event) => {
@@ -556,7 +538,6 @@ export function SalesSupportKanban() {
         </div>
         {/* Scroll container: snap x per card, hiện peek card kế để user biết có thể vuốt */}
         <div
-          onScroll={handleScroll}
           className="flex-1 flex flex-row gap-3 pb-2 -mx-4 px-4
             overflow-x-auto scroll-smooth
             snap-x snap-mandatory
@@ -573,23 +554,6 @@ export function SalesSupportKanban() {
           {/* Spacer để card cuối không sát mép */}
           {items.length > 0 && <div className="shrink-0 w-4 md:hidden" aria-hidden="true" />}
         </div>
-        {/* Dots indicator: chỉ hiện trên mobile khi có nhiều hơn 1 card */}
-        {items.length > 1 && (
-          <div className="flex justify-center gap-1.5 mt-3 md:hidden shrink-0">
-            {items.map((_, idx) => {
-              const isActive = (activeCardIndexes[column.key] ?? 0) === idx
-              return (
-                <span
-                  key={idx}
-                  className={clsx(
-                    "block h-1.5 rounded-full transition-all duration-300",
-                    isActive ? "bg-[#006b68] w-3" : "bg-slate-300 w-1.5"
-                  )}
-                />
-              )
-            })}
-          </div>
-        )}
       </section>
     )
   }
