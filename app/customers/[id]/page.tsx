@@ -153,7 +153,39 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const productSalesCount = salesRecords.filter(record => record.source_type === 'PRODUCT').length
 
   const unexploitedProducts = products.filter(p => {
-    return !salesRecords.some(r => r.source_type === 'PRODUCT' && (r.title === p.name || r.category === p.name))
+    const pName = p.name.toUpperCase()
+    const hasLoan = salesRecords.some(r => r.source_type === 'LOAN')
+    const hasDeposit = salesRecords.some(r => r.source_type === 'DEPOSIT')
+
+    // Nếu là các sản phẩm Dư nợ / HMTD
+    if (pName.includes('DƯ NỢ') || pName.includes('CẤP MỚI HMTD')) {
+      if (hasLoan) return false
+    }
+
+    // Nếu là các sản phẩm Huy động vốn
+    if (pName.includes('HUY ĐỘNG VỐN') || pName.includes('TIỀN GỬI')) {
+      if (hasDeposit) return false
+    }
+
+    // Kiểm tra xem đã bán trực tiếp sản phẩm này chưa
+    const isAlreadySold = salesRecords.some(r => {
+      const rTitle = (r.title || '').toUpperCase()
+      const rCategory = (r.category || '').toUpperCase()
+      
+      // Khớp tên chính xác
+      if (rTitle === pName || rCategory === pName) return true
+      
+      // Khớp một phần cho các sản phẩm đặc thù
+      if (pName.includes('DIRECT') && (rTitle.includes('DIRECT') || rCategory.includes('DIRECT'))) return true
+      if (pName.includes('NHÂN THỌ') && (rTitle.includes('NHÂN THỌ') || rCategory.includes('NHÂN THỌ'))) return true
+      if (pName.includes('KHOẢN VAY') && (rTitle.includes('KHOẢN VAY') || rCategory.includes('KHOẢN VAY'))) return true
+      
+      return false
+    })
+
+    if (isAlreadySold) return false
+
+    return true
   })
 
   return (
