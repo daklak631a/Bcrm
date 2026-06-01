@@ -218,7 +218,7 @@ export interface SalesRecord {
   source_id: string;
   source_type: SaleRecordType;
   customer_id: string | null;
-  customer_name: string;
+  customer_name?: string;
   agent_id: string | null;
   sale_date: string;
   status: string;
@@ -236,4 +236,17 @@ export interface SalesRecord {
   created_at?: string;
   updated_at?: string;
   raw?: any;
+}
+
+export interface SupportRequest {
+  id: string;
+  item_id: string;
+  item_type: 'INTERACTION' | 'PRODUCT';
+  requester_id: string;
+  support_admin_id: string;
+  status: 'PENDING' | 'ACCEPTED' | 'COMPLETED' | 'REJECTED';
+  scheduled_date: string;
+  created_at: string;
+  requester?: Profile;
+  support_admin?: Profile;
 }

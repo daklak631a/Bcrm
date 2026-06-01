@@ -270,7 +270,7 @@ function SalesPageContent() {
         record.category,
         record.status,
         record.account_number || "",
-      ].some((value) => value.toLowerCase().includes(q))
+      ].some((value) => value && value.toLowerCase().includes(q))
     })
   }, [visibleRecords, searchQuery, typeFilter])
 

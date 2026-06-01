@@ -21,10 +21,14 @@ import {
   fetchInteractions,
   fetchProfiles,
   fetchSalesRecords,
+  fetchSupportRequests,
+  createSupportRequest,
+  updateSupportRequestStatus,
   getCustomerFullName,
   updateInteraction,
   updateProductSale,
 } from "@/lib/supabase/api"
+import type { SupportRequest } from "@/types/models"
 
 type KanbanStatus = "OVERDUE" | "PENDING" | "FOLLOW_UP" | "UNALLOCATED" | "DONE"
 type WorkSourceType = "INTERACTION" | "PRODUCT" | "BATCH_GROUP"
@@ -42,9 +46,10 @@ interface WorkItem {
   salesHref: string | null
   date?: string | null
   badge: string
-  tone: "rose" | "amber" | "teal" | "sky"
+  tone: "rose" | "amber" | "teal" | "sky" | "emerald"
   icon: LucideIcon
   recordCount?: number
+  supportRequest?: SupportRequest
 }
 
 const KANBAN_COLUMNS: Array<{
@@ -119,16 +124,38 @@ export function SalesSupportKanban() {
   const [activeColumn, setActiveColumn] = useState<KanbanStatus | null>(null)
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null)
 
+  const [supportModalOpen, setSupportModalOpen] = useState(false)
+  const [selectedItemForSupport, setSelectedItemForSupport] = useState<WorkItem | null>(null)
+  const [supportRequests, setSupportRequests] = useState<SupportRequest[]>([])
+  const [supportSubmitting, setSupportSubmitting] = useState(false)
+  const [selectedAdminId, setSelectedAdminId] = useState("")
+  const [supportDate, setSupportDate] = useState(new Date().toISOString().slice(0, 10))
+  const [busyAdminsCache, setBusyAdminsCache] = useState<Set<string>>(new Set())
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [salesRecords, interactions, profilesData] = await Promise.all([
+      const [salesRecords, interactions, profilesData, supportData] = await Promise.all([
         fetchSalesRecords(),
         fetchInteractions(),
         fetchProfiles(),
+        fetchSupportRequests(),
       ])
 
       const profileById = new Map(profilesData.map((profile: any) => [profile.id, profile]))
+      setProfiles(profilesData)
+      setSupportRequests(supportData)
+
+      // Calculate busy admins cache
+      const busyAdmins = new Set<string>()
+      const todayStr = new Date().toISOString().slice(0, 10)
+      supportData.forEach((req: any) => {
+        if (req.status === 'ACCEPTED' && req.scheduled_date === todayStr) {
+          busyAdmins.add(req.support_admin_id)
+        }
+      })
+      setBusyAdminsCache(busyAdmins)
+
       const today = new Date()
       today.setHours(0, 0, 0, 0)
 
@@ -150,6 +177,7 @@ export function SalesSupportKanban() {
         .map((interaction: any) => {
           const dueDate = interaction.follow_up_date || interaction.interaction_date
           const overdue = isPastDate(dueDate)
+          const req = supportData.find((r: any) => r.item_id === interaction.id)
           return {
             id: `interaction:${interaction.id}`,
             sourceId: interaction.id,
@@ -162,30 +190,35 @@ export function SalesSupportKanban() {
             href: interaction.customer_id ? `/interactions?customerId=${interaction.customer_id}` : "/interactions",
             salesHref: interaction.customer_id ? `/sales?create=1&type=PRODUCT&customerId=${interaction.customer_id}` : null,
             date: dueDate,
-            badge: overdue ? "Quá hẹn" : interaction.result === "FOLLOW_UP" ? "Theo dõi" : "Đang chờ",
-            tone: overdue ? "rose" : interaction.result === "FOLLOW_UP" ? "teal" : "amber",
-            icon: overdue ? AlertTriangle : MessageSquare,
+            badge: overdue ? "Quá hạn" : interaction.result === "FOLLOW_UP" ? "Cần liên hệ" : "Chờ xử lý",
+            tone: overdue ? "rose" : interaction.result === "FOLLOW_UP" ? "sky" : "amber",
+            icon: MessageSquare,
+            supportRequest: req
           }
         })
 
       const productItems: WorkItem[] = salesRecords
         .filter((sale: any) => sale.source_type === "PRODUCT" && !sale.raw?.is_batch_entry && (sale.status === "PENDING" || sale.status === "INTERESTED"))
-        .map((sale: any) => ({
-          id: `sale:${sale.id}`,
-          sourceId: sale.source_id,
-          sourceType: "PRODUCT",
-          statusKey: sale.status === "INTERESTED" ? "FOLLOW_UP" : "PENDING",
-          ownerId: sale.agent_id,
-          ownerName: getOwnerName(sale.agent_id),
-          title: sale.title || "Giao dịch cần xử lý",
-          customerName: sale.customer_name || "—",
-          href: sale.source_href || "/sales",
-          salesHref: null,
-          date: sale.sale_date,
-          badge: sale.status === "INTERESTED" ? "Quan tâm" : "Đang xử lý",
-          tone: sale.status === "INTERESTED" ? "teal" : "amber",
-          icon: Package,
-        }))
+        .map((sale: any) => {
+          const req = supportData.find((r: any) => r.item_id === sale.source_id)
+          return {
+            id: `sale:${sale.id}`,
+            sourceId: sale.source_id,
+            sourceType: "PRODUCT",
+            statusKey: sale.status === "INTERESTED" ? "FOLLOW_UP" : "PENDING",
+            ownerId: sale.agent_id,
+            ownerName: getOwnerName(sale.agent_id),
+            title: sale.title || "Giao dịch cần xử lý",
+            customerName: sale.customer_name || "—",
+            href: sale.source_href || "/sales",
+            salesHref: null,
+            date: sale.sale_date,
+            badge: sale.status === "INTERESTED" ? "Quan tâm" : "Đang xử lý",
+            tone: sale.status === "INTERESTED" ? "teal" : "amber",
+            icon: Package,
+            supportRequest: req
+          }
+        })
 
       const batchGroups = new Map<string, any[]>()
       salesRecords
@@ -245,8 +278,8 @@ export function SalesSupportKanban() {
 
   const visibleItems = useMemo(() => {
     if (user?.role === "ADMIN_LEVEL_1") return workItems
-    if (user?.role === "ADMIN_LEVEL_2") return workItems.filter((item) => !!item.ownerId && departmentUserIds.has(item.ownerId))
-    return workItems.filter((item) => item.ownerId === user?.id)
+    if (user?.role === "ADMIN_LEVEL_2") return workItems.filter((item) => (!!item.ownerId && departmentUserIds.has(item.ownerId)) || item.supportRequest?.support_admin_id === user?.id)
+    return workItems.filter((item) => item.ownerId === user?.id || item.supportRequest?.support_admin_id === user?.id)
   }, [departmentUserIds, user?.id, user?.role, workItems])
 
   const personalCount = visibleItems.filter((item) => item.ownerId === user?.id).length
@@ -314,6 +347,38 @@ export function SalesSupportKanban() {
     await updateItemStatus(item, status)
   }
 
+  const handleInviteSupport = async () => {
+    if (!selectedItemForSupport || !selectedAdminId || !supportDate) return
+    setSupportSubmitting(true)
+    try {
+      await createSupportRequest({
+        item_id: selectedItemForSupport.sourceId,
+        item_type: selectedItemForSupport.sourceType,
+        support_admin_id: selectedAdminId,
+        scheduled_date: supportDate,
+        requester_id: user?.id || ''
+      })
+      toast.success("Đã gửi lời mời hỗ trợ")
+      setSupportModalOpen(false)
+      setSelectedItemForSupport(null)
+      loadData()
+    } catch (err: any) {
+      toast.error("Không thể gửi lời mời: " + err.message)
+    } finally {
+      setSupportSubmitting(false)
+    }
+  }
+
+  const handleSupportStatusUpdate = async (id: string, status: string) => {
+    try {
+      await updateSupportRequestStatus(id, status)
+      toast.success("Đã cập nhật trạng thái")
+      loadData()
+    } catch (err: any) {
+      toast.error("Lỗi cập nhật: " + err.message)
+    }
+  }
+
   const WorkItemCard = ({ item }: { item: WorkItem }) => {
     const Icon = item.icon
     const toneClass = getToneClass(item.tone)
@@ -372,16 +437,61 @@ export function SalesSupportKanban() {
                 key={action.key}
                 type="button"
                 disabled={updatingItemId === item.id}
-                onClick={() => updateItemStatus(item, action.key)}
+                onClick={(e) => { e.preventDefault(); updateItemStatus(item, action.key); }}
                 className={clsx(
                   "rounded-xl border px-2 py-2 text-[11px] font-semibold transition active:scale-[0.98] disabled:opacity-60",
                   action.tone
                 )}
               >
-                {action.key === "DONE" ? "Xong" : action.title}
+                {action.title}
               </button>
             ))}
           </div>
+        )}
+
+        {item.supportRequest ? (
+          <div className="mt-3 flex flex-col gap-2 rounded-lg bg-slate-50 p-2 ring-1 ring-slate-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <UserRound className="h-3.5 w-3.5 text-slate-500" />
+                <span className="text-[11px] font-medium text-slate-700">
+                  {item.supportRequest.support_admin?.full_name}
+                </span>
+              </div>
+              <span className={clsx("text-[10px] font-semibold px-1.5 py-0.5 rounded-md", 
+                item.supportRequest.status === 'PENDING' ? "bg-amber-100 text-amber-700" : 
+                item.supportRequest.status === 'ACCEPTED' ? "bg-teal-100 text-teal-700" : 
+                item.supportRequest.status === 'REJECTED' ? "bg-rose-100 text-rose-700" : "bg-slate-200 text-slate-700")}>
+                {item.supportRequest.status === 'PENDING' ? 'Đang chờ' : 
+                 item.supportRequest.status === 'ACCEPTED' ? 'Đã nhận' : 
+                 item.supportRequest.status === 'REJECTED' ? 'Từ chối' : item.supportRequest.status}
+              </span>
+            </div>
+            {item.supportRequest.support_admin_id === user?.id && item.supportRequest.status === 'PENDING' && (
+              <div className="flex gap-2">
+                <button
+                  onClick={(e) => { e.preventDefault(); handleSupportStatusUpdate(item.supportRequest!.id, 'ACCEPTED'); }}
+                  className="w-full rounded-md bg-teal-500 py-1 text-[10px] font-bold text-white transition hover:bg-teal-600"
+                >
+                  Nhận hỗ trợ
+                </button>
+                <button
+                  onClick={(e) => { e.preventDefault(); handleSupportStatusUpdate(item.supportRequest!.id, 'REJECTED'); }}
+                  className="w-full rounded-md border border-slate-200 bg-white py-1 text-[10px] font-bold text-slate-600 transition hover:bg-slate-50"
+                >
+                  Từ chối
+                </button>
+              </div>
+            )}
+          </div>
+        ) : item.sourceType !== 'BATCH_GROUP' && (
+          <button 
+            onClick={(e) => { e.preventDefault(); setSelectedItemForSupport(item); setSupportModalOpen(true); }}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 py-2 text-[11px] font-semibold text-slate-600 hover:border-[#006b68] hover:bg-[#006b68]/5 hover:text-[#006b68] transition"
+          >
+            <UsersRound className="h-3.5 w-3.5" />
+            Mời hỗ trợ
+          </button>
         )}
       </article>
     )
@@ -470,6 +580,73 @@ export function SalesSupportKanban() {
           <WorkColumn key={column.key} column={column} items={getColumnItems(column.key)} />
         ))}
       </div>
+
+      {/* MODAL MỜI HỖ TRỢ */}
+      {supportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-xl ring-1 ring-slate-900/5 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-bold text-slate-900">Mời Admin hỗ trợ</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Bạn đang mời hỗ trợ cho thẻ: <b className="text-slate-700">{selectedItemForSupport?.title}</b>
+            </p>
+            
+            <div className="mt-6 space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Chọn người hỗ trợ</label>
+                <select
+                  value={selectedAdminId}
+                  onChange={(e) => setSelectedAdminId(e.target.value)}
+                  className="w-full rounded-xl border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-[#006b68] focus:ring-[#006b68]"
+                >
+                  <option value="">-- Chọn Admin --</option>
+                  {profiles
+                    .filter((p: any) => p.role === 'ADMIN_LEVEL_2' || p.role === 'ADMIN_LEVEL_3')
+                    .map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {p.full_name} {busyAdminsCache.has(p.id) ? '(Đang bận hỗ trợ người khác)' : ''}
+                      </option>
+                    ))}
+                </select>
+                {selectedAdminId && busyAdminsCache.has(selectedAdminId) && (
+                  <p className="mt-2 text-xs text-rose-600 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Admin này hiện đã có lịch đi hỗ trợ người khác trong ngày, họ có thể sẽ không xếp được lịch hẹn.
+                  </p>
+                )}
+              </div>
+              
+              <div>
+                <label className="mb-1.5 block text-sm font-semibold text-slate-700">Ngày hỗ trợ</label>
+                <input
+                  type="date"
+                  value={supportDate}
+                  onChange={(e) => setSupportDate(e.target.value)}
+                  className="w-full rounded-xl border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-[#006b68] focus:ring-[#006b68]"
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setSupportModalOpen(false)}
+                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleInviteSupport}
+                disabled={supportSubmitting || !selectedAdminId}
+                className="rounded-xl bg-[#006b68] px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-[#005451] disabled:opacity-50 flex items-center gap-2"
+              >
+                {supportSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Gửi lời mời
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1190,6 +1190,51 @@ export async function deleteAllowedEmail(id: string) {
 }
 
 // ==========================================
+// SUPPORT REQUESTS
+// ==========================================
+
+export async function fetchSupportRequests() {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('support_requests')
+    .select(`
+      *,
+      requester:profiles!support_requests_requester_id_fkey(*),
+      support_admin:profiles!support_requests_support_admin_id_fkey(*)
+    `)
+  if (error) {
+    console.error('Error fetching support requests:', error)
+    return []
+  }
+  return data || []
+}
+
+export async function createSupportRequest(request: { item_id: string, item_type: string, support_admin_id: string, scheduled_date: string, requester_id: string }) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('support_requests')
+    .insert([{ ...request, status: 'PENDING' }])
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+export async function updateSupportRequestStatus(id: string, status: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('support_requests')
+    .update({ status })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// ==========================================
 // MANAGER TRANSFER REQUESTS
 // ==========================================
 
