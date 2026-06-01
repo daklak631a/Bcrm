@@ -498,42 +498,43 @@ export default function CustomersPage() {
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr className="text-sm text-slate-600 font-medium">
                       {isAdmin && (
-                        <th className="py-3 px-4 w-12">
+                        <th className="py-3 px-4 w-10">
                           <input 
                             type="checkbox" 
                             checked={isAllPageSelected}
                             onChange={handleToggleSelectAllPage}
-                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-5 h-5"
+                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-4 h-4"
                             aria-label="Chọn tất cả khách hàng trên trang"
                           />
                         </th>
                       )}
-                      <th className="py-3 px-4 font-semibold">Họ Tên</th>
-                      <th className="py-3 px-4 font-semibold">Bán Hàng</th>
+                      <th className="py-3 px-4 font-semibold">Khách Hàng</th>
                       <th className="py-3 px-4 font-semibold hidden md:table-cell">Sản Phẩm</th>
                       <th className="py-3 px-4 font-semibold hidden lg:table-cell">Chuyên Viên</th>
-                      <th className="py-3 px-4 font-semibold text-right w-16"></th>
+                      <th className="py-3 px-4 w-20 text-right"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {paginatedCustomers.map((customer: any) => (
                       <tr key={customer.id} className={clsx("hover:bg-slate-50 transition-colors group", selectedIds.includes(customer.id) && "bg-slate-50/70")}>
-                        {isAdmin && (
-                          <td className="py-3 px-4 w-12">
-                            <input 
-                              type="checkbox" 
-                              checked={selectedIds.includes(customer.id)}
-                              onChange={() => handleToggleSelect(customer.id)}
-                              className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-5 h-5"
-                              aria-label={`Chọn khách hàng ${getCustomerFullName(customer)}`}
-                            />
-                          </td>
-                        )}
-                        <td className="py-3 px-4">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link href={`/customers/${customer.id}`} className="text-sm font-medium text-slate-800 hover:text-emerald-600 transition-colors">
-                              {getCustomerFullName(customer)}
-                            </Link>
+                      {isAdmin && (
+                        <td className="py-3 px-4 w-10">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedIds.includes(customer.id)}
+                            onChange={() => handleToggleSelect(customer.id)}
+                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-4 h-4"
+                            aria-label={`Chọn khách hàng ${getCustomerFullName(customer)}`}
+                          />
+                        </td>
+                      )}
+                      {/* Tên KH */}
+                      <td className="py-3 px-4">
+                        <div className="min-w-0">
+                          <Link href={`/customers/${customer.id}`} className="text-sm font-semibold text-slate-800 hover:text-emerald-600 transition-colors block truncate max-w-[220px]" title={getCustomerFullName(customer)}>
+                            {getCustomerFullName(customer)}
+                          </Link>
+                          <div className="flex flex-wrap items-center gap-1 mt-1">
                             {customer.cif_code && (
                               <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-teal-50 text-[#006b68] border border-teal-100 rounded">
                                 CIF: {customer.cif_code}
@@ -544,62 +545,67 @@ export default function CustomersPage() {
                             ) : (
                               <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100 rounded">B2C</span>
                             )}
+                            {customer.note && <span className="text-[10px] text-slate-400 italic truncate max-w-[120px]" title={customer.note}>{customer.note}</span>}
                           </div>
-                          {customer.note && <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{customer.note}</p>}
-                        </td>
-                        <td className="py-3 px-4">
+                        </div>
+                      </td>
+                      {/* Sản phẩm */}
+                      <td className="py-3 px-4 hidden md:table-cell">
+                        <div className="flex flex-wrap gap-1 max-w-[220px]">
+                          {PRODUCT_MAP.map(prod => {
+                            const hasProduct = !!customer[prod.key]
+                            const isUpdating = updatingProduct?.customerId === customer.id && updatingProduct?.productKey === prod.key
+                            return (
+                              <button
+                                key={prod.key}
+                                title={prod.label}
+                                disabled={isUpdating}
+                                onClick={() => handleToggleProduct(customer, prod.key, hasProduct)}
+                                className={clsx(
+                                  "px-1.5 py-0.5 text-[10px] font-semibold border rounded transition-all flex items-center gap-0.5",
+                                  hasProduct 
+                                    ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                                    : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+                                  isUpdating && "opacity-50 cursor-not-allowed"
+                                )}
+                              >
+                                {isUpdating && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+                                {prod.short}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </td>
+                      {/* Chuyên viên */}
+                      <td className="py-3 px-4 text-sm text-slate-600 hidden lg:table-cell">
+                        <span className="block truncate max-w-[120px]" title={customer.profiles?.full_name}>
+                          {customer.profiles?.full_name || '—'}
+                        </span>
+                      </td>
+                      {/* Actions */}
+                      <td className="py-3 px-4 text-right w-20">
+                        <div className="flex items-center justify-end gap-1.5">
                           <Link
                             href={`/sales?create=1&type=PRODUCT&customerId=${customer.id}`}
-                            className="inline-flex items-center justify-center gap-1.5 px-3 text-sm font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 rounded-xl transition-all shadow-sm min-h-[44px] active:scale-95"
-                            title="Ghi nhận bán chéo sản phẩm"
+                            className="inline-flex items-center justify-center w-8 h-8 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors border border-amber-200 bg-white shadow-sm active:scale-95"
+                            title="Ghi nhận bán hàng"
                           >
-                            <ShoppingCart className="w-4 h-4" />
-                            <span className="whitespace-nowrap">Bán SP</span>
+                            <ShoppingCart className="w-3.5 h-3.5" />
                           </Link>
-                        </td>
-                        <td className="py-3 px-4 hidden md:table-cell">
-                          <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-                            {PRODUCT_MAP.map(prod => {
-                              const hasProduct = !!customer[prod.key]
-                              const isUpdating = updatingProduct?.customerId === customer.id && updatingProduct?.productKey === prod.key
-                              return (
-                                <button
-                                  key={prod.key}
-                                  title={prod.label}
-                                  disabled={isUpdating}
-                                  onClick={() => handleToggleProduct(customer, prod.key, hasProduct)}
-                                  className={clsx(
-                                    "px-1.5 py-0.5 text-[10px] font-semibold border rounded transition-all flex items-center gap-1",
-                                    hasProduct 
-                                      ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300"
-                                      : "bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:text-slate-600",
-                                    isUpdating && "opacity-50 cursor-not-allowed"
-                                  )}
-                                >
-                                  {isUpdating && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
-                                  {prod.short}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-slate-700 hidden lg:table-cell">{customer.profiles?.full_name || '—'}</td>
-                        <td className="py-3 px-4 text-right w-16">
-                          <div className="flex items-center justify-end gap-2">
-                            <Link
-                              href={`/customers/${customer.id}`}
-                              className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors border border-slate-200 bg-white shadow-sm active:scale-95"
-                              title="Xem chi tiết hồ sơ"
-                            >
-                              <ArrowRight className="w-5 h-5" />
-                            </Link>
-                          </div>
-                        </td>
+                          <Link
+                            href={`/customers/${customer.id}`}
+                            className="inline-flex items-center justify-center w-8 h-8 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors border border-slate-200 bg-white shadow-sm active:scale-95"
+                            title="Xem chi tiết hồ sơ"
+                          >
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
+                      </td>
                       </tr>
                     ))}
                     {filteredCustomers.length === 0 && (
                       <tr>
-                        <td colSpan={isAdmin ? 7 : 6} className="py-12 text-center text-slate-500">
+                        <td colSpan={isAdmin ? 5 : 4} className="py-12 text-center text-slate-500">
                           {searchQuery ? `Không tìm thấy khách hàng với "${searchQuery}"` : "Chưa có khách hàng nào. Bấm \"Thêm KH\" để bắt đầu."}
                         </td>
                       </tr>

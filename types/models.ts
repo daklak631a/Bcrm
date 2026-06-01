@@ -81,6 +81,7 @@ export interface Customer {
   tax_code?: string | null;
   representative_name?: string | null;
   cif_code?: string | null;
+  customer_segment?: string | null;
   
   // Financial indicators
   loan_short_term?: number;
