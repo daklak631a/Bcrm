@@ -323,6 +323,7 @@ export async function upsertPlanAssignment(assignment: {
   target_du_no_ngan_han_tang_rong?: number
   target_du_no_trung_han_tang_rong?: number
   target_cap_moi_hmtd?: number
+  product_targets?: Record<string, number>
 }) {
   const supabase = getSupabase()
   const payload = {

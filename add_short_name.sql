@@ -1,0 +1,2 @@
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS short_name TEXT;
+ALTER TABLE allowed_emails ADD COLUMN IF NOT EXISTS short_name TEXT;

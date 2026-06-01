@@ -12,6 +12,7 @@ export interface Profile {
   department_id?: string;
   is_active?: boolean;
   full_name_slug?: string | null;
+  short_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -43,6 +44,7 @@ export interface PlanAssignment {
   target_du_no_ngan_han_tang_rong?: number;
   target_du_no_trung_han_tang_rong?: number;
   target_cap_moi_hmtd?: number;
+  product_targets?: Record<string, number>;
   created_at: string;
   updated_at: string;
   profiles?: Profile;

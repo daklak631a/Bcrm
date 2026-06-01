@@ -12,6 +12,7 @@ import html2canvas from 'html2canvas'
 interface KPISummary {
   manager_id: string
   full_name: string
+  short_name?: string
   cif_moi: number
   bidv_direct: number
   bh_nhan_tho: number
@@ -183,7 +184,7 @@ export function KPISummaryTable() {
                     <th className="py-3 px-4 text-center font-semibold text-[#003e3b] w-24 border-r border-[#ccedea]">Đơn vị</th>
                     {data.map((user) => (
                       <th key={user.manager_id} className="py-3 px-4 text-center font-semibold text-[#003e3b] min-w-[120px] border-r border-[#ccedea] whitespace-nowrap">
-                        {user.full_name}
+                        {user.short_name || user.full_name}
                       </th>
                     ))}
                   </tr>

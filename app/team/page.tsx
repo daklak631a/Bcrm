@@ -14,6 +14,7 @@ interface AllowedEmail {
   id: string
   email: string
   full_name: string
+  short_name?: string | null
   role: UserRole
   department_id: string | null
   is_active: boolean
@@ -23,6 +24,7 @@ interface AllowedEmail {
 interface FormData {
   email: string
   full_name: string
+  short_name: string
   role: UserRole
   department_id: string
 }
@@ -39,7 +41,7 @@ const ROLE_ICONS: Record<UserRole, typeof Shield> = {
   'USER': UserCircle,
 }
 
-const EMPTY_FORM: FormData = { email: '', full_name: '', role: 'USER', department_id: '' }
+const EMPTY_FORM: FormData = { email: '', full_name: '', short_name: '', role: 'USER', department_id: '' }
 
 export default function TeamPage() {
   const { user } = useAuthStore()
@@ -117,6 +119,7 @@ export default function TeamPage() {
     setFormData({
       email: entry.email,
       full_name: entry.full_name,
+      short_name: entry.short_name || '',
       role: entry.role,
       department_id: entry.department_id || '',
     })
@@ -130,6 +133,7 @@ export default function TeamPage() {
     setFormData({
       email: profile.email,
       full_name: profile.full_name,
+      short_name: profile.short_name || '',
       role: profile.role,
       department_id: profile.department_id || '',
     })
@@ -163,6 +167,7 @@ export default function TeamPage() {
         .insert({
           email: formData.email.trim().toLowerCase(),
           full_name: formData.full_name.trim(),
+          short_name: formData.short_name.trim() || null,
           role: formData.role,
           department_id: formData.department_id.trim() || null,
           is_active: true,
@@ -177,6 +182,7 @@ export default function TeamPage() {
       const allowedPayload = {
         email: formData.email.trim().toLowerCase(),
         full_name: formData.full_name.trim(),
+        short_name: formData.short_name.trim() || null,
         role: formData.role,
         department_id: formData.department_id.trim() || null,
         is_active: true,
@@ -187,6 +193,7 @@ export default function TeamPage() {
           .from('allowed_emails')
           .update({
             full_name: allowedPayload.full_name,
+            short_name: allowedPayload.short_name,
             role: allowedPayload.role,
             department_id: allowedPayload.department_id,
           })
@@ -215,6 +222,7 @@ export default function TeamPage() {
           .from('profiles')
           .update({
             full_name: formData.full_name.trim(),
+            short_name: formData.short_name.trim() || null,
             role: formData.role,
             department_id: formData.department_id.trim() || null,
             updated_at: new Date().toISOString(),
@@ -502,6 +510,17 @@ export default function TeamPage() {
                   value={formData.full_name}
                   onChange={e => setFormData(p => ({ ...p, full_name: e.target.value }))}
                   placeholder="Nguyễn Văn A"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Tên viết tắt (Dùng cho bảng biểu)</label>
+                <input
+                  type="text"
+                  value={formData.short_name}
+                  onChange={e => setFormData(p => ({ ...p, short_name: e.target.value }))}
+                  placeholder="A, NV"
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
                 />
               </div>

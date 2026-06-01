@@ -457,17 +457,20 @@ export default function ReportsPage() {
   }, [getTargetValue, getActualValue, selectedMonthStart, selectedMonthEnd, selectedMonday, selectedFriday, reportDate])
 
   const reportTitleScope = useMemo(() => {
-    if (isUser) return `Chuyên viên: ${user?.full_name}`
+    if (isUser) {
+      const myProfile = profiles.find(p => p.id === user?.id)
+      return `Chuyên viên: ${myProfile?.short_name || user?.full_name}`
+    }
     if (isAdminL2) {
       if (viewMode === 'all') return `Phòng: ${user?.department_id || 'Chưa phân phòng'}`
       const targetUser = profiles.find(p => p.id === selectedUserId)
-      return targetUser ? `Chuyên viên: ${targetUser.full_name}` : 'Cấp phòng'
+      return targetUser ? `Chuyên viên: ${targetUser.short_name || targetUser.full_name}` : 'Cấp phòng'
     }
     // Admin L1
     if (viewMode === 'all') return 'Toàn bộ Chi nhánh'
     if (viewMode === 'department') return `Phòng: ${selectedDepartment}`
     const targetUser = profiles.find(p => p.id === selectedUserId)
-    return targetUser ? `Chuyên viên: ${targetUser.full_name}` : 'Chi nhánh'
+    return targetUser ? `Chuyên viên: ${targetUser.short_name || targetUser.full_name}` : 'Chi nhánh'
   }, [isUser, isAdminL2, viewMode, selectedUserId, selectedDepartment, user, profiles])
 
   if (!mounted) return null
@@ -598,7 +601,7 @@ export default function ReportsPage() {
                       >
                         <option value="ALL">Tất cả cán bộ</option>
                         {profiles.filter(p => p.role === 'USER' && (selectedDepartment === 'ALL' || p.department_id === selectedDepartment)).map(p => (
-                          <option key={p.id} value={p.id}>{p.full_name}</option>
+                          <option key={p.id} value={p.id}>{p.short_name || p.full_name}</option>
                         ))}
                       </select>
                     </div>
@@ -634,7 +637,7 @@ export default function ReportsPage() {
                       >
                         <option value="ALL">Tất cả cán bộ phòng</option>
                         {visibleProfiles.map(p => (
-                          <option key={p.id} value={p.id}>{p.full_name}</option>
+                          <option key={p.id} value={p.id}>{p.short_name || p.full_name}</option>
                         ))}
                       </select>
                     </div>

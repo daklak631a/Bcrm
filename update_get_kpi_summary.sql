@@ -7,6 +7,7 @@ CREATE OR REPLACE FUNCTION get_kpi_summary(start_date DATE, end_date DATE)
 RETURNS TABLE (
   manager_id UUID,
   full_name TEXT,
+  short_name TEXT,
   cif_moi INT,
   bidv_direct INT,
   bh_nhan_tho DECIMAL(15,2),
@@ -26,16 +27,27 @@ BEGIN
   SELECT 
     p.id as manager_id,
     p.full_name,
+    p.short_name,
     
-    -- 1. CIF MỚI (Loại bỏ khách hàng đã xóa soft delete)
-    (SELECT COUNT(*)::INT 
-     FROM customers c 
-     WHERE c.assigned_manager_id = p.id 
-       AND c.created_at::DATE BETWEEN start_date AND end_date
-       AND c.deleted_at IS NULL),
+    -- 1. CIF MỚI (Khách hàng tạo mới + Giao dịch lô)
+    (
+      (SELECT COUNT(*)::INT 
+       FROM customers c 
+       WHERE c.assigned_manager_id = p.id 
+         AND c.created_at::DATE BETWEEN start_date AND end_date
+         AND c.deleted_at IS NULL)
+      +
+      (SELECT COALESCE(SUM(csr.result_value), 0)::INT
+       FROM cross_sell_records csr
+       JOIN cross_sell_products csp ON csr.product_id = csp.id
+       WHERE csr.agent_id = p.id
+         AND csr.status = 'COMPLETED'
+         AND UPPER(csp.name) LIKE '%CIF MỚI%'
+         AND csr.sale_date BETWEEN start_date AND end_date)
+    ),
      
-    -- 2. BIDV DIRECT (Đăng ký BIDV Direct thành công, bao gồm giao dịch đơn và lô đã phân bổ)
-    (SELECT COALESCE(COUNT(*), 0)::INT 
+    -- 2. BIDV DIRECT (Đăng ký BIDV Direct thành công)
+    (SELECT COALESCE(SUM(csr.result_value), 0)::INT 
      FROM cross_sell_records csr
      JOIN cross_sell_products csp ON csr.product_id = csp.id
      WHERE csr.agent_id = p.id 
@@ -61,7 +73,7 @@ BEGIN
        AND (UPPER(csp.name) LIKE '%KHOẢN VAY%' OR UPPER(csp.name) LIKE '%NON-LIFE%')
        AND csr.sale_date BETWEEN start_date AND end_date),
      
-    -- 5. HUY ĐỘNG TĂNG RÒNG (Lấy chênh lệch snapshot gần nhất trước/bằng ngày cuối và ngày đầu)
+    -- 5. HUY ĐỘNG TĂNG RÒNG (Snapshot + Giao dịch tay)
     (
       COALESCE((
         SELECT dms.total_deposit_balance 
@@ -77,6 +89,14 @@ BEGIN
         ORDER BY dms.snapshot_date DESC 
         LIMIT 1
       ), 0)
+      +
+      (SELECT COALESCE(SUM(csr.result_value), 0)::DECIMAL(15,2)
+       FROM cross_sell_records csr
+       JOIN cross_sell_products csp ON csr.product_id = csp.id
+       WHERE csr.agent_id = p.id 
+         AND csr.status = 'COMPLETED'
+         AND UPPER(csp.name) LIKE '%HUY ĐỘNG%'
+         AND csr.sale_date BETWEEN start_date AND end_date)
     ),
     
     -- 6. DƯ NỢ NGẮN HẠN TĂNG RÒNG
@@ -95,6 +115,14 @@ BEGIN
         ORDER BY dms.snapshot_date DESC 
         LIMIT 1
       ), 0)
+      +
+      (SELECT COALESCE(SUM(csr.result_value), 0)::DECIMAL(15,2)
+       FROM cross_sell_records csr
+       JOIN cross_sell_products csp ON csr.product_id = csp.id
+       WHERE csr.agent_id = p.id 
+         AND csr.status = 'COMPLETED'
+         AND UPPER(csp.name) LIKE '%DƯ NỢ%' AND UPPER(csp.name) LIKE '%NGẮN HẠN%'
+         AND csr.sale_date BETWEEN start_date AND end_date)
     ),
     
     -- 7. DƯ NỢ TRUNG HẠN TĂNG RÒNG
@@ -113,10 +141,18 @@ BEGIN
         ORDER BY dms.snapshot_date DESC 
         LIMIT 1
       ), 0)
+      +
+      (SELECT COALESCE(SUM(csr.result_value), 0)::DECIMAL(15,2)
+       FROM cross_sell_records csr
+       JOIN cross_sell_products csp ON csr.product_id = csp.id
+       WHERE csr.agent_id = p.id 
+         AND csr.status = 'COMPLETED'
+         AND UPPER(csp.name) LIKE '%DƯ NỢ%' AND (UPPER(csp.name) LIKE '%TRUNG%' OR UPPER(csp.name) LIKE '%DÀI HẠN%')
+         AND csr.sale_date BETWEEN start_date AND end_date)
     ),
 
     -- 8. CẤP MỚI HMTD (Đăng ký hạn mức tín dụng thành công)
-    (SELECT COALESCE(COUNT(*), 0)::INT 
+    (SELECT COALESCE(SUM(csr.result_value), 0)::INT 
      FROM cross_sell_records csr
      JOIN cross_sell_products csp ON csr.product_id = csp.id
      WHERE csr.agent_id = p.id 

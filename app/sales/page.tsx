@@ -77,7 +77,6 @@ function SalesPageContent() {
     setShowBatchCustomerDropdown(false)
     setBatchSaleDate(new Date().toISOString().slice(0, 10))
     setBatchProductValues({})
-    setBatchProductNotes({})
     setIsBatchMode(false)
     setBatchEntryNote("")
     setShowBatchModal(true)
@@ -100,7 +99,6 @@ function SalesPageContent() {
         agent_id: user?.id || "",
         status: "COMPLETED",
         sale_date: batchSaleDate,
-        note: batchProductNotes[productId] || undefined,
         result_value: val,
       }))
 
@@ -120,7 +118,7 @@ function SalesPageContent() {
             status: sale.status,
             sale_date: sale.sale_date,
             result_value: sale.result_value,
-            batch_note: batchEntryNote || sale.note || undefined,
+            batch_note: batchEntryNote || undefined,
           })
         )
         await Promise.all(promises)
@@ -133,7 +131,6 @@ function SalesPageContent() {
           agent_id: sale.agent_id,
           status: sale.status,
           sale_date: sale.sale_date,
-          note: sale.note,
           product_id: sale.product_id,
           result_value: sale.result_value,
         }))
@@ -816,26 +813,23 @@ function SalesPageContent() {
                 <tr className="text-slate-600 font-medium">
                   <th className="py-2.5 px-3">Sản phẩm</th>
                   <th className="py-2.5 px-3">Nhóm</th>
-                  <th className="py-2.5 px-3 w-44">Kết quả bán</th>
-                  <th className="py-2.5 px-3">Ghi chú</th>
+                  <th className="py-2.5 px-3 w-48">Kết quả bán</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {products.map((product) => {
                   const metricDefinition = getProductMetricDefinition(product)
                   const value = batchProductValues[product.id] || ""
-                  const note = batchProductNotes[product.id] || ""
                   const hasValue = Number(value) > 0
 
                   return (
                     <tr key={product.id} className={clsx("transition-colors", hasValue ? "bg-amber-50/40 hover:bg-amber-50/60" : "hover:bg-slate-50/50")}>
                       <td className="py-2 px-3">
                         <div className="font-semibold text-slate-800">{product.name}</div>
-                        {product.description && <div className="text-[10px] text-slate-400">{product.description}</div>}
                       </td>
                       <td className="py-2 px-3 text-xs text-slate-500">{product.type}</td>
                       <td className="py-2 px-3">
-                        <div className="relative flex items-center">
+                        <div className="flex items-center gap-2">
                           <input
                             type="number"
                             step="0.01"
@@ -850,34 +844,17 @@ function SalesPageContent() {
                               })
                             }}
                             className={clsx(
-                              "w-full pr-20 pl-2 py-1 border rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none text-right font-mono transition-all",
+                              "flex-1 min-w-0 px-2 py-1 border rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none text-right font-mono transition-all",
                               hasValue ? "border-amber-400 font-bold bg-white text-amber-900" : "border-slate-200 bg-slate-50/30 text-slate-700"
                             )}
                           />
                           <span className={clsx(
-                            "absolute right-1 text-[10px] font-bold px-1.5 py-0.5 rounded border pointer-events-none truncate max-w-[70px]",
+                            "shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded border pointer-events-none truncate max-w-[80px]",
                             hasValue ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-slate-100 text-slate-500 border-slate-200"
                           )} title={metricDefinition.unitLabel}>
                             {metricDefinition.unitLabel}
                           </span>
                         </div>
-                      </td>
-                      <td className="py-2 px-3">
-                        <input
-                          type="text"
-                          placeholder="Ghi chú thêm (Tùy chọn)..."
-                          value={note}
-                          onChange={(e) => {
-                            setBatchProductNotes({
-                              ...batchProductNotes,
-                              [product.id]: e.target.value,
-                            })
-                          }}
-                          className={clsx(
-                            "w-full px-2 py-1 border rounded focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none text-xs transition-all",
-                            hasValue ? "border-amber-300" : "border-slate-200"
-                          )}
-                        />
                       </td>
                     </tr>
                   )

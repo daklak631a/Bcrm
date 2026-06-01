@@ -110,6 +110,13 @@ export async function GET(request: Request) {
     const addTarget = (target: any) => {
       if (!target?.user_id) return
       const current = targetsByUser.get(target.user_id) || {}
+      
+      if (target.product_targets) {
+        Object.entries(target.product_targets).forEach(([productId, val]) => {
+           current[productId] = (current[productId] || 0) + Number(val || 0)
+        })
+      }
+
       TARGET_FIELDS.forEach((field) => {
         current[field] = Number(current[field] || 0) + Number(target[field] || 0)
       })
@@ -165,6 +172,8 @@ export async function GET(request: Request) {
       const target = targetsByUser.get(row.manager_id)
       return {
         ...row,
+        product_targets: target || {},
+        // Fallback backward compatibility
         target_cif_moi: target?.target_cif_moi || 0,
         target_bidv_direct: target?.target_bidv_direct || 0,
         target_bh_nhan_tho: target?.target_bh_nhan_tho || 0,

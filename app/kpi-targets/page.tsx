@@ -12,38 +12,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import * as XLSX from 'xlsx'
 
-type AssignmentDraft = {
-  target_loans_amount: number
-  target_deposits_amount: number
-  target_calls: number
-  target_cif_moi: number
-  target_bidv_direct: number
-  target_bh_nhan_tho: number
-  target_bh_khoan_vay: number
-  target_huy_dong_tang_rong: number
-  target_du_no_ngan_han_tang_rong: number
-  target_du_no_trung_han_tang_rong: number
-  target_cap_moi_hmtd: number
-}
+export type AssignmentDraft = Record<string, number>
 
 type CreatePlanForm = {
   title: string
   description: string
   target_date: string
-}
-
-const DEFAULT_DRAFT: AssignmentDraft = {
-  target_loans_amount: 0,
-  target_deposits_amount: 0,
-  target_calls: 0,
-  target_cif_moi: 0,
-  target_bidv_direct: 0,
-  target_bh_nhan_tho: 0,
-  target_bh_khoan_vay: 0,
-  target_huy_dong_tang_rong: 0,
-  target_du_no_ngan_han_tang_rong: 0,
-  target_du_no_trung_han_tang_rong: 0,
-  target_cap_moi_hmtd: 0,
 }
 
 const EMPTY_PLAN_FORM: CreatePlanForm = {
@@ -52,79 +26,63 @@ const EMPTY_PLAN_FORM: CreatePlanForm = {
   target_date: new Date().toISOString().slice(0, 10),
 }
 
-const CORE_FIELDS: Array<{ key: keyof AssignmentDraft; label: string; unit: string; step?: string }> = [
+export type FieldDefinition = {
+  key: string
+  label: string
+  unit: string
+  step?: string
+  isProduct?: boolean
+  productId?: string
+}
+
+const CORE_FIELDS: FieldDefinition[] = [
   { key: "target_loans_amount", label: "Chỉ tiêu vay", unit: "VNĐ", step: "1000000" },
   { key: "target_deposits_amount", label: "Chỉ tiêu gửi", unit: "VNĐ", step: "1000000" },
   { key: "target_calls", label: "Chỉ tiêu gọi", unit: "Cuộc", step: "1" },
 ]
 
-const PRODUCT_FIELDS: Array<{ key: keyof AssignmentDraft; label: string; unit: string; step?: string }> = [
-  { key: "target_cif_moi", label: "CIF mới", unit: "KH", step: "1" },
-  { key: "target_bidv_direct", label: "BIDV Direct", unit: "KH", step: "1" },
-  { key: "target_bh_nhan_tho", label: "BH nhân thọ", unit: "Triệu", step: "0.01" },
-  { key: "target_bh_khoan_vay", label: "BH khoản vay", unit: "Triệu", step: "0.01" },
-  { key: "target_cap_moi_hmtd", label: "Cấp mới HMTD", unit: "KH", step: "1" },
-]
-
-const GROWTH_FIELDS: Array<{ key: keyof AssignmentDraft; label: string; unit: string; step?: string }> = [
+const GROWTH_FIELDS: FieldDefinition[] = [
   { key: "target_huy_dong_tang_rong", label: "Huy động tăng ròng", unit: "VNĐ", step: "1000000" },
   { key: "target_du_no_ngan_han_tang_rong", label: "Dư nợ ngắn hạn tăng ròng", unit: "VNĐ", step: "1000000" },
   { key: "target_du_no_trung_han_tang_rong", label: "Dư nợ trung dài hạn tăng ròng", unit: "VNĐ", step: "1000000" },
 ]
 
-const ALL_ASSIGNMENT_FIELDS: Array<{ key: keyof AssignmentDraft; label: string; unit: string; step?: string }> = [...CORE_FIELDS, ...PRODUCT_FIELDS, ...GROWTH_FIELDS]
-
-const CORE_FIELD_KEYS = new Set<keyof AssignmentDraft>(CORE_FIELDS.map((field) => field.key))
-const PRODUCT_FIELD_KEYS = new Set<keyof AssignmentDraft>(PRODUCT_FIELDS.map((field) => field.key))
-const GROWTH_FIELD_KEYS = new Set<keyof AssignmentDraft>(GROWTH_FIELDS.map((field) => field.key))
-
-function getFieldGroup(key: keyof AssignmentDraft) {
-  if (CORE_FIELD_KEYS.has(key)) return "core"
-  if (PRODUCT_FIELD_KEYS.has(key)) return "product"
-  return "growth"
-}
-
-function getFieldHeaderClass(key: keyof AssignmentDraft) {
-  const group = getFieldGroup(key)
-  if (group === "core") return "bg-teal-50 text-[#006b68]"
-  if (group === "product") return "bg-teal-100/60 text-[#005451]"
+function getFieldHeaderClass(field: FieldDefinition) {
+  if (field.isProduct) return "bg-teal-100/60 text-[#005451]"
+  if (CORE_FIELDS.some(f => f.key === field.key)) return "bg-teal-50 text-[#006b68]"
   return "bg-[#ccedea]/40 text-[#003e3b]"
 }
 
-function getFieldInputTone(key: keyof AssignmentDraft) {
-  const group = getFieldGroup(key)
-  if (group === "core") return "border-teal-200 bg-teal-50/60 group-hover:border-teal-300"
-  if (group === "product") return "border-teal-300/70 bg-teal-100/30 group-hover:border-teal-400"
+function getFieldInputTone(field: FieldDefinition) {
+  if (field.isProduct) return "border-teal-300/70 bg-teal-100/30 group-hover:border-teal-400"
+  if (CORE_FIELDS.some(f => f.key === field.key)) return "border-teal-200 bg-teal-50/60 group-hover:border-teal-300"
   return "border-teal-200 bg-[#ccedea]/20 group-hover:border-teal-300"
 }
 
-function getFieldChipClass(key: keyof AssignmentDraft) {
-  const group = getFieldGroup(key)
-  if (group === "core") return "bg-teal-50 text-[#006b68] border border-teal-200/50"
-  if (group === "product") return "bg-teal-100 text-[#005451]"
-  return "bg-[#ccedea] text-[#003e3b]"
+function buildDefaultDraft(allFields: FieldDefinition[]): AssignmentDraft {
+  const draft: AssignmentDraft = {}
+  allFields.forEach(f => draft[f.key] = 0)
+  return draft
 }
 
-function buildDraft(assignment?: Partial<PlanAssignment> | null): AssignmentDraft {
-  return {
-    target_loans_amount: Number(assignment?.target_loans_amount || 0),
-    target_deposits_amount: Number(assignment?.target_deposits_amount || 0),
-    target_calls: Number(assignment?.target_calls || 0),
-    target_cif_moi: Number(assignment?.target_cif_moi || 0),
-    target_bidv_direct: Number(assignment?.target_bidv_direct || 0),
-    target_bh_nhan_tho: Number(assignment?.target_bh_nhan_tho || 0),
-    target_bh_khoan_vay: Number(assignment?.target_bh_khoan_vay || 0),
-    target_huy_dong_tang_rong: Number(assignment?.target_huy_dong_tang_rong || 0),
-    target_du_no_ngan_han_tang_rong: Number(assignment?.target_du_no_ngan_han_tang_rong || 0),
-    target_du_no_trung_han_tang_rong: Number(assignment?.target_du_no_trung_han_tang_rong || 0),
-    target_cap_moi_hmtd: Number(assignment?.target_cap_moi_hmtd || 0),
-  }
+function buildDraft(assignment: Partial<PlanAssignment> | null | undefined, allFields: FieldDefinition[]): AssignmentDraft {
+  const draft = buildDefaultDraft(allFields)
+  if (!assignment) return draft
+  
+  allFields.forEach(f => {
+    if (f.isProduct && f.productId) {
+       draft[f.key] = Number(assignment.product_targets?.[f.productId] || 0)
+    } else {
+       draft[f.key] = Number((assignment as any)[f.key] || 0)
+    }
+  })
+  return draft
 }
 
-function draftsEqual(a?: AssignmentDraft, b?: AssignmentDraft) {
-  const left = a || DEFAULT_DRAFT
-  const right = b || DEFAULT_DRAFT
-  return Object.keys(DEFAULT_DRAFT).every((key) => left[key as keyof AssignmentDraft] === right[key as keyof AssignmentDraft])
+function draftsEqual(a: AssignmentDraft | undefined, b: AssignmentDraft | undefined, allFields: FieldDefinition[]) {
+  const left = a || buildDefaultDraft(allFields)
+  const right = b || buildDefaultDraft(allFields)
+  return allFields.every((f) => left[f.key] === right[f.key])
 }
 
 function formatPlanDate(value?: string) {
@@ -153,9 +111,9 @@ function formatCompact(value: number, fieldKey?: string) {
   return new Intl.NumberFormat("vi-VN").format(value)
 }
 
-function countConfiguredTargets(draft?: AssignmentDraft) {
-  const current = draft || DEFAULT_DRAFT
-  return Object.values(current).filter((value) => Number(value) > 0).length
+function countConfiguredTargets(draft: AssignmentDraft | undefined, allFields: FieldDefinition[]) {
+  const current = draft || buildDefaultDraft(allFields)
+  return allFields.filter((f) => Number(current[f.key]) > 0).length
 }
 
 function parseNumericCell(value: string) {
@@ -184,6 +142,7 @@ export default function KpiTargetsPage() {
   const [loading, setLoading] = useState(true)
   const [plans, setPlans] = useState<Plan[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
+  const [products, setProducts] = useState<any[]>([])
   const [assignments, setAssignments] = useState<PlanAssignment[]>([])
   const [selectedPlanId, setSelectedPlanId] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
@@ -215,7 +174,7 @@ export default function KpiTargetsPage() {
   }, [])
 
   const [selectedMonday, setSelectedMonday] = useState(() => toDateStr(getMonday(new Date())))
-  const [weeklyDraft, setWeeklyDraft] = useState<AssignmentDraft>(DEFAULT_DRAFT)
+  const [weeklyDraft, setWeeklyDraft] = useState<AssignmentDraft>({})
   const [dailyDrafts, setDailyDrafts] = useState<Record<string, AssignmentDraft>>({})
   const [personalLoading, setPersonalLoading] = useState(false)
   const [savingPersonal, setSavingPersonal] = useState(false)
@@ -244,6 +203,19 @@ export default function KpiTargetsPage() {
     }, {})
   }, [assignments])
 
+  const productFields = useMemo<FieldDefinition[]>(() => {
+    return products.map(p => ({
+      key: `prod_${p.id}`,
+      label: p.name,
+      unit: p.unit_label || (p.metric_type === 'AMOUNT' ? 'VNĐ' : 'Số lượng'),
+      step: p.metric_type === 'AMOUNT' ? '1000000' : '1',
+      isProduct: true,
+      productId: p.id
+    }))
+  }, [products])
+
+  const ALL_ASSIGNMENT_FIELDS = useMemo(() => [...CORE_FIELDS, ...productFields, ...GROWTH_FIELDS], [productFields])
+
   const selectedPlan = useMemo(() => plans.find((plan) => plan.id === selectedPlanId) || null, [plans, selectedPlanId])
 
   const filteredUsers = useMemo(() => {
@@ -258,16 +230,24 @@ export default function KpiTargetsPage() {
 
   const dirtyUserIds = useMemo(() => {
     return visibleUsers
-      .filter((profile) => !draftsEqual(drafts[profile.id], buildDraft(assignmentMap[profile.id])))
+      .filter((profile) => !draftsEqual(drafts[profile.id], buildDraft(assignmentMap[profile.id], ALL_ASSIGNMENT_FIELDS), ALL_ASSIGNMENT_FIELDS))
       .map((profile) => profile.id)
-  }, [assignmentMap, drafts, visibleUsers])
+  }, [assignmentMap, drafts, visibleUsers, ALL_ASSIGNMENT_FIELDS])
 
   const loadBaseData = useCallback(async () => {
     try {
       setLoading(true)
-      const [plansData, profilesData] = await Promise.all([fetchPlans(), fetchProfiles()])
+      const supabase = getSupabase()
+      const [plansData, profilesData, productsData] = await Promise.all([
+         fetchPlans(), 
+         fetchProfiles(),
+         supabase.from('cross_sell_products').select('*').eq('is_active', true).order('created_at', { ascending: true })
+      ])
       setPlans(plansData)
       setProfiles(profilesData)
+      if (productsData.data) {
+        setProducts(productsData.data)
+      }
       if (!selectedPlanId && plansData.length > 0) {
         setSelectedPlanId(plansData[0].id)
       }
@@ -303,7 +283,7 @@ export default function KpiTargetsPage() {
       // Fetch weekly plan
       const weeks = await fetchWeeklyPlans(userId)
       const thisWeekPlan = weeks.find((w: any) => w.start_date === mondayStr)
-      setWeeklyDraft(thisWeekPlan ? buildDraft(thisWeekPlan) : DEFAULT_DRAFT)
+      setWeeklyDraft(thisWeekPlan ? buildDraft(thisWeekPlan, ALL_ASSIGNMENT_FIELDS) : buildDefaultDraft(ALL_ASSIGNMENT_FIELDS))
 
       // Fetch daily plans
       const dailies = await fetchDailyPlans(userId, mondayStr, fridayStr)
@@ -313,7 +293,7 @@ export default function KpiTargetsPage() {
         d.setDate(mon.getDate() + i)
         const dStr = toDateStr(d)
         const dayPlan = dailies.find((dp: any) => dp.target_date === dStr)
-        nextDailyDrafts[dStr] = dayPlan ? buildDraft(dayPlan) : DEFAULT_DRAFT
+        nextDailyDrafts[dStr] = dayPlan ? buildDraft(dayPlan, ALL_ASSIGNMENT_FIELDS) : buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)
       }
       setDailyDrafts(nextDailyDrafts)
     } catch (err: any) {
@@ -390,11 +370,11 @@ export default function KpiTargetsPage() {
       return
     }
 
+    const myDraft = buildDraft(myAssignment, ALL_ASSIGNMENT_FIELDS)
     const nextWeek = { ...weeklyDraft }
     ALL_ASSIGNMENT_FIELDS.forEach((field) => {
-      const val = Number(myAssignment[field.key as keyof PlanAssignment] || 0)
-      const isInteger = ["target_calls", "target_cif_moi", "target_bidv_direct", "target_cap_moi_hmtd"].includes(field.key)
-      if (isInteger) {
+      const val = myDraft[field.key] || 0
+      if (field.step === '1') {
         nextWeek[field.key] = Math.round(val / 4)
       } else {
         nextWeek[field.key] = parseFloat((val / 4).toFixed(2))
@@ -414,17 +394,18 @@ export default function KpiTargetsPage() {
       const d = new Date(mon)
       d.setDate(mon.getDate() + i)
       const dStr = toDateStr(d)
-      const dayDraft: AssignmentDraft = { ...DEFAULT_DRAFT }
+      const dayDraft: AssignmentDraft = buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)
       
       Object.keys(weeklyDraft).forEach((key) => {
-        const val = weeklyDraft[key as keyof AssignmentDraft]
-        const isInteger = ["target_calls", "target_cif_moi", "target_bidv_direct", "target_cap_moi_hmtd"].includes(key)
+        const val = weeklyDraft[key]
+        const field = ALL_ASSIGNMENT_FIELDS.find(f => f.key === key)
+        const isInteger = field?.step === '1'
         if (isInteger) {
           const base = Math.floor(val / 5)
           const remainder = val % 5
-          dayDraft[key as keyof AssignmentDraft] = base + (i < remainder ? 1 : 0)
+          dayDraft[key] = base + (i < remainder ? 1 : 0)
         } else {
-          dayDraft[key as keyof AssignmentDraft] = parseFloat((val / 5).toFixed(2))
+          dayDraft[key] = parseFloat((val / 5).toFixed(2))
         }
       })
       nextDailies[dStr] = dayDraft
@@ -467,10 +448,10 @@ export default function KpiTargetsPage() {
   useEffect(() => {
     const nextDrafts: Record<string, AssignmentDraft> = {}
     visibleUsers.forEach((profile) => {
-      nextDrafts[profile.id] = buildDraft(assignmentMap[profile.id])
+      nextDrafts[profile.id] = buildDraft(assignmentMap[profile.id], ALL_ASSIGNMENT_FIELDS)
     })
     setDrafts(nextDrafts)
-  }, [assignmentMap, visibleUsers, selectedPlanId])
+  }, [assignmentMap, visibleUsers, selectedPlanId, ALL_ASSIGNMENT_FIELDS])
 
   useEffect(() => {
     const nextSourceUserId = filteredUserIds.includes(copySourceUserId) ? copySourceUserId : filteredUserIds[0] || ""
@@ -484,7 +465,7 @@ export default function KpiTargetsPage() {
     setDrafts((prev) => ({
       ...prev,
       [userId]: {
-        ...(prev[userId] || DEFAULT_DRAFT),
+        ...(prev[userId] || buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)),
         [key]: value,
       },
     }))
@@ -508,7 +489,7 @@ export default function KpiTargetsPage() {
       return
     }
 
-    const sourceDraft = { ...(drafts[copySourceUserId] || buildDraft(assignmentMap[copySourceUserId])) }
+    const sourceDraft = { ...(drafts[copySourceUserId] || buildDraft(assignmentMap[copySourceUserId], ALL_ASSIGNMENT_FIELDS)) }
     setDrafts((prev) => {
       const nextDrafts = { ...prev }
       copyTargetUserIds.forEach((userId) => {
@@ -551,7 +532,7 @@ export default function KpiTargetsPage() {
         const profile = filteredUsers[rowIndex]
         if (!profile) return
 
-        const nextDraft = { ...(prev[profile.id] || DEFAULT_DRAFT) }
+        const nextDraft = { ...(prev[profile.id] || buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)) }
         let rowTouched = false
 
         ALL_ASSIGNMENT_FIELDS.forEach((field, columnIndex) => {
@@ -609,32 +590,17 @@ export default function KpiTargetsPage() {
   const handleDownloadKpiTemplate = () => {
     const header = [
       'Chuyên viên',
-      'Chỉ tiêu vay (VNĐ)',
-      'Chỉ tiêu gửi (VNĐ)',
-      'Chỉ tiêu gọi (Cuộc)',
-      'CIF mới (KH)',
-      'BIDV Direct (KH)',
-      'BH nhân thọ (Triệu)',
-      'BH khoản vay (Triệu)',
-      'Cấp mới HMTD (KH)',
-      'Huy động tăng ròng (VNĐ)',
-      'Dư nợ ngắn hạn tăng ròng (VNĐ)',
-      'Dư nợ trung dài hạn tăng ròng (VNĐ)',
+      ...ALL_ASSIGNMENT_FIELDS.map(f => `${f.label} (${f.unit})`)
     ]
-    const sampleData = visibleUsers.map(p => ({
-      'Chuyên viên': p.full_name,
-      'Chỉ tiêu vay (VNĐ)': 0,
-      'Chỉ tiêu gửi (VNĐ)': 0,
-      'Chỉ tiêu gọi (Cuộc)': 0,
-      'CIF mới (KH)': 0,
-      'BIDV Direct (KH)': 0,
-      'BH nhân thọ (Triệu)': 0,
-      'BH khoản vay (Triệu)': 0,
-      'Cấp mới HMTD (KH)': 0,
-      'Huy động tăng ròng (VNĐ)': 0,
-      'Dư nợ ngắn hạn tăng ròng (VNĐ)': 0,
-      'Dư nợ trung dài hạn tăng ròng (VNĐ)': 0,
-    }))
+    const sampleData = visibleUsers.map(p => {
+      const row: any = {
+        'Chuyên viên': p.short_name || p.full_name,
+      }
+      ALL_ASSIGNMENT_FIELDS.forEach(f => {
+        row[`${f.label} (${f.unit})`] = 0
+      })
+      return row
+    })
     const ws = XLSX.utils.json_to_sheet(sampleData, { header })
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'KPI_Template')
@@ -666,21 +632,14 @@ export default function KpiTargetsPage() {
         const nextDrafts: Record<string, AssignmentDraft> = { ...drafts }
         for (const row of rows) {
           const name = String(row['Chuyên viên'] || '').trim()
-          const match = visibleUsers.find(p => slugify(p.full_name) === slugify(name))
+          const match = visibleUsers.find(p => slugify(p.short_name || p.full_name) === slugify(name))
           if (!match) continue
-          nextDrafts[match.id] = {
-            target_loans_amount: Number(row['Chỉ tiêu vay (VNĐ)'] || 0),
-            target_deposits_amount: Number(row['Chỉ tiêu gửi (VNĐ)'] || 0),
-            target_calls: Number(row['Chỉ tiêu gọi (Cuộc)'] || 0),
-            target_cif_moi: Number(row['CIF mới (KH)'] || 0),
-            target_bidv_direct: Number(row['BIDV Direct (KH)'] || 0),
-            target_bh_nhan_tho: Number(row['BH nhân thọ (Triệu)'] || 0),
-            target_bh_khoan_vay: Number(row['BH khoản vay (Triệu)'] || 0),
-            target_cap_moi_hmtd: Number(row['Cấp mới HMTD (KH)'] || 0),
-            target_huy_dong_tang_rong: Number(row['Huy động tăng ròng (VNĐ)'] || 0),
-            target_du_no_ngan_han_tang_rong: Number(row['Dư nợ ngắn hạn tăng ròng (VNĐ)'] || 0),
-            target_du_no_trung_han_tang_rong: Number(row['Dư nợ trung dài hạn tăng ròng (VNĐ)'] || 0),
-          }
+          
+          const newDraft = buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)
+          ALL_ASSIGNMENT_FIELDS.forEach(f => {
+            newDraft[f.key] = Number(row[`${f.label} (${f.unit})`] || 0)
+          })
+          nextDrafts[match.id] = newDraft
           applied++
         }
         setDrafts(nextDrafts)
@@ -702,12 +661,22 @@ export default function KpiTargetsPage() {
     }
     try {
       setSavingUserId(profile.id)
-      const draft = drafts[profile.id] || DEFAULT_DRAFT
-      await upsertPlanAssignment({
+      const draft = drafts[profile.id] || buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)
+      const payload: any = {
         plan_id: selectedPlanId,
         user_id: profile.id,
-        ...draft,
+        target_loans_amount: draft.target_loans_amount || 0,
+        target_deposits_amount: draft.target_deposits_amount || 0,
+        target_calls: draft.target_calls || 0,
+        target_huy_dong_tang_rong: draft.target_huy_dong_tang_rong || 0,
+        target_du_no_ngan_han_tang_rong: draft.target_du_no_ngan_han_tang_rong || 0,
+        target_du_no_trung_han_tang_rong: draft.target_du_no_trung_han_tang_rong || 0,
+        product_targets: {}
+      }
+      productFields.forEach(f => {
+        if (f.productId) payload.product_targets[f.productId] = draft[f.key] || 0
       })
+      await upsertPlanAssignment(payload)
       await loadAssignments(selectedPlanId)
       toast.success(`Đã lưu KPI cho ${profile.full_name}`)
     } catch (error: any) {
@@ -729,13 +698,24 @@ export default function KpiTargetsPage() {
     try {
       setSavingAll(true)
       await Promise.all(
-        dirtyUserIds.map((userId) =>
-          upsertPlanAssignment({
+        dirtyUserIds.map((userId) => {
+          const draft = drafts[userId] || buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)
+          const payload: any = {
             plan_id: selectedPlanId,
             user_id: userId,
-            ...(drafts[userId] || DEFAULT_DRAFT),
+            target_loans_amount: draft.target_loans_amount || 0,
+            target_deposits_amount: draft.target_deposits_amount || 0,
+            target_calls: draft.target_calls || 0,
+            target_huy_dong_tang_rong: draft.target_huy_dong_tang_rong || 0,
+            target_du_no_ngan_han_tang_rong: draft.target_du_no_ngan_han_tang_rong || 0,
+            target_du_no_trung_han_tang_rong: draft.target_du_no_trung_han_tang_rong || 0,
+            product_targets: {}
+          }
+          productFields.forEach(f => {
+            if (f.productId) payload.product_targets[f.productId] = draft[f.key] || 0
           })
-        )
+          return upsertPlanAssignment(payload)
+        })
       )
       await loadAssignments(selectedPlanId)
       toast.success(`Đã lưu ${dirtyUserIds.length} phân bổ KPI`)
@@ -805,7 +785,8 @@ export default function KpiTargetsPage() {
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {ALL_ASSIGNMENT_FIELDS.map((field) => {
-              const targetVal = Number(myAssignment?.[field.key] || 0)
+              const myDraft = myAssignment ? buildDraft(myAssignment, ALL_ASSIGNMENT_FIELDS) : null
+              const targetVal = Number(myDraft?.[field.key] || 0)
               const actualVal = getFieldActualValue(field.key)
               const pct = targetVal > 0 ? Math.round((actualVal / targetVal) * 100) : null
               return (
@@ -942,7 +923,8 @@ export default function KpiTargetsPage() {
               {activeDayTab && dailyDrafts[activeDayTab] ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {ALL_ASSIGNMENT_FIELDS.map((field) => {
-                    const dayDraft = dailyDrafts[activeDayTab] || DEFAULT_DRAFT
+                    const monthVal = myAssignment ? buildDraft(myAssignment, ALL_ASSIGNMENT_FIELDS)[field.key] : 0
+                    const dayDraft = dailyDrafts[activeDayTab] || buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)
                     return (
                       <div key={field.key} className="flex flex-col gap-1.5 p-3.5 rounded-2xl border border-slate-100 bg-slate-50/30">
                         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{field.label} ({field.unit})</label>
@@ -956,7 +938,7 @@ export default function KpiTargetsPage() {
                             setDailyDrafts(prev => ({
                               ...prev,
                               [activeDayTab]: {
-                                ...(prev[activeDayTab] || DEFAULT_DRAFT),
+                                ...(prev[activeDayTab] || buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)),
                                 [field.key]: val
                               }
                             }))
@@ -1186,7 +1168,7 @@ export default function KpiTargetsPage() {
               <div className="flex flex-wrap gap-2">
                 <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{filteredUsers.length} nhân sự</span>
                 <span className="inline-flex items-center rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-[#006b68]">{CORE_FIELDS.length} cột trọng tâm</span>
-                <span className="inline-flex items-center rounded-full bg-teal-100 px-3 py-1 text-xs font-medium text-[#005451]">{PRODUCT_FIELDS.length} cột sản phẩm</span>
+                <span className="inline-flex items-center rounded-full bg-teal-100 px-3 py-1 text-xs font-medium text-[#005451]">{productFields.length} cột sản phẩm</span>
                 <span className="inline-flex items-center rounded-full bg-[#ccedea] px-3 py-1 text-xs font-medium text-[#003e3b]">{GROWTH_FIELDS.length} cột tăng ròng</span>
               </div>
             </div>
@@ -1204,9 +1186,11 @@ export default function KpiTargetsPage() {
                     <th colSpan={CORE_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-[#002b29] bg-[#003835] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-50">
                       Chỉ tiêu trọng tâm
                     </th>
-                    <th colSpan={PRODUCT_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-[#003835] bg-[#004d4a] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-100">
-                      Chỉ tiêu sản phẩm
-                    </th>
+                    {productFields.length > 0 && (
+                      <th colSpan={productFields.length} className="sticky top-0 z-40 border-b border-r border-[#003835] bg-[#004d4a] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-100">
+                        Chỉ tiêu sản phẩm
+                      </th>
+                    )}
                     <th colSpan={GROWTH_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-[#004744] bg-[#005c58] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-50">
                       Chỉ tiêu tăng ròng
                     </th>
@@ -1223,7 +1207,7 @@ export default function KpiTargetsPage() {
                         key={field.key}
                         className={clsx(
                           "sticky top-[52px] z-40 min-w-[150px] border-b border-slate-200 px-3 py-3 text-left align-top text-xs font-semibold",
-                          getFieldHeaderClass(field.key),
+                          getFieldHeaderClass(field),
                           index === CORE_FIELDS.length - 1 || index === ALL_ASSIGNMENT_FIELDS.length - 1 ? "border-r" : "border-r border-slate-200"
                         )}
                       >
@@ -1237,10 +1221,10 @@ export default function KpiTargetsPage() {
                 </thead>
                 <tbody>
                   {filteredUsers.map((profile, index) => {
-                    const draft = drafts[profile.id] || DEFAULT_DRAFT
+                    const draft = drafts[profile.id] || buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)
                     const saving = savingUserId === profile.id
                     const currentAssignment = assignmentMap[profile.id]
-                    const dirty = !draftsEqual(draft, buildDraft(currentAssignment))
+                    const dirty = !draftsEqual(draft, buildDraft(currentAssignment, ALL_ASSIGNMENT_FIELDS), ALL_ASSIGNMENT_FIELDS)
                     const rowBackground = index % 2 === 0 ? "bg-white" : "bg-slate-50/70"
 
                     return (
@@ -1248,12 +1232,12 @@ export default function KpiTargetsPage() {
                         <td className={clsx("max-md:static sticky left-0 z-20 border-b border-r border-slate-200 px-4 py-4 align-top", rowBackground)}>
                           <div className="flex items-start gap-3">
                             <div className={clsx("mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl text-sm font-semibold text-white shadow-sm", dirty ? "bg-amber-500" : "bg-slate-900")}>
-                              {profile.full_name.charAt(0)}
+                              {profile.short_name ? profile.short_name.charAt(0) : profile.full_name.charAt(0)}
                             </div>
                             <div className="min-w-0 space-y-2">
                               <div>
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <p className="text-sm font-semibold text-slate-900">{profile.full_name}</p>
+                                  <p className="text-sm font-semibold text-slate-900">{profile.short_name || profile.full_name}</p>
                                   <span className={clsx("rounded-full px-2.5 py-1 text-[11px] font-semibold", dirty ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>
                                     {dirty ? "Chưa lưu" : "Đã đồng bộ"}
                                   </span>
@@ -1267,7 +1251,7 @@ export default function KpiTargetsPage() {
                                 </span>
                                 <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
                                   <Target className="h-3.5 w-3.5" />
-                                  {countConfiguredTargets(draft)} chỉ tiêu
+                                  {countConfiguredTargets(draft, ALL_ASSIGNMENT_FIELDS)} chỉ tiêu
                                 </span>
                               </div>
                             </div>
@@ -1286,7 +1270,7 @@ export default function KpiTargetsPage() {
 
                         {ALL_ASSIGNMENT_FIELDS.map((field) => (
                           <td key={field.key} className={clsx("border-b border-r border-slate-200 px-2 py-3 align-top", rowBackground)}>
-                            <div className={clsx("min-w-[145px] rounded-xl border px-3 py-2 shadow-sm transition", getFieldInputTone(field.key))}>
+                            <div className={clsx("min-w-[145px] rounded-xl border px-3 py-2 shadow-sm transition", getFieldInputTone(field))}>
                               <input
                                 type="number"
                                 min="0"
