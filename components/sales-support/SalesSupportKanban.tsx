@@ -133,6 +133,13 @@ export function SalesSupportKanban() {
   const [selectedAdminId, setSelectedAdminId] = useState("")
   const [supportDate, setSupportDate] = useState(new Date().toISOString().slice(0, 10))
   const [busyAdminsCache, setBusyAdminsCache] = useState<Set<string>>(new Set())
+  const [activeCardIndexes, setActiveCardIndexes] = useState<Record<KanbanStatus, number>>({
+    OVERDUE: 0,
+    PENDING: 0,
+    FOLLOW_UP: 0,
+    UNALLOCATED: 0,
+    DONE: 0,
+  })
 
   const loadData = useCallback(async () => {
     try {
@@ -507,6 +514,17 @@ export function SalesSupportKanban() {
     const Icon = column.icon
     const isDropTarget = draggingItemId !== null && activeColumn === column.key
 
+    const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+      const container = event.currentTarget
+      const scrollLeft = container.scrollLeft
+      const cardWidth = container.offsetWidth * 0.82 // w-[82vw]
+      const index = Math.round(scrollLeft / (cardWidth + 12)) // card width + gap-3
+      setActiveCardIndexes((prev) => ({
+        ...prev,
+        [column.key]: index,
+      }))
+    }
+
     return (
       <section
         onDragOver={(event) => {
@@ -519,6 +537,7 @@ export function SalesSupportKanban() {
         onDrop={() => handleDropToColumn(column.key)}
         className={clsx(
           "relative flex min-h-[460px] flex-col rounded-[26px] border bg-slate-50/80 p-4 transition duration-200",
+          "w-full min-w-0 overflow-hidden",
           isDropTarget ? "scale-[1.01] border-dashed border-[#006b68]/60 bg-teal-50/50 shadow-lg shadow-teal-900/5" : "border-slate-200"
         )}
       >
@@ -537,8 +556,9 @@ export function SalesSupportKanban() {
         </div>
         {/* Scroll container: snap x per card, hiện peek card kế để user biết có thể vuốt */}
         <div
+          onScroll={handleScroll}
           className="flex-1 flex flex-row gap-3 pb-2 -mx-4 px-4
-            overflow-x-scroll scroll-smooth
+            overflow-x-auto scroll-smooth
             snap-x snap-mandatory
             [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden
             md:flex-col md:overflow-visible md:snap-none md:px-0 md:mx-0 md:pb-0"
@@ -555,10 +575,19 @@ export function SalesSupportKanban() {
         </div>
         {/* Dots indicator: chỉ hiện trên mobile khi có nhiều hơn 1 card */}
         {items.length > 1 && (
-          <div className="flex justify-center gap-1.5 mt-3 md:hidden">
-            {items.map((_, idx) => (
-              <span key={idx} className="block w-1.5 h-1.5 rounded-full bg-slate-300 first:bg-slate-500" />
-            ))}
+          <div className="flex justify-center gap-1.5 mt-3 md:hidden shrink-0">
+            {items.map((_, idx) => {
+              const isActive = (activeCardIndexes[column.key] ?? 0) === idx
+              return (
+                <span
+                  key={idx}
+                  className={clsx(
+                    "block h-1.5 rounded-full transition-all duration-300",
+                    isActive ? "bg-[#006b68] w-3" : "bg-slate-300 w-1.5"
+                  )}
+                />
+              )
+            })}
           </div>
         )}
       </section>

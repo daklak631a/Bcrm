@@ -29,6 +29,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<any>({})
+  const [interactionModalOpen, setInteractionModalOpen] = useState(false)
   
   const [notesDraft, setNotesDraft] = useState("")
   const [savingNotes, setSavingNotes] = useState(false)
@@ -86,7 +87,8 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
         phone: editForm.phone,
         email: editForm.email,
         address: editForm.address,
-        note: editForm.note
+        note: editForm.note,
+        customer_segment: isEnt ? (editForm.customer_segment || 'SME') : '',
       })
       await loadData()
       setIsEditing(false)
@@ -231,13 +233,36 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                   <h2 className="text-xl font-bold text-slate-800">{getCustomerFullName(customer)}</h2>
                   <p className="text-sm text-slate-500 mt-1">Cán bộ QL: {customer.profiles?.full_name || 'Chưa phân bổ'}</p>
                   
+                  <div className="flex gap-1.5 mt-2 justify-center">
+                    {customer.customer_type === 'ENTERPRISE' ? (
+                      <>
+                        <span className="px-2 py-0.5 text-xs font-semibold bg-[#ccedea] text-[#003e3b] border border-teal-200/50 rounded-lg">B2B</span>
+                        {customer.customer_segment && (
+                          <span className="px-2 py-0.5 text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-100 rounded-lg">
+                            {customer.customer_segment}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg">B2C</span>
+                    )}
+                  </div>
+                  
                   {!isEditing && (
-                    <button 
-                      onClick={() => setIsEditing(true)}
-                      className="mt-4 flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors text-sm font-medium w-full justify-center"
-                    >
-                      <Edit className="w-4 h-4" /> Chỉnh sửa thông tin
-                    </button>
+                    <div className="mt-4 flex flex-col gap-2 w-full">
+                      <button 
+                        onClick={() => setIsEditing(true)}
+                        className="flex items-center gap-2 px-4 py-2 border border-slate-200 bg-white text-slate-700 rounded-xl hover:bg-slate-50 transition-colors text-sm font-medium w-full justify-center shadow-sm"
+                      >
+                        <Edit className="w-4 h-4 text-slate-500" /> Chỉnh sửa thông tin
+                      </button>
+                      <button 
+                        onClick={() => setInteractionModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-sky-600 text-white rounded-xl hover:bg-sky-700 transition-colors text-sm font-semibold w-full justify-center shadow-md active:scale-98"
+                      >
+                        <Phone className="w-4 h-4" /> Ghi nhận tương tác
+                      </button>
+                    </div>
                   )}
                 </div>
                 
@@ -254,6 +279,20 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                               onChange={e => setEditForm({...editForm, business_name: e.target.value})}
                               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" 
                             />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-500 mb-1">Phân khúc doanh nghiệp</label>
+                            <select
+                              value={editForm.customer_segment || 'SME'} 
+                              onChange={e => setEditForm({...editForm, customer_segment: e.target.value})}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium" 
+                            >
+                              <option value="SME">SME</option>
+                              <option value="Hành chính sự nghiệp">Hành chính sự nghiệp</option>
+                              <option value="Doanh nghiệp lớn">Doanh nghiệp lớn</option>
+                              <option value="FDI">FDI</option>
+                              <option value="Khác">Khác</option>
+                            </select>
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-slate-500 mb-1">Mã Số Thuế</label>
@@ -331,25 +370,36 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-start gap-3">
-                        <Phone className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-xs font-medium text-slate-500">Số điện thoại</p>
-                          <p className="text-sm font-medium text-slate-800">{customer.phone || 'Chưa cập nhật'}</p>
+                      <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100/75 transition-colors">
+                        <div className="flex items-start gap-3">
+                          <Phone className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-xs font-medium text-slate-500">Số điện thoại</p>
+                            <p className="text-sm font-semibold text-slate-800">{customer.phone || 'Chưa cập nhật'}</p>
+                          </div>
                         </div>
+                        {customer.phone && (
+                          <a
+                            href={`tel:${customer.phone}`}
+                            className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors active:scale-95 shrink-0"
+                            title="Gọi điện"
+                          >
+                            <Phone className="w-4 h-4" />
+                          </a>
+                        )}
                       </div>
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50">
                         <Mail className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
                         <div>
                           <p className="text-xs font-medium text-slate-500">Email</p>
-                          <p className="text-sm font-medium text-slate-800">{customer.email || 'Chưa cập nhật'}</p>
+                          <p className="text-sm font-semibold text-slate-800 break-all">{customer.email || 'Chưa cập nhật'}</p>
                         </div>
                       </div>
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50">
                         <MapPin className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
                         <div>
                           <p className="text-xs font-medium text-slate-500">Địa chỉ</p>
-                          <p className="text-sm font-medium text-slate-800">{customer.address || 'Chưa cập nhật'}</p>
+                          <p className="text-sm font-semibold text-slate-800">{customer.address || 'Chưa cập nhật'}</p>
                         </div>
                       </div>
                     </>
@@ -518,8 +568,14 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               </div>
 
 
-              {/* Quick Interaction Section */}
-              <QuickInteractionPanel customerId={customerId} managerId={user?.id || ''} onSaved={loadData} />
+              {/* Quick Interaction Modal */}
+              <QuickInteractionModal
+                isOpen={interactionModalOpen}
+                onClose={() => setInteractionModalOpen(false)}
+                customerId={customerId}
+                managerId={user?.id || ''}
+                onSaved={loadData}
+              />
 
               {/* Interactions Section - Now as a Timeline */}
               <CustomerTimeline customerId={customerId} />
@@ -532,17 +588,20 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   )
 }
 
-// ─── Quick Interaction Panel ────────────────────────────────────────────────
-function QuickInteractionPanel({
+// ─── Quick Interaction Modal ────────────────────────────────────────────────
+function QuickInteractionModal({
+  isOpen,
+  onClose,
   customerId,
   managerId,
   onSaved,
 }: {
+  isOpen: boolean
+  onClose: () => void
   customerId: string
   managerId: string
   onSaved: () => void
 }) {
-  const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
     type: 'CALL',
@@ -553,6 +612,18 @@ function QuickInteractionPanel({
     follow_up_date: '',
     next_action: '',
   })
+
+  // Prevent background scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [isOpen])
 
   const INTERACTION_TYPES = [
     { value: 'CALL', label: '📞 Gọi điện' },
@@ -591,7 +662,6 @@ function QuickInteractionPanel({
         next_action: form.next_action.trim() || undefined,
       })
       toast.success('Đã ghi nhận tương tác!')
-      setOpen(false)
       setForm({
         type: 'CALL',
         purpose: '',
@@ -602,6 +672,7 @@ function QuickInteractionPanel({
         next_action: '',
       })
       onSaved()
+      onClose()
     } catch (err: any) {
       toast.error('Lỗi: ' + err.message)
     } finally {
@@ -609,32 +680,25 @@ function QuickInteractionPanel({
     }
   }
 
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="p-5 flex items-center justify-between gap-4 bg-slate-50/50 border-b border-slate-100">
-        <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-          <Phone className="w-4 h-4 text-sky-500" />
-          Ghi nhận tương tác
-        </h3>
-        <button
-          onClick={() => setOpen(o => !o)}
-          className={clsx(
-            'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all shadow-sm',
-            open
-              ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              : 'bg-sky-600 text-white hover:bg-sky-700'
-          )}
-        >
-          {open ? (
-            <><X className="w-4 h-4" /> Đóng</>
-          ) : (
-            <><Plus className="w-4 h-4" /> Thêm tương tác</>
-          )}
-        </button>
-      </div>
+  if (!isOpen) return null
 
-      {open && (
-        <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-900/5 animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between gap-4 pb-4 border-b border-slate-100 shrink-0">
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            <Phone className="w-5 h-5 text-sky-500" />
+            Ghi nhận tương tác mới
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto pr-1 py-4 space-y-4 my-2 scrollbar-none">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1">Loại tương tác</label>
@@ -715,26 +779,27 @@ function QuickInteractionPanel({
               className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>
-
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 px-4 py-2.5 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-70"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Lưu tương tác
-            </button>
-          </div>
         </form>
-      )}
+
+        <div className="flex gap-2 pt-4 border-t border-slate-100 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={saving}
+            className="flex-1 px-4 py-2.5 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 shadow-md active:scale-98"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Lưu tương tác
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

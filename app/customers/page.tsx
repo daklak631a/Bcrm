@@ -184,6 +184,7 @@ export default function CustomersPage() {
         address: form.get('address') as string || undefined,
         note: form.get('note') as string || undefined,
         assigned_manager_id: (form.get('assigned_manager_id') as string) || user!.id,
+        customer_segment: isEnt ? (form.get('customer_segment') as string || 'SME') : '',
         cif_moi: form.get('cif_moi') === 'on',
         smart_banking: form.get('smart_banking') === 'on',
         bao_hiem_nhan_tho: form.get('bao_hiem_nhan_tho') === 'on',
@@ -541,7 +542,14 @@ export default function CustomersPage() {
                               </span>
                             )}
                             {customer.customer_type === 'ENTERPRISE' ? (
-                              <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-[#ccedea] text-[#003e3b] border border-teal-200/50 rounded">B2B</span>
+                              <>
+                                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-[#ccedea] text-[#003e3b] border border-teal-200/50 rounded">B2B</span>
+                                {customer.customer_segment && (
+                                  <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-100 rounded">
+                                    {customer.customer_segment}
+                                  </span>
+                                )}
+                              </>
                             ) : (
                               <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100 rounded">B2C</span>
                             )}
@@ -692,6 +700,15 @@ export default function CustomersPage() {
 
           {customerType === 'ENTERPRISE' ? (
             <>
+              <FormField label="Phân Khúc Doanh Nghiệp" required>
+                <FormSelect name="customer_segment" required>
+                  <option value="SME">SME</option>
+                  <option value="Hành chính sự nghiệp">Hành chính sự nghiệp</option>
+                  <option value="Doanh nghiệp lớn">Doanh nghiệp lớn</option>
+                  <option value="FDI">FDI</option>
+                  <option value="Khác">Khác</option>
+                </FormSelect>
+              </FormField>
               <FormField label="Tên Doanh Nghiệp" required>
                 <FormInput name="business_name" required placeholder="VD: Công ty TNHH ABC" />
               </FormField>

@@ -387,6 +387,7 @@ export async function createCustomer(customer: {
   note?: string
   assigned_manager_id: string
   cif_code?: string | null
+  customer_segment?: string | null
   
   // Financial indicators
   loan_short_term?: number
@@ -458,6 +459,7 @@ export async function updateCustomer(id: string, updates: Partial<{
   note: string
   assigned_manager_id: string
   cif_code: string | null
+  customer_segment: string | null
   
   // Financial indicators
   loan_short_term: number
