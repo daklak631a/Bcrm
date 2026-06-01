@@ -403,7 +403,9 @@ export function SalesSupportKanban() {
           setActiveColumn(null)
         }}
         className={clsx(
-          "group rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition-[transform,box-shadow,opacity] duration-200 hover:-translate-y-0.5 hover:shadow-lg shrink-0 w-[85vw] snap-center md:w-auto md:snap-align-none",
+          "group rounded-2xl border border-slate-100 bg-white p-4 shadow-sm transition-[transform,box-shadow,opacity] duration-200 hover:shadow-lg",
+          // Mobile: card chiếm ~82% width để peek card kế tiếp, snap từng cái
+          "shrink-0 w-[82vw] snap-center md:w-auto md:snap-align-none",
           canMoveItem(item) ? "cursor-grab active:cursor-grabbing" : "cursor-default",
           draggingItemId === item.id && "scale-[0.97] opacity-50",
           updatingItemId === item.id && "pointer-events-none opacity-60"
@@ -533,14 +535,32 @@ export function SalesSupportKanban() {
           </div>
           <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-700 ring-1 ring-slate-200">{items.length}</span>
         </div>
-        <div className="flex-1 flex flex-row gap-3 overflow-x-auto snap-x snap-mandatory pb-4 -mx-4 px-4 scrollbar-hide md:flex-col md:overflow-visible md:snap-none md:p-0 md:m-0 md:pb-0">
+        {/* Scroll container: snap x per card, hiện peek card kế để user biết có thể vuốt */}
+        <div
+          className="flex-1 flex flex-row gap-3 pb-2 -mx-4 px-4
+            overflow-x-scroll scroll-smooth
+            snap-x snap-mandatory
+            [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden
+            md:flex-col md:overflow-visible md:snap-none md:px-0 md:mx-0 md:pb-0"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           {items.map((item) => <WorkItemCard key={item.id} item={item} />)}
           {items.length === 0 && (
             <div className="w-full shrink-0 snap-center rounded-2xl border border-dashed border-slate-200 bg-white/70 p-5 text-center text-sm leading-6 text-slate-500">
               {column.key === "DONE" ? "Kéo thẻ vào đây để chốt hoàn thành." : "Không có thẻ ở trạng thái này."}
             </div>
           )}
+          {/* Spacer để card cuối không sát mép */}
+          {items.length > 0 && <div className="shrink-0 w-4 md:hidden" aria-hidden="true" />}
         </div>
+        {/* Dots indicator: chỉ hiện trên mobile khi có nhiều hơn 1 card */}
+        {items.length > 1 && (
+          <div className="flex justify-center gap-1.5 mt-3 md:hidden">
+            {items.map((_, idx) => (
+              <span key={idx} className="block w-1.5 h-1.5 rounded-full bg-slate-300 first:bg-slate-500" />
+            ))}
+          </div>
+        )}
       </section>
     )
   }
