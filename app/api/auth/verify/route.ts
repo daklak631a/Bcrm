@@ -12,22 +12,44 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
   try {
     const { userId, userEmail } = await request.json();
+    const authHeader = request.headers.get('Authorization');
 
-    if (!userId || !userEmail) {
+    if (!userId || !userEmail || !authHeader) {
       return NextResponse.json(
-        { error: 'Missing userId or userEmail' },
+        { error: 'Thiếu thông tin xác thực.' },
         { status: 400 }
       );
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    if (!supabaseUrl || !serviceRoleKey) {
+    if (!supabaseUrl || !anonKey || !serviceRoleKey) {
       console.error('[Auth Verify] Missing Supabase credentials or SERVICE_ROLE_KEY');
       return NextResponse.json(
         { error: 'Server configuration error: SERVICE_ROLE_KEY required' },
         { status: 500 }
+      );
+    }
+
+    const authSupabase = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const { data: { user }, error: authError } = await authSupabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Phiên đăng nhập không hợp lệ.' },
+        { status: 401 }
+      );
+    }
+
+    if (user.id !== userId || user.email !== userEmail) {
+      return NextResponse.json(
+        { error: 'Thông tin xác thực không khớp.' },
+        { status: 403 }
       );
     }
 

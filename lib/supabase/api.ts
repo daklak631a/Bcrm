@@ -1197,43 +1197,48 @@ export async function deleteAllowedEmail(id: string) {
 
 export async function fetchSupportRequests() {
   const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('support_requests')
-    .select(`
-      *,
-      requester:profiles!support_requests_requester_id_fkey(*),
-      support_admin:profiles!support_requests_support_admin_id_fkey(*)
-    `)
-  if (error) {
-    console.error('Error fetching support requests:', error)
+  const { data: { session } } = await supabase.auth.getSession()
+  const response = await fetch('/api/support/requests', {
+    headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+  })
+  const payload = await response.json()
+  if (!response.ok) {
+    console.error('Error fetching support requests:', payload.error)
     return []
   }
-  return data || []
+  return payload.data || []
 }
 
-export async function createSupportRequest(request: { item_id: string, item_type: string, support_admin_id: string, scheduled_date: string, requester_id: string }) {
+export async function createSupportRequest(request: { item_id: string, item_type: string, support_admin_id: string, scheduled_date: string, requester_id?: string }) {
   const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('support_requests')
-    .insert([{ ...request, status: 'PENDING' }])
-    .select()
-    .single()
-  
-  if (error) throw error
-  return data
+  const { data: { session } } = await supabase.auth.getSession()
+  const response = await fetch('/api/support/requests', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
+    body: JSON.stringify(request),
+  })
+  const payload = await response.json()
+  if (!response.ok) throw new Error(payload.error || 'Không thể tạo yêu cầu hỗ trợ.')
+  return payload.data
 }
 
 export async function updateSupportRequestStatus(id: string, status: string) {
   const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('support_requests')
-    .update({ status })
-    .eq('id', id)
-    .select()
-    .single()
-
-  if (error) throw error
-  return data
+  const { data: { session } } = await supabase.auth.getSession()
+  const response = await fetch('/api/support/requests', {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+    },
+    body: JSON.stringify({ id, status }),
+  })
+  const payload = await response.json()
+  if (!response.ok) throw new Error(payload.error || 'Không thể cập nhật yêu cầu hỗ trợ.')
+  return payload.data
 }
 
 // ==========================================
@@ -1334,6 +1339,7 @@ export async function updateTransferRequestStatus(
     .from('manager_transfer_requests')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', requestId)
+    .eq('status', 'PENDING')
     .select(`
       *,
       customer:customer_id(id, full_name),
@@ -1348,6 +1354,16 @@ export async function updateTransferRequestStatus(
 
   // Log interaction if approved
   if (status === 'APPROVED') {
+    const { error: customerUpdateError } = await supabase
+      .from('customers')
+      .update({
+        assigned_manager_id: data.target_manager_id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', data.customer_id)
+
+    if (customerUpdateError) throw customerUpdateError
+
     await supabase.from('interactions').insert({
       customer_id: data.customer_id,
       manager_id: data.target_manager_id,
@@ -1477,4 +1493,3 @@ export async function upsertDailyPlans(plans: any[]) {
   if (error) throw error
   return data
 }
-

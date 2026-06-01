@@ -43,7 +43,7 @@ export default function ProductAdminPage() {
       return;
     }
     loadProducts();
-  }, [isAdmin]);
+  }, [isAdmin, router]);
 
   async function loadProducts() {
     const supabase = getSupabase();

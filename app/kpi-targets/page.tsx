@@ -302,7 +302,7 @@ export default function KpiTargetsPage() {
     } finally {
       setPersonalLoading(false)
     }
-  }, [toDateStr])
+  }, [ALL_ASSIGNMENT_FIELDS, toDateStr])
 
   // Load monthly actuals for current user and selected plan period
   const loadMonthlyActuals = useCallback(async (plan: Plan) => {

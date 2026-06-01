@@ -54,7 +54,7 @@ export default function AuthCallbackPage() {
           window.history.replaceState(null, '', window.location.pathname);
 
           // Directly verify and redirect — don't wait for AuthProvider
-          await verifyAndRedirect(data.session.user.id, data.session.user.email || '');
+          await verifyAndRedirect(data.session.user.id, data.session.user.email || '', data.session.access_token);
           return;
         }
 
@@ -63,7 +63,7 @@ export default function AuthCallbackPage() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           console.log('[Callback] Existing session found, verifying...');
-          await verifyAndRedirect(session.user.id, session.user.email || '');
+          await verifyAndRedirect(session.user.id, session.user.email || '', session.access_token);
           return;
         }
 
@@ -79,12 +79,15 @@ export default function AuthCallbackPage() {
       }
     };
 
-    const verifyAndRedirect = async (userId: string, userEmail: string) => {
+    const verifyAndRedirect = async (userId: string, userEmail: string, accessToken?: string) => {
       try {
         console.log(`[Callback] Calling /api/auth/verify for ${userEmail}...`);
         const res = await fetch('/api/auth/verify', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
           body: JSON.stringify({ userId, userEmail }),
         });
 

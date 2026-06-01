@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { getSupabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { fetchTransferRequests, updateTransferRequestStatus } from '@/lib/supabase/api';
 
 interface TransferRequest {
   id: string;
@@ -18,8 +18,8 @@ interface TransferRequest {
   reason?: string | null;
   created_at: string;
   updated_at?: string | null;
-  from_manager?: { full_name: string };
-  to_manager?: { full_name: string };
+  requester?: { full_name: string };
+  target_manager?: { full_name: string };
   customer?: { full_name: string; business_name?: string };
 }
 
@@ -37,29 +37,16 @@ export default function ManagerTransfersPage() {
       return;
     }
     loadTransfers();
-  }, [isAdmin]);
+  }, [isAdmin, router]);
 
   async function loadTransfers() {
-    const supabase = getSupabase();
-    const { data } = await supabase
-      .from('manager_transfer_requests')
-      .select(`
-        *,
-        from_manager:profiles!requester_id(full_name),
-        to_manager:profiles!target_manager_id(full_name),
-        customer:customers(full_name, business_name)
-      `)
-      .order('created_at', { ascending: false });
+    const data = await fetchTransferRequests();
     setTransfers((data as any) || []);
     setLoading(false);
   }
 
   async function updateStatus(id: string, status: 'APPROVED' | 'REJECTED') {
-    const supabase = getSupabase();
-    await supabase
-      .from('manager_transfer_requests')
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq('id', id);
+    await updateTransferRequestStatus(id, status);
     loadTransfers();
   }
 
@@ -94,8 +81,8 @@ export default function ManagerTransfersPage() {
                 {transfers.map((t) => (
                   <tr key={t.id} className="border-b">
                     <td className="py-2">{t.customer?.full_name || t.customer?.business_name || '—'}</td>
-                    <td className="py-2 text-sm">{t.from_manager?.full_name || '—'}</td>
-                    <td className="py-2 text-sm">{t.to_manager?.full_name || '—'}</td>
+                    <td className="py-2 text-sm">{t.requester?.full_name || '—'}</td>
+                    <td className="py-2 text-sm">{t.target_manager?.full_name || '—'}</td>
                     <td className="py-2">
                       <span className={`px-2 py-0.5 text-xs rounded ${t.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' : t.status === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                         {t.status}
