@@ -179,21 +179,21 @@ function DepositsPageContent() {
     <DashboardLayout title="Theo Dõi Tiền Gửi">
       <div className="flex flex-col gap-6">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
-            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4"><PiggyBank className="w-5 h-5" /></div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Tổng Vốn Huy Động</p>
-            <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{formatCurrency(totalAmount)}</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+          <div className="bg-white p-4 md:p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3 md:mb-4 shrink-0"><PiggyBank className="w-4 h-4 md:w-5 md:h-5" /></div>
+            <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Tổng Vốn Huy Động</p>
+            <h3 className="text-xl md:text-3xl font-bold font-mono tracking-tight text-slate-800 truncate" title={formatCurrency(totalAmount)}>{formatCurrency(totalAmount)}</h3>
           </div>
-          <div className="bg-white p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
-            <div className="w-10 h-10 rounded-full bg-teal-50 text-[#006b68] border border-teal-100 flex items-center justify-center mb-4"><TrendingUp className="w-5 h-5" /></div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Số Lượng Giao Dịch</p>
-            <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{deposits.length} <span className="text-lg font-medium text-slate-500">GD</span></h3>
+          <div className="bg-white p-4 md:p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-teal-50 text-[#006b68] border border-teal-100 flex items-center justify-center mb-3 md:mb-4 shrink-0"><TrendingUp className="w-4 h-4 md:w-5 md:h-5" /></div>
+            <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Số Lượng Giao Dịch</p>
+            <h3 className="text-xl md:text-3xl font-bold font-mono tracking-tight text-slate-800">{deposits.length} <span className="text-xs md:text-lg font-medium text-slate-500">GD</span></h3>
           </div>
-          <div className="bg-white p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
-            <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-4"><CalendarClock className="w-5 h-5" /></div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Chờ Phát Hành Sổ</p>
-            <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{pendingDeposits.length} <span className="text-lg font-medium text-slate-500">Khách</span></h3>
+          <div className="col-span-2 md:col-span-1 bg-white p-4 md:p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mb-3 md:mb-4 shrink-0"><CalendarClock className="w-4 h-4 md:w-5 md:h-5" /></div>
+            <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Chờ Phát Hành Sổ</p>
+            <h3 className="text-xl md:text-3xl font-bold font-mono tracking-tight text-slate-800">{pendingDeposits.length} <span className="text-xs md:text-lg font-medium text-slate-500">Khách</span></h3>
           </div>
         </div>
 

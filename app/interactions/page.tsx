@@ -194,22 +194,22 @@ function InteractionsPageContent() {
     <DashboardLayout title="Quản Lý Tương Tác">
       <div className="flex flex-col gap-6">
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white p-6 rounded-xl border shadow-sm flex items-center justify-between">
-            <div><p className="text-sm font-medium text-slate-500 mb-1">Tổng Tương Tác</p><h3 className="text-2xl font-bold text-slate-800">{interactions.length}</h3></div>
-            <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center"><MessageSquare className="w-6 h-6" /></div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+          <div className="bg-white p-4 md:p-6 rounded-xl border shadow-sm flex items-center justify-between">
+            <div><p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Tổng Tương Tác</p><h3 className="text-xl md:text-2xl font-bold text-slate-800">{interactions.length}</h3></div>
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center shrink-0"><MessageSquare className="w-5 h-5 md:w-6 md:h-6" /></div>
           </div>
-          <div className="bg-white p-6 rounded-xl border shadow-sm flex items-center justify-between">
-            <div><p className="text-sm font-medium text-slate-500 mb-1">Cuộc Gọi</p><h3 className="text-2xl font-bold text-slate-800">{callCount}</h3></div>
-            <div className="w-12 h-12 rounded-full bg-teal-50 text-[#006b68] border border-teal-100 flex items-center justify-center"><PhoneCall className="w-6 h-6" /></div>
+          <div className="bg-white p-4 md:p-6 rounded-xl border shadow-sm flex items-center justify-between">
+            <div><p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Cuộc Gọi</p><h3 className="text-xl md:text-2xl font-bold text-slate-800">{callCount}</h3></div>
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-teal-50 text-[#006b68] border border-teal-100 flex items-center justify-center shrink-0"><PhoneCall className="w-5 h-5 md:w-6 md:h-6" /></div>
           </div>
-          <div className="bg-white p-6 rounded-xl border shadow-sm flex items-center justify-between">
-            <div><p className="text-sm font-medium text-slate-500 mb-1">Gặp Mặt</p><h3 className="text-2xl font-bold text-slate-800">{meetingCount}</h3></div>
-            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center"><CalendarDays className="w-6 h-6" /></div>
+          <div className="bg-white p-4 md:p-6 rounded-xl border shadow-sm flex items-center justify-between">
+            <div><p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Gặp Mặt</p><h3 className="text-xl md:text-2xl font-bold text-slate-800">{meetingCount}</h3></div>
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><CalendarDays className="w-5 h-5 md:w-6 md:h-6" /></div>
           </div>
-          <div className="bg-white p-6 rounded-xl border shadow-sm flex items-center justify-between">
-            <div><p className="text-sm font-medium text-slate-500 mb-1">Đang Chờ</p><h3 className="text-2xl font-bold text-slate-800">{pendingCount}</h3></div>
-            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center"><CalendarDays className="w-6 h-6" /></div>
+          <div className="bg-white p-4 md:p-6 rounded-xl border shadow-sm flex items-center justify-between">
+            <div><p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Đang Chờ</p><h3 className="text-xl md:text-2xl font-bold text-slate-800">{pendingCount}</h3></div>
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0"><CalendarDays className="w-5 h-5 md:w-6 md:h-6" /></div>
           </div>
         </div>
 

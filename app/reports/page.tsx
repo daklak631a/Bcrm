@@ -526,22 +526,22 @@ export default function ReportsPage() {
             </div>
 
             {/* Range Info Cards */}
-            <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Kỳ Tháng</p>
-                <p className="text-xs font-bold text-slate-700 mt-1">
+            <div className="lg:col-span-8 grid grid-cols-3 gap-1.5 md:gap-3">
+              <div className="p-1.5 md:p-3 bg-slate-50 rounded-lg md:rounded-xl border border-slate-100 text-center flex flex-col justify-center min-w-0">
+                <p className="text-[8px] md:text-[10px] font-semibold text-slate-400 uppercase tracking-wider leading-none truncate">Kỳ Tháng</p>
+                <p className="text-[9px] md:text-xs font-bold text-slate-700 mt-0.5 md:mt-1 whitespace-nowrap overflow-hidden text-ellipsis">
                   {new Date(selectedMonthStart).toLocaleDateString('vi-VN')} - {new Date(selectedMonthEnd).toLocaleDateString('vi-VN')}
                 </p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Kỳ Tuần (T2-T6)</p>
-                <p className="text-xs font-bold text-slate-700 mt-1">
+              <div className="p-1.5 md:p-3 bg-slate-50 rounded-lg md:rounded-xl border border-slate-100 text-center flex flex-col justify-center min-w-0">
+                <p className="text-[8px] md:text-[10px] font-semibold text-slate-400 uppercase tracking-wider leading-none truncate">Kỳ Tuần</p>
+                <p className="text-[9px] md:text-xs font-bold text-slate-700 mt-0.5 md:mt-1 whitespace-nowrap overflow-hidden text-ellipsis">
                   {new Date(selectedMonday).toLocaleDateString('vi-VN')} - {new Date(selectedFriday).toLocaleDateString('vi-VN')}
                 </p>
               </div>
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Kỳ Ngày</p>
-                <p className="text-xs font-bold text-slate-700 mt-1">
+              <div className="p-1.5 md:p-3 bg-slate-50 rounded-lg md:rounded-xl border border-slate-100 text-center flex flex-col justify-center min-w-0">
+                <p className="text-[8px] md:text-[10px] font-semibold text-slate-400 uppercase tracking-wider leading-none truncate">Kỳ Ngày</p>
+                <p className="text-[9px] md:text-xs font-bold text-slate-700 mt-0.5 md:mt-1 whitespace-nowrap overflow-hidden text-ellipsis">
                   {new Date(reportDate).toLocaleDateString('vi-VN')}
                 </p>
               </div>

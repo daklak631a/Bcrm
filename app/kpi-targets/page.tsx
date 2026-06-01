@@ -1013,34 +1013,34 @@ export default function KpiTargetsPage() {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-3 inline-flex rounded-2xl bg-emerald-50 p-2 text-emerald-600">
+        <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="rounded-3xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
+            <div className="mb-2 md:mb-3 inline-flex rounded-2xl bg-emerald-50 p-2 text-emerald-600">
               <Layers3 className="h-5 w-5" />
             </div>
-            <p className="text-sm text-slate-500">Kỳ KPI</p>
-            <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">{plans.length}</p>
+            <p className="text-xs md:text-sm text-slate-500">Kỳ KPI</p>
+            <p className="mt-1 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">{plans.length}</p>
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-3 inline-flex rounded-2xl bg-cyan-50 p-2 text-cyan-600">
+          <div className="rounded-3xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
+            <div className="mb-2 md:mb-3 inline-flex rounded-2xl bg-cyan-50 p-2 text-cyan-600">
               <Users2 className="h-5 w-5" />
             </div>
-            <p className="text-sm text-slate-500">Chuyên viên áp dụng</p>
-            <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">{visibleUsers.length}</p>
+            <p className="text-xs md:text-sm text-slate-500">Chuyên viên áp dụng</p>
+            <p className="mt-1 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">{visibleUsers.length}</p>
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-3 inline-flex rounded-2xl bg-blue-50 p-2 text-blue-600">
+          <div className="rounded-3xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
+            <div className="mb-2 md:mb-3 inline-flex rounded-2xl bg-blue-50 p-2 text-blue-600">
               <CheckCircle2 className="h-5 w-5" />
             </div>
-            <p className="text-sm text-slate-500">Đã giao trong kỳ</p>
-            <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">{assignments.length}</p>
+            <p className="text-xs md:text-sm text-slate-500">Đã giao trong kỳ</p>
+            <p className="mt-1 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">{assignments.length}</p>
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-3 inline-flex rounded-2xl bg-amber-50 p-2 text-amber-600">
+          <div className="rounded-3xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm">
+            <div className="mb-2 md:mb-3 inline-flex rounded-2xl bg-amber-50 p-2 text-amber-600">
               <Target className="h-5 w-5" />
             </div>
-            <p className="text-sm text-slate-500">Cần cập nhật</p>
-            <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-900">{dirtyUserIds.length}</p>
+            <p className="text-xs md:text-sm text-slate-500">Cần cập nhật</p>
+            <p className="mt-1 text-2xl md:text-3xl font-semibold tracking-tight text-slate-900">{dirtyUserIds.length}</p>
           </div>
         </section>
 

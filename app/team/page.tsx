@@ -297,22 +297,22 @@ export default function TeamPage() {
     <DashboardLayout title="Quản Lý Nhân Sự">
       <div className="flex flex-col gap-6">
         {/* KPI */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-2xl ring-1 ring-slate-900/5">
-            <p className="text-sm font-medium text-slate-500 mb-1">Đã Đăng Nhập</p>
-            <h3 className="text-2xl font-bold text-slate-800">{profiles.length}</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white p-4 md:p-5 rounded-2xl ring-1 ring-slate-900/5">
+            <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Đã Đăng Nhập</p>
+            <h3 className="text-xl md:text-2xl font-bold text-slate-800">{profiles.length}</h3>
           </div>
-          <div className="bg-white p-5 rounded-2xl ring-1 ring-slate-900/5">
-            <p className="text-sm font-medium text-slate-500 mb-1">Chờ Đăng Nhập</p>
-            <h3 className="text-2xl font-bold text-amber-600">{pendingEmails.length}</h3>
+          <div className="bg-white p-4 md:p-5 rounded-2xl ring-1 ring-slate-900/5">
+            <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Chờ Đăng Nhập</p>
+            <h3 className="text-xl md:text-2xl font-bold text-amber-600">{pendingEmails.length}</h3>
           </div>
-          <div className="bg-white p-5 rounded-2xl ring-1 ring-slate-900/5">
-            <p className="text-sm font-medium text-slate-500 mb-1">Admin Cấp 2</p>
-            <h3 className="text-2xl font-bold text-slate-800">{allowedEmails.filter(ae => ae.role === 'ADMIN_LEVEL_2').length}</h3>
+          <div className="bg-white p-4 md:p-5 rounded-2xl ring-1 ring-slate-900/5">
+            <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Admin Cấp 2</p>
+            <h3 className="text-xl md:text-2xl font-bold text-slate-800">{allowedEmails.filter(ae => ae.role === 'ADMIN_LEVEL_2').length}</h3>
           </div>
-          <div className="bg-white p-5 rounded-2xl ring-1 ring-slate-900/5">
-            <p className="text-sm font-medium text-slate-500 mb-1">Chuyên Viên</p>
-            <h3 className="text-2xl font-bold text-slate-800">{allowedEmails.filter(ae => ae.role === 'USER').length}</h3>
+          <div className="bg-white p-4 md:p-5 rounded-2xl ring-1 ring-slate-900/5">
+            <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Chuyên Viên</p>
+            <h3 className="text-xl md:text-2xl font-bold text-slate-800">{allowedEmails.filter(ae => ae.role === 'USER').length}</h3>
           </div>
         </div>
 

@@ -397,22 +397,22 @@ function SalesPageContent() {
   return (
     <DashboardLayout title="Bảng Bán Hàng">
       <div className="flex flex-col gap-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500 mb-1">Tổng giao dịch bán</p>
-            <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{stats.totalCount}</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+          <div className="bg-white p-4 md:p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
+            <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Tổng giao dịch bán</p>
+            <h3 className="text-2xl md:text-3xl font-bold font-mono tracking-tight text-slate-800">{stats.totalCount}</h3>
           </div>
-          <div className="bg-white p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500 mb-1">Doanh số khoản vay</p>
-            <h3 className="text-2xl font-bold font-mono tracking-tight text-slate-800 truncate" title={formatCurrency(stats.loanAmount)}>{formatCurrency(stats.loanAmount)}</h3>
+          <div className="bg-white p-4 md:p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
+            <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Doanh số khoản vay</p>
+            <h3 className="text-xl md:text-2xl font-bold font-mono tracking-tight text-slate-800 truncate" title={formatCurrency(stats.loanAmount)}>{formatCurrency(stats.loanAmount)}</h3>
           </div>
-          <div className="bg-white p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500 mb-1">Doanh số huy động</p>
-            <h3 className="text-2xl font-bold font-mono tracking-tight text-slate-800 truncate" title={formatCurrency(stats.depositAmount)}>{formatCurrency(stats.depositAmount)}</h3>
+          <div className="bg-white p-4 md:p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
+            <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Doanh số huy động</p>
+            <h3 className="text-xl md:text-2xl font-bold font-mono tracking-tight text-slate-800 truncate" title={formatCurrency(stats.depositAmount)}>{formatCurrency(stats.depositAmount)}</h3>
           </div>
-          <div className="bg-white p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500 mb-1">Giao dịch sản phẩm</p>
-            <h3 className="text-3xl font-bold font-mono tracking-tight text-slate-800">{stats.productTransactions}</h3>
+          <div className="bg-white p-4 md:p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
+            <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Giao dịch sản phẩm</p>
+            <h3 className="text-2xl md:text-3xl font-bold font-mono tracking-tight text-slate-800">{stats.productTransactions}</h3>
           </div>
         </div>
 
