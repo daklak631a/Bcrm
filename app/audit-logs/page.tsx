@@ -17,7 +17,7 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     // Only allow Admin
-    if (user && user.role !== 'ADMIN_LEVEL_1') {
+    if (user && user.role !== 'ADMIN_LEVEL_0' && user.role !== 'ADMIN_LEVEL_1') {
       router.push('/dashboard')
       return
     }

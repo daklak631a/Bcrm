@@ -2,7 +2,7 @@
 
 import clsx from "clsx"
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Briefcase, Filter, Loader2, Package, PiggyBank, Plus, Search, TrendingUp, ArrowRight, AlertCircle, Upload } from "lucide-react"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -12,31 +12,28 @@ import { formatMetricValue, getProductMetricDefinition, getRecordMetricValue, ge
 import { createSalesRecord, createBatchSale, fetchCustomers, fetchProducts, fetchProfiles, fetchSalesRecords, fetchSalesRecordsByCustomer, formatCurrency, getCustomerFullName, updateProductSale } from "@/lib/supabase/api"
 import { useAuthStore } from "@/store/useAuthStore"
 import { SalesRecord } from "@/types/models"
+import { getActiveOptions } from "@/lib/workflow-config"
 
 const ITEMS_PER_PAGE = 12
 
-const LOAN_OPTIONS = [
-  "Vay bổ sung vốn lưu động",
-  "Vay đầu tư dự án",
-  "Cấp mới hạn mức tín dụng",
-  "Thấu chi tài khoản Doanh nghiệp",
-  "Cho vay tài trợ thương mại",
-  "Vay tiêu dùng",
-  "Vay mua nhà",
-  "Vay sản xuất kinh doanh",
-  "Vay tín chấp",
-  "Vay mua ô tô",
+type SalesFormType = SalesRecord["source_type"] | "PROJECT"
+type ProjectDirectionValue = "hybrid" | "top_down" | "bottom_up"
+
+const PROJECT_DIRECTION_OPTIONS: Array<{ value: ProjectDirectionValue; label: string }> = [
+  { value: "hybrid", label: "Đi lên duyệt, sau đó triển khai xuống" },
+  { value: "top_down", label: "Cấp trên triển khai xuống" },
+  { value: "bottom_up", label: "Cấp dưới đề xuất lên" },
 ]
 
-const DEPOSIT_OPTIONS = [
-  "Tiết kiệm thường",
-  "Tiết kiệm có kỳ hạn",
-  "Tiết kiệm không kỳ hạn",
-  "Tiền gửi thanh toán",
+const PROJECT_TEMPLATE_OPTIONS: Array<{ value: string; label: string; direction: ProjectDirectionValue; description: string }> = [
+  { value: "blank", label: "Không dùng template", direction: "bottom_up", description: "Tạo workspace trống để tự cấu hình." },
+  { value: "tpl-crm-implementation", label: "Triển khai CRM B2B", direction: "hybrid", description: "Khảo sát, dữ liệu, cấu hình, UAT và nghiệm thu." },
+  { value: "tpl-credit-limit", label: "Đề xuất hạn mức nhiều cấp", direction: "bottom_up", description: "Bổ sung hồ sơ, kiểm tra chi nhánh và phê duyệt hội sở." },
 ]
 
 function SalesPageContent() {
   const { user } = useAuthStore()
+  const router = useRouter()
   const canEdit = user?.role !== 'ADVISOR'
   const searchParams = useSearchParams()
   const customerIdParam = searchParams.get("customerId")
@@ -54,7 +51,7 @@ function SalesPageContent() {
   const [typeFilter, setTypeFilter] = useState<"ALL" | SalesRecord["source_type"]>("ALL")
   const [currentPage, setCurrentPage] = useState(1)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [saleType, setSaleType] = useState<SalesRecord["source_type"]>("LOAN")
+  const [saleType, setSaleType] = useState<SalesFormType>("LOAN")
   const [selectedCustomerId, setSelectedCustomerId] = useState("")
   const [selectedProductId, setSelectedProductId] = useState("")
   const [customerSearch, setCustomerSearch] = useState("")
@@ -71,6 +68,19 @@ function SalesPageContent() {
   const [isBatchMode, setIsBatchMode] = useState(false) // true = không cần KH
   const [batchEntryNote, setBatchEntryNote] = useState("")
   const [isSingleBatchMode, setIsSingleBatchMode] = useState(false)
+  const [projectName, setProjectName] = useState("")
+  const [projectDirections, setProjectDirections] = useState<ProjectDirectionValue[]>(["bottom_up"])
+  const [projectStartLevel, setProjectStartLevel] = useState("Cán bộ")
+  const [projectTargetLevel, setProjectTargetLevel] = useState("Lãnh đạo hội sở")
+  const [projectTemplateId, setProjectTemplateId] = useState("blank")
+  const [projectFirstMembers, setProjectFirstMembers] = useState<string[]>([])
+  const [projectMemberSearch, setProjectMemberSearch] = useState("")
+  const [otherOrderType, setOtherOrderType] = useState("")
+  const [otherStatus, setOtherStatus] = useState("")
+  const salesGroupOptions = useMemo(() => getActiveOptions("salesGroups").filter((option) => ["LOAN", "DEPOSIT", "PRODUCT", "PROJECT"].includes(option.value)), [])
+  const loanTypeOptions = useMemo(() => [...getActiveOptions("loanTypes"), { id: "loan-other", label: "Khác", value: "OTHER", active: true }], [])
+  const depositTypeOptions = useMemo(() => [...getActiveOptions("depositTypes"), { id: "dep-other", label: "Khác", value: "OTHER", active: true }], [])
+  const orderStatusOptions = useMemo(() => [...getActiveOptions("orderStatuses"), { id: "status-other", label: "Khác", value: "OTHER", active: true }], [])
 
   const handleOpenBatchModal = () => {
     setBatchCustomerId("")
@@ -152,6 +162,9 @@ function SalesPageContent() {
     if (normalized === "LOAN" || normalized === "DEPOSIT" || normalized === "PRODUCT") {
       return normalized as SalesRecord["source_type"]
     }
+    if (normalized === "PROJECT") {
+      return "PROJECT" as SalesFormType
+    }
     return null
   }, [typeParam])
 
@@ -181,7 +194,7 @@ function SalesPageContent() {
   }, [loadData])
 
   const visibleProfiles = useMemo(() => {
-    if (user?.role === "ADMIN_LEVEL_1") return profiles
+    if (user?.role === "ADMIN_LEVEL_0" || user?.role === "ADMIN_LEVEL_1") return profiles
     if (user?.role === "ADMIN_LEVEL_2" || user?.role === "ADMIN_LEVEL_3") return profiles.filter((profile: any) => profile.department_id === user.department_id)
     return profiles.filter((profile: any) => profile.id === user?.id)
   }, [profiles, user?.department_id, user?.id, user?.role])
@@ -208,6 +221,31 @@ function SalesPageContent() {
     })
   }, [visibleCustomers, batchCustomerSearch])
 
+  const projectMemberOptions = useMemo(() => {
+    return visibleProfiles
+      .map((profile: any) => profile.full_name || profile.email || profile.id)
+      .filter(Boolean)
+  }, [visibleProfiles])
+
+  const filteredProjectMembers = useMemo(() => {
+    const q = projectMemberSearch.trim().toLowerCase()
+    return projectMemberOptions.filter((name) =>
+      !projectFirstMembers.includes(name)
+      && (!q || name.toLowerCase().includes(q))
+    )
+  }, [projectFirstMembers, projectMemberOptions, projectMemberSearch])
+
+  const addProjectMember = (name: string) => {
+    const normalized = name.trim()
+    if (!normalized) return
+    setProjectFirstMembers((current) => current.includes(normalized) ? current : [...current, normalized])
+    setProjectMemberSearch("")
+  }
+
+  const removeProjectMember = (name: string) => {
+    setProjectFirstMembers((current) => current.filter((item) => item !== name))
+  }
+
   useEffect(() => {
     if (!customerIdParam || visibleCustomers.length === 0) return
     const customer = visibleCustomers.find((c) => c.id === customerIdParam)
@@ -222,7 +260,9 @@ function SalesPageContent() {
 
     if (presetSaleType) {
       setSaleType(presetSaleType)
-      setTypeFilter(presetSaleType)
+      if (presetSaleType !== "PROJECT") {
+        setTypeFilter(presetSaleType)
+      }
     }
 
     if (productIdParam) {
@@ -332,6 +372,15 @@ function SalesPageContent() {
   const resetModalState = () => {
     setSaleType(presetSaleType || "LOAN")
     setSelectedProductId(productIdParam || "")
+    setProjectName("")
+    setProjectDirections(["bottom_up"])
+    setProjectStartLevel("Cán bộ")
+    setProjectTargetLevel("Lãnh đạo hội sở")
+    setProjectTemplateId("blank")
+    setProjectFirstMembers([])
+    setProjectMemberSearch("")
+    setOtherOrderType("")
+    setOtherStatus("")
     if (!customerIdParam) {
       setSelectedCustomerId("")
       setCustomerSearch("")
@@ -349,6 +398,49 @@ function SalesPageContent() {
 
     const form = new FormData(e.currentTarget)
     const resultValue = Number(form.get("result_value") || 0)
+    const rawTitle = form.get("title") as string
+    const rawStatus = form.get("status") as string
+    const finalTitle = rawTitle === "OTHER" ? otherOrderType.trim() : rawTitle
+    const finalStatus = rawStatus === "OTHER" ? otherStatus.trim() : rawStatus
+    if (saleType !== "PROJECT" && saleType !== "PRODUCT" && !finalTitle) {
+      toast.error("Vui lòng chọn hoặc nhập loại giao dịch")
+      return
+    }
+    if (saleType !== "PROJECT" && !finalStatus) {
+      toast.error("Vui lòng chọn hoặc nhập trạng thái")
+      return
+    }
+
+    if (saleType === "PROJECT") {
+      const title = projectName.trim()
+      if (!title) {
+        toast.error("Vui lòng nhập tên dự án")
+        return
+      }
+      const selectedCustomer = visibleCustomers.find((customer) => customer.id === selectedCustomerId)
+      const selectedTemplate = PROJECT_TEMPLATE_OPTIONS.find((template) => template.value === projectTemplateId) || PROJECT_TEMPLATE_OPTIONS[0]
+      const direction = selectedTemplate.value === "blank" ? (projectDirections[0] || "bottom_up") : selectedTemplate.direction
+      const params = new URLSearchParams({
+        source: "sales-record",
+        created: "1",
+        customerId: selectedCustomerId,
+        customerName: selectedCustomer ? getCustomerFullName(selectedCustomer) : customerSearch,
+        projectName: title,
+        direction,
+        directionFlow: selectedTemplate.value === "blank" ? projectDirections.map((value) => PROJECT_DIRECTION_OPTIONS.find((option) => option.value === value)?.label || value).join(" > ") : selectedTemplate.label,
+        templateId: selectedTemplate.value,
+        templateName: selectedTemplate.label,
+        startLevel: projectStartLevel,
+        targetLevel: projectTargetLevel,
+        firstMembers: projectFirstMembers.join(", "),
+        note: (form.get("note") as string) || "",
+      })
+      toast.success("Đã tạo hồ sơ dự án thử nghiệm")
+      setShowAddModal(false)
+      resetModalState()
+      router.push(`/advanced-workflow-pilot?${params.toString()}`)
+      return
+    }
 
     if (saleType === "PRODUCT" && resultValue <= 0) {
       toast.error(`Vui lòng nhập kết quả (${selectedProductMetric.unitLabel})`)
@@ -361,7 +453,7 @@ function SalesPageContent() {
         await createBatchSale({
           product_id: selectedProductId || (form.get("product_id") as string),
           agent_id: user?.id || "",
-          status: form.get("status") as string,
+          status: finalStatus,
           sale_date: form.get("sale_date") as string,
           result_value: resultValue,
           batch_note: (form.get("note") as string) || undefined,
@@ -371,14 +463,14 @@ function SalesPageContent() {
           source_type: saleType,
           customer_id: selectedCustomerId,
           agent_id: user?.id || "",
-          title: saleType === "PRODUCT" ? undefined : (form.get("title") as string),
+          title: saleType === "PRODUCT" ? undefined : finalTitle,
           amount: saleType === "PRODUCT" ? 0 : Number(form.get("amount") || 0),
           result_value: saleType === "PRODUCT" ? resultValue : undefined,
           account_number: (form.get("account_number") as string) || undefined,
           sale_date: form.get("sale_date") as string,
           due_date: saleType === "LOAN" ? (form.get("due_date") as string) : undefined,
           maturity_date: saleType === "DEPOSIT" ? (form.get("maturity_date") as string) : undefined,
-          status: form.get("status") as string,
+          status: finalStatus,
           note: (form.get("note") as string) || undefined,
           product_id: saleType === "PRODUCT" ? (selectedProductId || (form.get("product_id") as string)) : undefined,
         })
@@ -397,7 +489,7 @@ function SalesPageContent() {
   return (
     <DashboardLayout title="Bảng Bán Hàng">
       <div className="flex flex-col gap-6">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+        <div className="hidden">
           <div className="bg-white p-4 md:p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
             <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Tổng giao dịch bán</p>
             <h3 className="text-2xl md:text-3xl font-bold font-mono tracking-tight text-slate-800">{stats.totalCount}</h3>
@@ -551,10 +643,23 @@ function SalesPageContent() {
       >
         <form onSubmit={handleCreateRecord} className="space-y-4">
           <FormField label="Nhóm bán hàng" required>
-            <FormSelect value={saleType} onChange={(e) => setSaleType(e.target.value as SalesRecord["source_type"])}>
-              <option value="LOAN">Khoản vay</option>
-              <option value="DEPOSIT">Tiền gửi</option>
-              <option value="PRODUCT">Sản phẩm khác</option>
+            <FormSelect
+              value={saleType}
+              onChange={(e) => {
+                const nextType = e.target.value as SalesFormType
+                setSaleType(nextType)
+                if (nextType !== "PRODUCT") {
+                  setIsSingleBatchMode(false)
+                  if (selectedCustomerId === "BATCH") {
+                    setSelectedCustomerId("")
+                    setCustomerSearch("")
+                  }
+                }
+              }}
+            >
+              {salesGroupOptions.map((option) => (
+                <option key={option.id} value={option.value}>{option.label}</option>
+              ))}
             </FormSelect>
           </FormField>
 
@@ -582,7 +687,7 @@ function SalesPageContent() {
             </div>
           )}
 
-          {!isSingleBatchMode && (
+          {(saleType === "PROJECT" || !isSingleBatchMode) && (
             <div className="space-y-1 relative">
               <label className="text-sm font-medium text-slate-700">Khách hàng <span className="text-rose-500">*</span></label>
               <div className="relative">
@@ -625,7 +730,66 @@ function SalesPageContent() {
             </div>
           )}
 
-          {saleType === "PRODUCT" ? (
+          {saleType === "PROJECT" ? (
+            <>
+              <div className="rounded-xl border border-teal-200 bg-teal-50/60 p-3">
+                <p className="text-sm font-semibold text-teal-900">Ghi nhận dự án từ bán hàng</p>
+                <p className="mt-1 text-xs leading-5 text-teal-700">
+                  Dự án sẽ gắn với khách hàng đã chọn, sau đó sinh workspace gồm tuyến bàn giao, Gantt, Kanban, thành viên và nhật ký thử nghiệm.
+                </p>
+              </div>
+              <FormField label="Tên dự án" required>
+                <FormInput
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="VD: Triển khai CRM doanh nghiệp"
+                />
+              </FormField>
+              <FormField label="Template dự án">
+                <FormSelect value={projectTemplateId} onChange={(e) => setProjectTemplateId(e.target.value)}>
+                  {PROJECT_TEMPLATE_OPTIONS.map((template) => (
+                    <option key={template.value} value={template.value}>
+                      {template.label}
+                    </option>
+                  ))}
+                </FormSelect>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {PROJECT_TEMPLATE_OPTIONS.find((template) => template.value === projectTemplateId)?.description}
+                </p>
+              </FormField>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="Cấp bắt đầu" required>
+                  <FormSelect value={projectStartLevel} onChange={(e) => setProjectStartLevel(e.target.value)}>
+                    <option value="Cán bộ">Cán bộ</option>
+                    <option value="Trưởng phòng">Trưởng phòng</option>
+                    <option value="Giám đốc CN">Giám đốc CN</option>
+                    <option value="Hội sở">Hội sở</option>
+                  </FormSelect>
+                </FormField>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField label="Cấp phê duyệt cao nhất" required>
+                  <FormSelect value={projectTargetLevel} onChange={(e) => setProjectTargetLevel(e.target.value)}>
+                    <option value="Trưởng phòng">Trưởng phòng</option>
+                    <option value="Giám đốc CN">Giám đốc CN</option>
+                    <option value="Cán bộ hội sở">Cán bộ hội sở</option>
+                    <option value="Lãnh đạo hội sở">Lãnh đạo hội sở</option>
+                  </FormSelect>
+                </FormField>
+              </div>
+              <ProjectMultiPicker
+                label="Thành viên giai đoạn đầu"
+                placeholder="Tìm người tham gia..."
+                selected={projectFirstMembers.map((name) => ({ id: name, label: name }))}
+                searchValue={projectMemberSearch}
+                onSearchChange={setProjectMemberSearch}
+                options={filteredProjectMembers.slice(0, 8).map((name) => ({ id: name, label: name }))}
+                onAdd={(id) => addProjectMember(id)}
+                onAddTyped={() => addProjectMember(projectMemberSearch)}
+                onRemove={(id) => removeProjectMember(id)}
+              />
+            </>
+          ) : saleType === "PRODUCT" ? (
             <>
               <FormField label="Sản phẩm" required>
                 <FormSelect name="product_id" required value={selectedProductId} onChange={(e) => setSelectedProductId(e.target.value)}>
@@ -650,11 +814,16 @@ function SalesPageContent() {
             <>
               <FormField label={saleType === "LOAN" ? "Loại khoản vay" : "Loại tiền gửi"} required>
                 <FormSelect name="title" required>
-                  {(saleType === "LOAN" ? LOAN_OPTIONS : DEPOSIT_OPTIONS).map((option) => (
-                    <option key={option} value={option}>{option}</option>
+                  {(saleType === "LOAN" ? loanTypeOptions : depositTypeOptions).map((option) => (
+                    <option key={option.id} value={option.value}>{option.label}</option>
                   ))}
                 </FormSelect>
               </FormField>
+              {(saleType === "LOAN" || saleType === "DEPOSIT") && (
+                <FormField label="Loại khác">
+                  <FormInput value={otherOrderType} onChange={(e) => setOtherOrderType(e.target.value)} placeholder="Chỉ nhập khi chọn Khác" />
+                </FormField>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField label="Số tiền" required>
                   <FormInput name="amount" type="number" required placeholder="100000000" />
@@ -678,33 +847,38 @@ function SalesPageContent() {
             </>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField label="Ngày giao dịch" required>
-              <FormInput name="sale_date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} />
+          {saleType !== "PROJECT" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField label="Ngày giao dịch" required>
+                <FormInput name="sale_date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} />
+              </FormField>
+              <FormField label="Trạng thái" required>
+                <FormSelect name="status" required>
+                  {saleType === "PRODUCT" ? (
+                    orderStatusOptions.filter((option) => ["COMPLETED", "INTERESTED", "PENDING", "OTHER"].includes(option.value)).map((option) => (
+                      <option key={option.id} value={option.value}>{option.label}</option>
+                    ))
+                  ) : (
+                    orderStatusOptions.filter((option) => ["ACTIVE", "PENDING", "OTHER"].includes(option.value)).map((option) => (
+                      <option key={option.id} value={option.value}>{option.label}</option>
+                    ))
+                  )}
+                </FormSelect>
+              </FormField>
+            </div>
+          )}
+
+          {saleType !== "PROJECT" && (
+            <FormField label="Trạng thái khác">
+              <FormInput value={otherStatus} onChange={(e) => setOtherStatus(e.target.value)} placeholder="Chỉ nhập khi chọn Khác" />
             </FormField>
-            <FormField label="Trạng thái" required>
-              <FormSelect name="status" required>
-                {saleType === "PRODUCT" ? (
-                  <>
-                    <option value="COMPLETED">Thành công</option>
-                    <option value="INTERESTED">Quan tâm</option>
-                    <option value="PENDING">Đang xử lý</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="ACTIVE">Đang hoạt động</option>
-                    <option value="PENDING">Chờ xử lý</option>
-                  </>
-                )}
-              </FormSelect>
-            </FormField>
-          </div>
+          )}
 
           <FormField label="Ghi chú">
             <FormInput name="note" placeholder="Nội dung thêm nếu cần" />
           </FormField>
 
-          <SubmitButton loading={formLoading}>Lưu giao dịch</SubmitButton>
+          <SubmitButton loading={formLoading}>{saleType === "PROJECT" ? "Tạo dự án" : "Lưu giao dịch"}</SubmitButton>
         </form>
       </Modal>
 
@@ -887,6 +1061,101 @@ function SalesPageContent() {
         </form>
       </Modal>
     </DashboardLayout>
+  )
+}
+
+function ProjectMultiPicker({
+  label,
+  required,
+  placeholder,
+  selected,
+  options,
+  searchValue,
+  onSearchChange,
+  onAdd,
+  onAddTyped,
+  onRemove,
+}: {
+  label: string
+  required?: boolean
+  placeholder: string
+  selected: Array<{ id: string; label: string }>
+  options: Array<{ id: string; label: string }>
+  searchValue: string
+  onSearchChange: (value: string) => void
+  onAdd: (id: string) => void
+  onAddTyped?: () => void
+  onRemove: (id: string) => void
+}) {
+  const canAddTyped = Boolean(onAddTyped && searchValue.trim())
+  const firstOption = options[0]
+
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-slate-700">
+        {label} {required && <span className="text-rose-500">*</span>}
+      </label>
+      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-2">
+        {selected.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {selected.map((item) => (
+              <span key={item.id} className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-white px-2.5 py-1 text-xs font-semibold text-teal-800">
+                {item.label}
+                <button
+                  type="button"
+                  onClick={() => onRemove(item.id)}
+                  className="rounded-full px-1 text-teal-500 hover:bg-teal-50 hover:text-teal-700"
+                  aria-label={`Bỏ ${item.label}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={searchValue}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder={placeholder}
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none focus:border-[#006b68] focus:ring-2 focus:ring-[#006b68]/15"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (canAddTyped) {
+                onAddTyped?.()
+                return
+              }
+              if (firstOption) onAdd(firstOption.id)
+            }}
+            disabled={!canAddTyped && !firstOption}
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Plus className="h-4 w-4" />
+            Thêm
+          </button>
+        </div>
+        {options.length > 0 && (
+          <div className="mt-2 max-h-32 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+            {options.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => onAdd(option.id)}
+                className="flex w-full items-center justify-between gap-3 border-b border-slate-100 px-3 py-2 text-left text-sm last:border-0 hover:bg-slate-50"
+              >
+                <span className="font-medium text-slate-700">{option.label}</span>
+                <Plus className="h-3.5 w-3.5 text-slate-400" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 

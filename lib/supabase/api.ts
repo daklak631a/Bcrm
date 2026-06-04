@@ -199,7 +199,7 @@ export async function logAudit(payload: AuditLogPayload) {
           .in('role', ['ADMIN_LEVEL_1', 'ADMIN_LEVEL_2'])
         
         if (admins && admins.length > 0) {
-          const notifications = admins.map(admin => ({
+          const notifications = admins.map((admin: any) => ({
             user_id: admin.id,
             title: 'Hệ thống',
             message: `${user.email} vừa ${actionMsg.toLowerCase()} ${msg} mới.`,
@@ -216,7 +216,7 @@ export async function logAudit(payload: AuditLogPayload) {
   }
 }
 
-export async function fetchAuditLogs(limit = 100) {
+export async function fetchAuditLogs(limit = 100): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('audit_logs')
@@ -231,7 +231,7 @@ export async function fetchAuditLogs(limit = 100) {
 // PROFILES
 // ==========================================
 
-export async function fetchProfiles() {
+export async function fetchProfiles(): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('profiles')
@@ -242,7 +242,7 @@ export async function fetchProfiles() {
   return data || []
 }
 
-export async function fetchProfileById(id: string) {
+export async function fetchProfileById(id: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('profiles')
@@ -253,7 +253,7 @@ export async function fetchProfileById(id: string) {
   return data
 }
 
-export async function fetchPlans() {
+export async function fetchPlans(): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('plans')
@@ -268,7 +268,7 @@ export async function createPlan(plan: {
   title: string
   description?: string | null
   target_date: string
-}) {
+}): Promise<any> {
   const supabase = getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   const payload = {
@@ -292,7 +292,7 @@ export async function createPlan(plan: {
   return data as Plan
 }
 
-export async function fetchPlanAssignments(planId?: string) {
+export async function fetchPlanAssignments(planId?: string): Promise<any> {
   const supabase = getSupabase()
   let query = supabase
     .from('plan_assignments')
@@ -324,7 +324,7 @@ export async function upsertPlanAssignment(assignment: {
   target_du_no_trung_han_tang_rong?: number
   target_cap_moi_hmtd?: number
   product_targets?: Record<string, number>
-}) {
+}): Promise<any> {
   const supabase = getSupabase()
   const payload = {
     ...assignment,
@@ -337,7 +337,28 @@ export async function upsertPlanAssignment(assignment: {
     .select('*, profiles:user_id(*), plans:plan_id(*)')
     .single()
 
-  if (error) throw error
+  if (error) {
+    const productTargetsMissing = /product_targets|schema cache/i.test(error.message || '')
+    if (!productTargetsMissing) throw error
+
+    const { product_targets: _productTargets, ...compatiblePayload } = payload
+    const { data: compatibleData, error: compatibleError } = await supabase
+      .from('plan_assignments')
+      .upsert(compatiblePayload, { onConflict: 'plan_id,user_id' })
+      .select('*, profiles:user_id(*), plans:plan_id(*)')
+      .single()
+
+    if (compatibleError) throw compatibleError
+
+    await logAudit({
+      action: 'UPDATE',
+      entityType: 'PLAN',
+      entityId: compatibleData.id || `${assignment.plan_id}:${assignment.user_id}`,
+      afterValue: compatiblePayload,
+    })
+
+    return compatibleData as PlanAssignment
+  }
 
   await logAudit({
     action: 'UPDATE',
@@ -353,7 +374,7 @@ export async function upsertPlanAssignment(assignment: {
 // CUSTOMERS
 // ==========================================
 
-export async function fetchCustomers() {
+export async function fetchCustomers(): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('customers')
@@ -364,7 +385,7 @@ export async function fetchCustomers() {
   return data || []
 }
 
-export async function fetchCustomerById(id: string) {
+export async function fetchCustomerById(id: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('customers')
@@ -406,7 +427,7 @@ export async function createCustomer(customer: {
   chuyen_tien_ngoai?: boolean
   merchant_qr?: boolean
   sp_khac?: string
-}) {
+}): Promise<any> {
   const supabase = getSupabase()
   
   // Normalization logic
@@ -478,7 +499,7 @@ export async function updateCustomer(id: string, updates: Partial<{
   chuyen_tien_ngoai: boolean
   merchant_qr: boolean
   sp_khac: string
-}>) {
+}>): Promise<any> {
   const supabase = getSupabase()
   
   const customerToUpdate = { ...updates }
@@ -516,7 +537,7 @@ export async function updateCustomer(id: string, updates: Partial<{
 // LOANS
 // ==========================================
 
-export async function fetchLoans() {
+export async function fetchLoans(): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('loans')
@@ -526,7 +547,7 @@ export async function fetchLoans() {
   return data || []
 }
 
-export async function fetchLoansByCustomer(customerId: string) {
+export async function fetchLoansByCustomer(customerId: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('loans')
@@ -552,7 +573,7 @@ export async function createLoan(loan: {
   credit_limit?: number
   loan_method?: string
   term_type?: string
-}) {
+}): Promise<any> {
   const supabase = getSupabase()
   const payload = {
     ...loan,
@@ -576,7 +597,7 @@ export async function createLoan(loan: {
   return data
 }
 
-export async function updateLoan(id: string, updates: Record<string, any>) {
+export async function updateLoan(id: string, updates: Record<string, any>): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('loans')
@@ -600,7 +621,7 @@ export async function updateLoan(id: string, updates: Record<string, any>) {
 // DEPOSITS
 // ==========================================
 
-export async function fetchDeposits() {
+export async function fetchDeposits(): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('deposits')
@@ -610,7 +631,7 @@ export async function fetchDeposits() {
   return data || []
 }
 
-export async function fetchDepositsByCustomer(customerId: string) {
+export async function fetchDepositsByCustomer(customerId: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('deposits')
@@ -629,7 +650,7 @@ export async function createDeposit(deposit: {
   start_date: string
   maturity_date: string
   status?: string
-}) {
+}): Promise<any> {
   const supabase = getSupabase()
   const payload = {
     ...deposit,
@@ -653,7 +674,7 @@ export async function createDeposit(deposit: {
   return data
 }
 
-export async function updateDeposit(id: string, updates: Record<string, any>) {
+export async function updateDeposit(id: string, updates: Record<string, any>): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('deposits')
@@ -677,7 +698,7 @@ export async function updateDeposit(id: string, updates: Record<string, any>) {
 // INTERACTIONS
 // ==========================================
 
-export async function fetchInteractions() {
+export async function fetchInteractions(): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('interactions')
@@ -687,7 +708,7 @@ export async function fetchInteractions() {
   return data || []
 }
 
-export async function fetchInteractionsByCustomer(customerId: string) {
+export async function fetchInteractionsByCustomer(customerId: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('interactions')
@@ -708,7 +729,7 @@ export async function createInteraction(interaction: {
   interaction_date?: string
   follow_up_date?: string
   next_action?: string
-}) {
+}): Promise<any> {
   const supabase = getSupabase()
   const payload = {
     ...interaction,
@@ -732,7 +753,7 @@ export async function createInteraction(interaction: {
   return data
 }
 
-export async function updateInteraction(id: string, updates: Record<string, any>) {
+export async function updateInteraction(id: string, updates: Record<string, any>): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('interactions')
@@ -756,7 +777,7 @@ export async function updateInteraction(id: string, updates: Record<string, any>
 // NOTIFICATIONS
 // ==========================================
 
-export async function fetchNotifications(userId: string) {
+export async function fetchNotifications(userId: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('notifications')
@@ -774,7 +795,7 @@ export async function createNotification(notification: {
   message: string
   type?: string
   link_url?: string
-}) {
+}): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('notifications')
@@ -808,7 +829,7 @@ export async function markAllNotificationsRead(userId: string) {
 // CROSS-SELL PRODUCTS
 // ==========================================
 
-export async function fetchProducts() {
+export async function fetchProducts(): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cross_sell_products')
@@ -825,7 +846,7 @@ export async function createProduct(product: {
   target?: number
   metric_type?: ProductMetricType
   unit_label?: string
-}) {
+}): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cross_sell_products')
@@ -836,7 +857,7 @@ export async function createProduct(product: {
   return data
 }
 
-export async function deleteProduct(id: string) {
+export async function deleteProduct(id: string): Promise<any> {
   const supabase = getSupabase()
   const { error } = await supabase
     .from('cross_sell_products')
@@ -849,7 +870,7 @@ export async function deleteProduct(id: string) {
 // CROSS-SELL RECORDS (SALES)
 // ==========================================
 
-export async function fetchProductSales() {
+export async function fetchProductSales(): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cross_sell_records')
@@ -859,7 +880,7 @@ export async function fetchProductSales() {
   return data || []
 }
 
-export async function fetchProductSalesByAgentId(agentId: string) {
+export async function fetchProductSalesByAgentId(agentId: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cross_sell_records')
@@ -870,7 +891,7 @@ export async function fetchProductSalesByAgentId(agentId: string) {
   return data || []
 }
 
-export async function fetchProductSalesByAgentIds(agentIds: string[]) {
+export async function fetchProductSalesByAgentIds(agentIds: string[]): Promise<any> {
   if (agentIds.length === 0) return []
   const supabase = getSupabase()
   const { data, error } = await supabase
@@ -882,7 +903,7 @@ export async function fetchProductSalesByAgentIds(agentIds: string[]) {
   return data || []
 }
 
-export async function fetchProductSalesByCustomer(customerId: string) {
+export async function fetchProductSalesByCustomer(customerId: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cross_sell_records')
@@ -893,7 +914,7 @@ export async function fetchProductSalesByCustomer(customerId: string) {
   return data || []
 }
 
-export async function fetchBatchSales(agentId?: string) {
+export async function fetchBatchSales(agentId?: string): Promise<any> {
   const supabase = getSupabase()
   let query = supabase
     .from('cross_sell_records')
@@ -916,7 +937,7 @@ export async function createBatchSale(sale: {
   sale_date?: string
   result_value?: number
   batch_note?: string
-}) {
+}): Promise<any> {
   const supabase = getSupabase()
   const payload = {
     product_id: sale.product_id,
@@ -962,7 +983,7 @@ export async function createProductSale(sale: {
   sale_date?: string
   note?: string
   result_value?: number
-}) {
+}): Promise<any> {
   const supabase = getSupabase()
   const payload = {
     ...sale,
@@ -984,7 +1005,7 @@ export async function createProductSale(sale: {
   return data
 }
 
-export async function updateProductSale(id: string, updates: Record<string, any>) {
+export async function updateProductSale(id: string, updates: Record<string, any>): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('cross_sell_records')
@@ -996,7 +1017,7 @@ export async function updateProductSale(id: string, updates: Record<string, any>
   return data
 }
 
-export async function fetchSalesRecords() {
+export async function fetchSalesRecords(): Promise<any> {
   const [loans, deposits, productSales] = await Promise.all([
     fetchLoans(),
     fetchDeposits(),
@@ -1010,7 +1031,7 @@ export async function fetchSalesRecords() {
   ])
 }
 
-export async function fetchSalesRecordsByAgent(agentId: string) {
+export async function fetchSalesRecordsByAgent(agentId: string): Promise<any> {
   const supabase = getSupabase()
   const [productSales, loansData, depositsData] = await Promise.all([
     fetchProductSalesByAgentId(agentId),
@@ -1034,7 +1055,7 @@ export async function fetchSalesRecordsByAgent(agentId: string) {
   ])
 }
 
-export async function fetchSalesRecordsByAgents(agentIds: string[]) {
+export async function fetchSalesRecordsByAgents(agentIds: string[]): Promise<any> {
   if (agentIds.length === 0) return []
   const [loans, deposits, productSales] = await Promise.all([
     fetchLoans(),
@@ -1050,7 +1071,7 @@ export async function fetchSalesRecordsByAgents(agentIds: string[]) {
   ])
 }
 
-export async function fetchSalesRecordsByCustomer(customerId: string) {
+export async function fetchSalesRecordsByCustomer(customerId: string): Promise<any> {
   const [loans, deposits, productSales] = await Promise.all([
     fetchLoansByCustomer(customerId),
     fetchDepositsByCustomer(customerId),
@@ -1084,7 +1105,7 @@ export async function createSalesRecord(record: {
   credit_limit?: number
   loan_method?: string
   term_type?: string
-}) {
+}): Promise<any> {
   if (record.source_type === 'LOAN') {
     const normalizedSaleDate = extractDateOnly(record.sale_date) || new Date().toISOString().slice(0, 10)
     const normalizedLoanTitle = (record.title || '').toLowerCase()
@@ -1143,7 +1164,7 @@ export async function createSalesRecord(record: {
 // ALLOWED EMAILS (Team management)
 // ==========================================
 
-export async function fetchAllowedEmails() {
+export async function fetchAllowedEmails(): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('allowed_emails')
@@ -1159,7 +1180,7 @@ export async function createAllowedEmail(entry: {
   role?: string
   department_id?: string
   is_active?: boolean
-}) {
+}): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('allowed_emails')
@@ -1170,7 +1191,7 @@ export async function createAllowedEmail(entry: {
   return data
 }
 
-export async function updateAllowedEmail(id: string, updates: Record<string, any>) {
+export async function updateAllowedEmail(id: string, updates: Record<string, any>): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('allowed_emails')
@@ -1182,7 +1203,7 @@ export async function updateAllowedEmail(id: string, updates: Record<string, any
   return data
 }
 
-export async function deleteAllowedEmail(id: string) {
+export async function deleteAllowedEmail(id: string): Promise<any> {
   const supabase = getSupabase()
   const { error } = await supabase
     .from('allowed_emails')
@@ -1195,7 +1216,7 @@ export async function deleteAllowedEmail(id: string) {
 // SUPPORT REQUESTS
 // ==========================================
 
-export async function fetchSupportRequests() {
+export async function fetchSupportRequests(): Promise<any> {
   const supabase = getSupabase()
   const { data: { session } } = await supabase.auth.getSession()
   const response = await fetch('/api/support/requests', {
@@ -1209,7 +1230,7 @@ export async function fetchSupportRequests() {
   return payload.data || []
 }
 
-export async function createSupportRequest(request: { item_id: string, item_type: string, support_admin_id: string, scheduled_date: string, requester_id?: string }) {
+export async function createSupportRequest(request: { item_id: string, item_type: string, support_admin_id: string, scheduled_date: string, requester_id?: string }): Promise<any> {
   const supabase = getSupabase()
   const { data: { session } } = await supabase.auth.getSession()
   const response = await fetch('/api/support/requests', {
@@ -1225,7 +1246,7 @@ export async function createSupportRequest(request: { item_id: string, item_type
   return payload.data
 }
 
-export async function updateSupportRequestStatus(id: string, status: string) {
+export async function updateSupportRequestStatus(id: string, status: string): Promise<any> {
   const supabase = getSupabase()
   const { data: { session } } = await supabase.auth.getSession()
   const response = await fetch('/api/support/requests', {
@@ -1249,7 +1270,7 @@ export async function createTransferRequest(
   customerId: string,
   targetManagerId: string,
   reason: string
-) {
+): Promise<any> {
   const supabase = getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
@@ -1296,7 +1317,7 @@ export async function createTransferRequest(
   ]
 
   if (admins && admins.length > 0) {
-    admins.forEach(admin => {
+    admins.forEach((admin: any) => {
       if (admin.id !== targetManagerId) {
         notifications.push({
           user_id: admin.id,
@@ -1314,7 +1335,7 @@ export async function createTransferRequest(
   return data
 }
 
-export async function fetchTransferRequests() {
+export async function fetchTransferRequests(): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('manager_transfer_requests')
@@ -1333,7 +1354,7 @@ export async function fetchTransferRequests() {
 export async function updateTransferRequestStatus(
   requestId: string,
   status: 'APPROVED' | 'REJECTED'
-) {
+): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('manager_transfer_requests')
@@ -1403,7 +1424,7 @@ export async function updateTransferRequestStatus(
 // SYSTEM SETTINGS
 // ==========================================
 
-export async function fetchSystemSettings() {
+export async function fetchSystemSettings(): Promise<any[]> {
   const supabase = getSupabase()
   try {
     const { data, error } = await supabase
@@ -1420,7 +1441,7 @@ export async function fetchSystemSettings() {
   }
 }
 
-export async function updateSystemSetting(key: string, value: string) {
+export async function updateSystemSetting(key: string, value: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('system_settings')
@@ -1435,7 +1456,7 @@ export async function updateSystemSetting(key: string, value: string) {
 // WEEKLY & DAILY PLANS
 // ==========================================
 
-export async function fetchWeeklyPlans(userId: string) {
+export async function fetchWeeklyPlans(userId: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('weekly_plans')
@@ -1449,7 +1470,7 @@ export async function fetchWeeklyPlans(userId: string) {
   return data || []
 }
 
-export async function fetchDailyPlans(userId: string, startDate: string, endDate: string) {
+export async function fetchDailyPlans(userId: string, startDate: string, endDate: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('daily_plans')
@@ -1465,7 +1486,7 @@ export async function fetchDailyPlans(userId: string, startDate: string, endDate
   return data || []
 }
 
-export async function upsertWeeklyPlan(plan: any) {
+export async function upsertWeeklyPlan(plan: any): Promise<any> {
   const supabase = getSupabase()
   const payload = {
     ...plan,
@@ -1476,13 +1497,25 @@ export async function upsertWeeklyPlan(plan: any) {
     .upsert(payload, { onConflict: 'user_id,start_date' })
     .select()
     .single()
-  if (error) throw error
+  if (error) {
+    const productTargetsMissing = /product_targets|schema cache/i.test(error.message || '')
+    if (!productTargetsMissing) throw error
+
+    const { product_targets: _productTargets, ...compatiblePayload } = payload
+    const { data: compatibleData, error: compatibleError } = await supabase
+      .from('weekly_plans')
+      .upsert(compatiblePayload, { onConflict: 'user_id,start_date' })
+      .select()
+      .single()
+    if (compatibleError) throw compatibleError
+    return compatibleData
+  }
   return data
 }
 
-export async function upsertDailyPlans(plans: any[]) {
+export async function upsertDailyPlans(plans: any[]): Promise<any> {
   const supabase = getSupabase()
-  const payloads = plans.map(p => ({
+  const payloads = plans.map((p: any) => ({
     ...p,
     updated_at: new Date().toISOString()
   }))
@@ -1490,6 +1523,17 @@ export async function upsertDailyPlans(plans: any[]) {
     .from('daily_plans')
     .upsert(payloads, { onConflict: 'user_id,target_date' })
     .select()
-  if (error) throw error
+  if (error) {
+    const productTargetsMissing = /product_targets|schema cache/i.test(error.message || '')
+    if (!productTargetsMissing) throw error
+
+    const compatiblePayloads = payloads.map(({ product_targets: _productTargets, ...payload }) => payload)
+    const { data: compatibleData, error: compatibleError } = await supabase
+      .from('daily_plans')
+      .upsert(compatiblePayloads, { onConflict: 'user_id,target_date' })
+      .select()
+    if (compatibleError) throw compatibleError
+    return compatibleData
+  }
   return data
 }

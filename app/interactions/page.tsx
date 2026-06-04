@@ -10,6 +10,7 @@ import { fetchInteractions, createInteraction, fetchCustomers, fetchProfiles, ge
 import { Modal, FormField, FormInput, FormSelect, FormTextarea, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 import { Check } from "lucide-react"
+import { getActiveOptions } from "@/lib/workflow-config"
 
 const ITEMS_PER_PAGE = 10
 
@@ -35,9 +36,18 @@ function InteractionsPageContent() {
   const [showQuickAddCustomer, setShowQuickAddCustomer] = useState(false)
   const [quickAddLoading, setQuickAddLoading] = useState(false)
   const [customerType, setCustomerType] = useState("INDIVIDUAL")
+  const [interactionType, setInteractionType] = useState("CALL")
+  const [interactionPurpose, setInteractionPurpose] = useState("")
+  const [interactionResult, setInteractionResult] = useState("PENDING")
+  const [otherInteractionType, setOtherInteractionType] = useState("")
+  const [otherPurpose, setOtherPurpose] = useState("")
+  const [otherResult, setOtherResult] = useState("")
+  const interactionTypeOptions = useMemo(() => [...getActiveOptions("interactionTypes"), { id: "it-other", label: "Khác", value: "OTHER", active: true }], [])
+  const interactionPurposeOptions = useMemo(() => [...getActiveOptions("interactionPurposes"), { id: "ip-other", label: "Khác", value: "OTHER", active: true }], [])
+  const interactionResultOptions = useMemo(() => [...getActiveOptions("interactionResults"), { id: "ir-other", label: "Khác", value: "OTHER", active: true }], [])
 
   const visibleProfiles = useMemo(() => {
-    if (user?.role === "ADMIN_LEVEL_1" || user?.role === "ADVISOR") return profiles
+    if (user?.role === "ADMIN_LEVEL_0" || user?.role === "ADMIN_LEVEL_1" || user?.role === "ADVISOR") return profiles
     if (user?.role === "ADMIN_LEVEL_2" || user?.role === "ADMIN_LEVEL_3") return profiles.filter((profile: any) => profile.department_id === user.department_id)
     return profiles.filter((profile: any) => profile.id === user?.id)
   }, [profiles, user?.department_id, user?.id, user?.role])
@@ -134,15 +144,22 @@ function InteractionsPageContent() {
       toast.error('Vui lòng chọn khách hàng')
       return
     }
+    const finalType = interactionType === "OTHER" ? otherInteractionType.trim() : interactionType
+    const finalPurpose = interactionPurpose === "OTHER" ? otherPurpose.trim() : interactionPurpose
+    const finalResult = interactionResult === "OTHER" ? otherResult.trim() : interactionResult
+    if (!finalType || !finalPurpose || !finalResult) {
+      toast.error("Vui lòng nhập đầy đủ lựa chọn Khác")
+      return
+    }
     const form = new FormData(e.currentTarget)
     try {
       setFormLoading(true)
       await createInteraction({
         customer_id: selectedCustomerId,
         manager_id: user!.id,
-        type: form.get('type') as string,
-        purpose: form.get('purpose') as string,
-        result: form.get('result') as string || 'PENDING',
+        type: finalType,
+        purpose: finalPurpose,
+        result: finalResult,
         notes: form.get('notes') as string || undefined,
         interaction_date: form.get('interaction_date') as string || undefined,
         follow_up_date: form.get('follow_up_date') as string || undefined,
@@ -194,7 +211,7 @@ function InteractionsPageContent() {
     <DashboardLayout title="Quản Lý Tương Tác">
       <div className="flex flex-col gap-6">
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+        <div className="hidden">
           <div className="bg-white p-4 md:p-6 rounded-xl border shadow-sm flex items-center justify-between">
             <div><p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Tổng Tương Tác</p><h3 className="text-xl md:text-2xl font-bold text-slate-800">{interactions.length}</h3></div>
             <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center shrink-0"><MessageSquare className="w-5 h-5 md:w-6 md:h-6" /></div>
@@ -348,26 +365,42 @@ function InteractionsPageContent() {
             {showCustomerDropdown && <div className="fixed inset-0 z-0" onClick={() => setShowCustomerDropdown(false)}></div>}
           </div>
           <FormField label="Loại tương tác" required>
-            <FormSelect name="type" required>
-              <option value="CALL">Gọi điện</option>
-              <option value="MEETING">Gặp mặt</option>
-              <option value="EMAIL">Email</option>
-              <option value="SMS">SMS</option>
-              <option value="VISIT">Thăm khách hàng</option>
+            <FormSelect value={interactionType} onChange={(e) => setInteractionType(e.target.value)} required>
+              {interactionTypeOptions.map((option) => (
+                <option key={option.id} value={option.value}>{option.label}</option>
+              ))}
             </FormSelect>
           </FormField>
+          {interactionType === "OTHER" && (
+            <FormField label="Loại tương tác khác" required>
+              <FormInput value={otherInteractionType} onChange={(e) => setOtherInteractionType(e.target.value)} required placeholder="Nhập loại tương tác khác" />
+            </FormField>
+          )}
           <FormField label="Mục đích" required>
-            <FormInput name="purpose" required placeholder="VD: Tư vấn vay mua nhà" />
-          </FormField>
-          <FormField label="Kết quả">
-            <FormSelect name="result">
-              <option value="PENDING">Đang chờ</option>
-              <option value="SUCCESS">Thành công</option>
-              <option value="FOLLOW_UP">Cần theo dõi</option>
-              <option value="NO_ANSWER">Không nghe máy</option>
-              <option value="NOT_INTERESTED">Không quan tâm</option>
+            <FormSelect value={interactionPurpose} onChange={(e) => setInteractionPurpose(e.target.value)} required>
+              <option value="">Chọn mục đích</option>
+              {interactionPurposeOptions.map((option) => (
+                <option key={option.id} value={option.value}>{option.label}</option>
+              ))}
             </FormSelect>
           </FormField>
+          {interactionPurpose === "OTHER" && (
+            <FormField label="Mục đích khác" required>
+              <FormInput value={otherPurpose} onChange={(e) => setOtherPurpose(e.target.value)} required placeholder="Nhập mục đích khác" />
+            </FormField>
+          )}
+          <FormField label="Kết quả">
+            <FormSelect value={interactionResult} onChange={(e) => setInteractionResult(e.target.value)}>
+              {interactionResultOptions.map((option) => (
+                <option key={option.id} value={option.value}>{option.label}</option>
+              ))}
+            </FormSelect>
+          </FormField>
+          {interactionResult === "OTHER" && (
+            <FormField label="Kết quả khác" required>
+              <FormInput value={otherResult} onChange={(e) => setOtherResult(e.target.value)} required placeholder="Nhập kết quả khác" />
+            </FormField>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <FormField label="Ngày tương tác">
               <FormInput name="interaction_date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />

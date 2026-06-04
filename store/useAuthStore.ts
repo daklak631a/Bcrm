@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { Profile } from '@/types/models'
 
-export type Role = 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_3' | 'USER' | 'ADVISOR'
+export type Role = 'ADMIN_LEVEL_0' | 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_3' | 'USER' | 'ADVISOR'
 
 export interface User {
   id: string

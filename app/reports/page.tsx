@@ -11,19 +11,48 @@ import clsx from "clsx"
 import { toast } from "sonner"
 import { formatShortName } from '@/lib/utils'
 
-const KPI_METRICS = [
-  { key: 'target_loans_amount', label: 'Chỉ tiêu cho vay', unit: 'VNĐ', type: 'currency' },
-  { key: 'target_deposits_amount', label: 'Chỉ tiêu huy động', unit: 'VNĐ', type: 'currency' },
-  { key: 'target_calls', label: 'Chỉ tiêu gọi điện', unit: 'Cuộc', type: 'number' },
-  { key: 'target_cif_moi', label: 'CIF mới phát triển', unit: 'KH', type: 'number' },
-  { key: 'target_bidv_direct', label: 'Đăng ký BIDV Direct', unit: 'KH', type: 'number' },
-  { key: 'target_bh_nhan_tho', label: 'Bảo hiểm nhân thọ (Life)', unit: 'Triệu', type: 'number' },
-  { key: 'target_bh_khoan_vay', label: 'Bảo hiểm khoản vay (Non-Life)', unit: 'Triệu', type: 'number' },
-  { key: 'target_cap_moi_hmtd', label: 'Cấp mới hạn mức tín dụng', unit: 'KH', type: 'number' },
+import { getProductMetricValue } from "@/lib/product-metrics"
+
+type ReportMetric = { key: string; label: string; unit: string; type: 'currency' | 'number'; productId?: string; isOtherProducts?: boolean }
+
+const OTHER_PRODUCTS_ID = 'other_spdv'
+
+const KPI_METRICS: ReportMetric[] = [
+  { key: 'target_cif_moi', label: 'CIF mới', unit: 'KH', type: 'number' },
+  { key: 'target_bidv_direct', label: 'BIDV Direct', unit: 'KH', type: 'number' },
+  { key: 'target_bh_nhan_tho', label: 'Bảo hiểm nhân thọ', unit: 'Triệu đồng', type: 'number' },
+  { key: 'target_bh_khoan_vay', label: 'Bảo hiểm khoản vay', unit: 'Triệu đồng', type: 'number' },
   { key: 'target_huy_dong_tang_rong', label: 'Huy động vốn tăng ròng', unit: 'VNĐ', type: 'currency' },
   { key: 'target_du_no_ngan_han_tang_rong', label: 'Dư nợ ngắn hạn tăng ròng', unit: 'VNĐ', type: 'currency' },
   { key: 'target_du_no_trung_han_tang_rong', label: 'Dư nợ trung/dài hạn tăng ròng', unit: 'VNĐ', type: 'currency' },
+  { key: 'target_cap_moi_hmtd', label: 'Cấp mới HMTD (SL KH)', unit: 'KH', type: 'number' },
+  { key: OTHER_PRODUCTS_ID, label: 'Các sản phẩm khác', unit: 'SL', type: 'number', isOtherProducts: true },
 ]
+
+function isReportProductActive(product: any) {
+  return product?.is_active !== false
+}
+
+function classifyReportProduct(product?: any): string {
+  const upperName = `${product?.name || ''}`.toUpperCase()
+  const upperType = `${product?.type || ''}`.toUpperCase()
+  const text = `${upperName} ${upperType}`
+
+  if (text.includes('CIF')) return 'target_cif_moi'
+  if (text.includes('DIRECT')) return 'target_bidv_direct'
+  if (text.includes('HMTD') || text.includes('HẠN MỨC') || text.includes('HAN MUC')) return 'target_cap_moi_hmtd'
+  if (text.includes('BẢO HIỂM') || text.includes('BAO HIEM') || text.includes('BH ') || text.includes('LIFE')) {
+    if (text.includes('KHOẢN VAY') || text.includes('KHOAN VAY') || text.includes('LOAN')) return 'target_bh_khoan_vay'
+    return 'target_bh_nhan_tho'
+  }
+  if (text.includes('HUY ĐỘNG') || text.includes('HUY DONG')) return 'target_huy_dong_tang_rong'
+  if (text.includes('DƯ NỢ') || text.includes('DU NO')) {
+    if (text.includes('NGẮN HẠN') || text.includes('NGAN HAN')) return 'target_du_no_ngan_han_tang_rong'
+    if (text.includes('TRUNG') || text.includes('DÀI HẠN') || text.includes('DAI HAN')) return 'target_du_no_trung_han_tang_rong'
+  }
+
+  return OTHER_PRODUCTS_ID
+}
 
 type ViewMode = 'all' | 'department' | 'user'
 
@@ -39,6 +68,7 @@ export default function ReportsPage() {
   const [loans, setLoans] = useState<any[]>([])
   const [deposits, setDeposits] = useState<any[]>([])
   const [crossSellRecords, setCrossSellRecords] = useState<any[]>([])
+  const [products, setProducts] = useState<any[]>([])
   const [interactions, setInteractions] = useState<any[]>([])
   const [customers, setCustomers] = useState<any[]>([])
   const [weeklyPlans, setWeeklyPlans] = useState<any[]>([])
@@ -123,6 +153,7 @@ export default function ReportsPage() {
         loansData,
         depositsData,
         productsData,
+        productCatalogData,
         interactionsData,
         customersData,
         weeklyPlansData,
@@ -135,6 +166,7 @@ export default function ReportsPage() {
         supabase.from('loans').select('*').eq('status', 'ACTIVE'),
         supabase.from('deposits').select('*').eq('status', 'ACTIVE'),
         supabase.from('cross_sell_records').select('*, cross_sell_products(*)').eq('status', 'COMPLETED'),
+        supabase.from('cross_sell_products').select('*').order('created_at', { ascending: true }),
         supabase.from('interactions').select('*'),
         supabase.from('customers').select('*').is('deleted_at', null),
         supabase.from('weekly_plans').select('*'),
@@ -148,6 +180,7 @@ export default function ReportsPage() {
       if (loansData.data) setLoans(loansData.data)
       if (depositsData.data) setDeposits(depositsData.data)
       if (productsData.data) setCrossSellRecords(productsData.data)
+      if (productCatalogData.data) setProducts(productCatalogData.data.filter(isReportProductActive))
       if (interactionsData.data) setInteractions(interactionsData.data)
       if (customersData.data) setCustomers(customersData.data)
       if (weeklyPlansData.data) setWeeklyPlans(weeklyPlansData.data)
@@ -216,6 +249,8 @@ export default function ReportsPage() {
     }
   }, [profiles, user, isUser, isAdminL2, viewMode, selectedDepartment, selectedUserId])
 
+  const productCategoryById = useMemo(() => new Map(products.map((product) => [product.id, classifyReportProduct(product)])), [products])
+
   // Helper to calculate Net Growth actual from snapshots
   const getNetGrowthActual = useCallback((metricType: 'deposit' | 'short_loan' | 'medium_loan', userIds: string[], startDateStr: string, endDateStr: string) => {
     let total = 0
@@ -250,21 +285,38 @@ export default function ReportsPage() {
   const getTargetValue = useCallback((fieldKey: string, level: 'month' | 'week' | 'day') => {
     if (targetUserIds.length === 0) return 0
 
+    const getProductTargetValue = (row: any) => {
+      const productTargets = row?.product_targets || {}
+      if (fieldKey === OTHER_PRODUCTS_ID) {
+        return Object.entries(productTargets).reduce((sum, [productId, value]) => {
+          const category = productId === OTHER_PRODUCTS_ID ? OTHER_PRODUCTS_ID : productCategoryById.get(productId) || OTHER_PRODUCTS_ID
+          return category === OTHER_PRODUCTS_ID ? sum + Number(value || 0) : sum
+        }, 0)
+      }
+      if (fieldKey.startsWith('target_')) {
+        const categorizedProductTarget = Object.entries(productTargets).reduce((sum, [productId, value]) => {
+          return productCategoryById.get(productId) === fieldKey ? sum + Number(value || 0) : sum
+        }, 0)
+        return Number(row?.[fieldKey] || 0) + categorizedProductTarget
+      }
+      return Number(row?.[fieldKey] || 0)
+    }
+
     if (level === 'month') {
       if (!activeMonthPlan) return 0
       const activeAssigns = assignments.filter(a => a.plan_id === activeMonthPlan.id && targetUserIds.includes(a.user_id))
-      return activeAssigns.reduce((sum, a) => sum + Number(a[fieldKey] || 0), 0)
+      return activeAssigns.reduce((sum, a) => sum + getProductTargetValue(a), 0)
     }
 
     if (level === 'week') {
       const activeWeekPlans = weeklyPlans.filter(wp => wp.start_date === selectedMonday && targetUserIds.includes(wp.user_id))
-      return activeWeekPlans.reduce((sum, wp) => sum + Number(wp[fieldKey] || 0), 0)
+      return activeWeekPlans.reduce((sum, wp) => sum + getProductTargetValue(wp), 0)
     }
 
     // level === 'day'
     const activeDailyPlans = dailyPlans.filter(dp => dp.target_date === reportDate && targetUserIds.includes(dp.user_id))
-    return activeDailyPlans.reduce((sum, dp) => sum + Number(dp[fieldKey] || 0), 0)
-  }, [targetUserIds, activeMonthPlan, assignments, weeklyPlans, selectedMonday, dailyPlans, reportDate])
+    return activeDailyPlans.reduce((sum, dp) => sum + getProductTargetValue(dp), 0)
+  }, [targetUserIds, productCategoryById, activeMonthPlan, assignments, weeklyPlans, selectedMonday, dailyPlans, reportDate])
 
   // Helper to calculate aggregated Actual values
   const getActualValue = useCallback((fieldKey: string, startDateStr: string, endDateStr: string) => {
@@ -278,7 +330,7 @@ export default function ReportsPage() {
         l.customer_id && 
         customers.some(c => c.id === l.customer_id && targetUserIds.includes(c.assigned_manager_id))
       )
-      return filteredLoans.reduce((sum, l) => sum + Number(l.loan_amount ?? l.amount ?? 0), 0)
+      return filteredLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0)
     }
 
     // 2. Deposits amount
@@ -309,23 +361,27 @@ export default function ReportsPage() {
         const cDate = c.created_at ? c.created_at.slice(0, 10) : ''
         return cDate >= startDateStr && cDate <= endDateStr && targetUserIds.includes(c.assigned_manager_id)
       })
-      return filteredCustomers.length
+      const productCifCount = crossSellRecords
+        .filter((sale) => {
+          const sDate = sale.sale_date || (sale.created_at ? sale.created_at.slice(0, 10) : '')
+          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && targetUserIds.includes(sale.agent_id)
+        })
+        .reduce((sum, sale) => sum + getProductMetricValue(sale, sale.cross_sell_products), 0)
+      return filteredCustomers.length + productCifCount
     }
 
-    // 5. Product metrics (BIDV Direct, BH nhân thọ, BH khoản vay, Cấp mới HMTD)
-    const productKeys = ['target_bidv_direct', 'target_bh_nhan_tho', 'target_bh_khoan_vay', 'target_cap_moi_hmtd']
-
-    if (productKeys.includes(fieldKey)) {
+    // 5. Product metrics from product catalog, classified into the fixed 8 KPI rows + other products
+    if (
+      fieldKey === 'target_bidv_direct' ||
+      fieldKey === 'target_bh_nhan_tho' ||
+      fieldKey === 'target_bh_khoan_vay' ||
+      fieldKey === 'target_cap_moi_hmtd' ||
+      fieldKey === OTHER_PRODUCTS_ID
+    ) {
       const filteredSales = crossSellRecords.filter(s => {
         const sDate = s.sale_date || (s.created_at ? s.created_at.slice(0, 10) : '')
-        const pName = s.cross_sell_products?.name || ''
-        const nameUpper = pName.toUpperCase()
-        
-        let isMatch = false
-        if (fieldKey === 'target_bidv_direct') isMatch = nameUpper.includes("DIRECT")
-        else if (fieldKey === 'target_bh_nhan_tho') isMatch = nameUpper.includes("NHÂN THỌ") || nameUpper.includes("LIFE")
-        else if (fieldKey === 'target_bh_khoan_vay') isMatch = nameUpper.includes("KHOẢN VAY") || nameUpper.includes("NON-LIFE")
-        else if (fieldKey === 'target_cap_moi_hmtd') isMatch = nameUpper.includes("HMTD")
+        const category = classifyReportProduct(s.cross_sell_products)
+        const isMatch = fieldKey === OTHER_PRODUCTS_ID ? category === OTHER_PRODUCTS_ID : category === fieldKey
 
         return (
           isMatch &&
@@ -335,23 +391,36 @@ export default function ReportsPage() {
         )
       })
 
-      if (fieldKey === 'target_bidv_direct' || fieldKey === 'target_cap_moi_hmtd') {
-        return filteredSales.length
-      } else {
-        // BH nhân thọ and BH khoản vay are numeric amounts (triệu đồng)
-        return filteredSales.reduce((sum, s) => sum + Number(s.result_value || 0), 0)
-      }
+      return filteredSales.reduce((sum, s) => sum + getProductMetricValue(s, s.cross_sell_products), 0)
     }
 
     // 6. Net growth metrics using snapshots
     if (fieldKey === 'target_huy_dong_tang_rong') {
-      return getNetGrowthActual('deposit', targetUserIds, startDateStr, endDateStr)
+      const manualActual = crossSellRecords
+        .filter((sale) => {
+          const sDate = sale.sale_date || (sale.created_at ? sale.created_at.slice(0, 10) : '')
+          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && targetUserIds.includes(sale.agent_id)
+        })
+        .reduce((sum, sale) => sum + getProductMetricValue(sale, sale.cross_sell_products), 0)
+      return getNetGrowthActual('deposit', targetUserIds, startDateStr, endDateStr) + manualActual
     }
     if (fieldKey === 'target_du_no_ngan_han_tang_rong') {
-      return getNetGrowthActual('short_loan', targetUserIds, startDateStr, endDateStr)
+      const manualActual = crossSellRecords
+        .filter((sale) => {
+          const sDate = sale.sale_date || (sale.created_at ? sale.created_at.slice(0, 10) : '')
+          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && targetUserIds.includes(sale.agent_id)
+        })
+        .reduce((sum, sale) => sum + getProductMetricValue(sale, sale.cross_sell_products), 0)
+      return getNetGrowthActual('short_loan', targetUserIds, startDateStr, endDateStr) + manualActual
     }
     if (fieldKey === 'target_du_no_trung_han_tang_rong') {
-      return getNetGrowthActual('medium_loan', targetUserIds, startDateStr, endDateStr)
+      const manualActual = crossSellRecords
+        .filter((sale) => {
+          const sDate = sale.sale_date || (sale.created_at ? sale.created_at.slice(0, 10) : '')
+          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && targetUserIds.includes(sale.agent_id)
+        })
+        .reduce((sum, sale) => sum + getProductMetricValue(sale, sale.cross_sell_products), 0)
+      return getNetGrowthActual('medium_loan', targetUserIds, startDateStr, endDateStr) + manualActual
     }
 
     return 0
@@ -456,6 +525,30 @@ export default function ReportsPage() {
       dayAvg: dCount > 0 ? Math.round(dSum / dCount) : 0,
     }
   }, [getTargetValue, getActualValue, selectedMonthStart, selectedMonthEnd, selectedMonday, selectedFriday, reportDate])
+
+  const operationSummary = useMemo(() => {
+    const scopedLoans = loans.filter((loan) =>
+      loan.customer_id &&
+      customers.some((customer) => customer.id === loan.customer_id && targetUserIds.includes(customer.assigned_manager_id))
+    )
+    const scopedDeposits = deposits.filter((deposit) =>
+      deposit.customer_id &&
+      customers.some((customer) => customer.id === deposit.customer_id && targetUserIds.includes(customer.assigned_manager_id))
+    )
+    const scopedProductSales = crossSellRecords.filter((record) => targetUserIds.includes(record.agent_id))
+    const scopedInteractions = interactions.filter((interaction) => targetUserIds.includes(interaction.manager_id))
+
+    return {
+      salesTotal: scopedLoans.length + scopedDeposits.length + scopedProductSales.length,
+      loanAmount: scopedLoans.reduce((sum, loan) => sum + Number(loan.loan_amount || 0), 0),
+      depositAmount: scopedDeposits.reduce((sum, deposit) => sum + Number(deposit.amount || 0), 0),
+      productTransactions: scopedProductSales.length,
+      interactionTotal: scopedInteractions.length,
+      callCount: scopedInteractions.filter((interaction) => interaction.type === "CALL").length,
+      meetingCount: scopedInteractions.filter((interaction) => interaction.type === "MEETING").length,
+      pendingCount: scopedInteractions.filter((interaction) => interaction.result === "PENDING").length,
+    }
+  }, [loans, deposits, crossSellRecords, interactions, customers, targetUserIds])
 
   const reportTitleScope = useMemo(() => {
     if (isUser) {
@@ -651,6 +744,27 @@ export default function ReportsPage() {
               </div>
             </div>
           )}
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-lg font-bold text-slate-900">Tổng hợp dữ liệu vận hành</h3>
+            <p className="text-xs text-slate-500">Dữ liệu hiển thị theo phạm vi quyền: LV1 toàn hệ thống, LV2 theo phòng, chuyên viên theo dữ liệu của mình.</p>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <ReportStat label="Tổng giao dịch bán" value={operationSummary.salesTotal.toLocaleString("vi-VN")} />
+            <ReportStat label="Doanh số khoản vay" value={formatValue(operationSummary.loanAmount, "currency")} />
+            <ReportStat label="Doanh số huy động" value={formatValue(operationSummary.depositAmount, "currency")} />
+            <ReportStat label="Giao dịch sản phẩm" value={operationSummary.productTransactions.toLocaleString("vi-VN")} />
+          </div>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <ReportStat label="Tổng tương tác" value={operationSummary.interactionTotal.toLocaleString("vi-VN")} />
+            <ReportStat label="Cuộc gọi" value={operationSummary.callCount.toLocaleString("vi-VN")} />
+            <ReportStat label="Gặp mặt" value={operationSummary.meetingCount.toLocaleString("vi-VN")} />
+            <ReportStat label="Đang chờ" value={operationSummary.pendingCount.toLocaleString("vi-VN")} />
+          </div>
         </section>
 
         {/* Core Stats Progress Overview */}
@@ -928,5 +1042,14 @@ export default function ReportsPage() {
 
       </div>
     </DashboardLayout>
+  )
+}
+
+function ReportStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+      <p className="mt-2 truncate font-mono text-xl font-bold text-slate-900" title={value}>{value}</p>
+    </div>
   )
 }

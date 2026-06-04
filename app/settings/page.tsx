@@ -16,16 +16,16 @@ export default function SettingsPage() {
   const [logoUrl, setLogoUrl] = useState("")
   const [faviconUrl, setFaviconUrl] = useState("")
 
-  const isAdmin = user?.role === 'ADMIN_LEVEL_1'
+  const isAdmin = user?.role === 'ADMIN_LEVEL_0' || user?.role === 'ADMIN_LEVEL_1'
 
   const loadSettings = useCallback(async () => {
     try {
       setLoading(true)
       const settings = await fetchSystemSettings()
       
-      const appNameSetting = settings.find(s => s.key === 'app_name')
-      const logoUrlSetting = settings.find(s => s.key === 'logo_url')
-      const faviconUrlSetting = settings.find(s => s.key === 'favicon_url')
+      const appNameSetting = settings.find((s: any) => s.key === 'app_name')
+      const logoUrlSetting = settings.find((s: any) => s.key === 'logo_url')
+      const faviconUrlSetting = settings.find((s: any) => s.key === 'favicon_url')
 
       if (appNameSetting) setAppName(appNameSetting.value)
       if (logoUrlSetting) setLogoUrl(logoUrlSetting.value)

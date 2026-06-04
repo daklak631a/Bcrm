@@ -78,7 +78,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
     // Listen for auth state changes (Google OAuth callback)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (event: string, session: any) => {
         console.log('[AuthProvider] Auth state changed:', event);
         if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && session?.user) {
           // Only verify if we don't already have a user set (callback page may have already done this)

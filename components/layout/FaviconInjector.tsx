@@ -61,8 +61,8 @@ export function FaviconInjector() {
     const updateFavicon = async () => {
       try {
         const settings = await fetchSystemSettings()
-        const faviconUrl = settings.find(s => s.key === 'favicon_url')?.value
-        const appName = settings.find(s => s.key === 'app_name')?.value
+        const faviconUrl = settings.find((s: any) => s.key === 'favicon_url')?.value
+        const appName = settings.find((s: any) => s.key === 'app_name')?.value
         
         if (faviconUrl) {
           try {

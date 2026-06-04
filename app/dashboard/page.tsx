@@ -3,7 +3,7 @@
 import clsx from "clsx"
 import Link from "next/link"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
-import { ArrowRight, Loader2, MessageSquare, Package, TrendingUp } from "lucide-react"
+import { ArrowRight, Loader2, MessageSquare, Network, Package, TrendingUp } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useCallback } from "react"
 import { KPISummaryTable } from "@/components/ui/kpi-summary-table"
@@ -109,17 +109,38 @@ export default function DashboardPage() {
         <KPISummaryTable />
       </div>
 
-      <Link href="/sales-support" className="mb-6 block rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-slate-900/5 transition hover:-translate-y-0.5 hover:shadow-md">
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight text-slate-900">Kanban bán hàng</h2>
+      <div className="mb-6 grid gap-4 lg:grid-cols-2">
+        <Link href="/sales-support" className="block rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-900/5 transition hover:-translate-y-0.5 hover:shadow-md">
+          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
+              <h2 className="text-xl font-semibold tracking-tight text-slate-900">Kanban bán hàng</h2>
+              <p className="mt-1 text-sm text-slate-500">Luồng xử lý bán hàng hiện hữu.</p>
+            </div>
+            <div className="inline-flex w-fit items-center gap-2 rounded-xl bg-[#006b68] px-4 py-2 text-sm font-semibold text-white">
+              Mở Kanban
+              <ArrowRight className="h-4 w-4" />
+            </div>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-2xl bg-[#006b68] px-4 py-2 text-sm font-semibold text-white">
-            Mở Kanban
-            <ArrowRight className="h-4 w-4" />
+        </Link>
+
+        <Link href="/advanced-workflow-pilot" className="block rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm ring-1 ring-slate-900/5 transition hover:-translate-y-0.5 hover:border-[#006b68]/30 hover:shadow-md">
+          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-[#006b68] ring-1 ring-emerald-100">
+                  <Network className="h-4 w-4" />
+                </span>
+                <h2 className="text-xl font-semibold tracking-tight text-slate-900">Luồng B2B nâng cao</h2>
+              </div>
+              <p className="mt-2 text-sm text-slate-500">Quản lý dự án, hạn mức, phê duyệt, báo cáo và kết nối ngoài.</p>
+            </div>
+            <div className="inline-flex w-fit items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+              Mở luồng
+              <ArrowRight className="h-4 w-4" />
+            </div>
           </div>
-        </div>
-      </Link>
+        </Link>
+      </div>
 
       {/* Team Activity (for admin) */}
       {(user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADMIN_LEVEL_2') && visibleProfiles.length > 1 && (

@@ -14,6 +14,12 @@ interface KPISummary {
   manager_id: string
   full_name: string
   short_name?: string
+  loans_amount: number
+  deposits_amount: number
+  calls: number
+  target_loans_amount: number
+  target_deposits_amount: number
+  target_calls: number
   cif_moi: number
   bidv_direct: number
   bh_nhan_tho: number
@@ -22,17 +28,30 @@ interface KPISummary {
   du_no_ngan_han_tang_rong: number
   du_no_trung_han_tang_rong: number
   cap_moi_hmtd: number
+  target_cif_moi: number
+  target_bidv_direct: number
+  target_bh_nhan_tho: number
+  target_bh_khoan_vay: number
+  target_huy_dong_tang_rong: number
+  target_du_no_ngan_han_tang_rong: number
+  target_du_no_trung_han_tang_rong: number
+  target_cap_moi_hmtd: number
+  product_values?: Record<string, number>
+  product_targets?: Record<string, number>
 }
 
-const METRICS = [
-  { id: 'cif_moi', label: 'CIF MỚI', unit: 'KH' },
-  { id: 'bidv_direct', label: 'BIDV DIRECT', unit: 'KH' },
-  { id: 'bh_nhan_tho', label: 'BẢO HIỂM NHÂN THỌ', unit: 'Triệu đồng' },
-  { id: 'bh_khoan_vay', label: 'BẢO HIỂM KHOẢN VAY', unit: 'Triệu đồng' },
-  { id: 'huy_dong_tang_rong', label: 'HUY ĐỘNG VỐN TĂNG RÒNG', unit: 'Tỷ đồng', scale: 1_000_000_000 },
-  { id: 'du_no_ngan_han_tang_rong', label: 'DƯ NỢ NGẮN HẠN TĂNG RÒNG', unit: 'Tỷ đồng', scale: 1_000_000_000 },
-  { id: 'du_no_trung_han_tang_rong', label: 'DƯ NỢ TRUNG/DÀI HẠN TĂNG RÒNG', unit: 'Tỷ đồng', scale: 1_000_000_000 },
-  { id: 'cap_moi_hmtd', label: 'CẤP MỚI HMTD (SL KH)', unit: 'KH' },
+type KpiMetric = { id: string; label: string; unit: string; scale?: number; isProduct?: boolean; actualKey?: keyof KPISummary; targetKey?: keyof KPISummary }
+
+const KPI_METRICS: KpiMetric[] = [
+  { id: 'cif_moi', label: 'CIF MỚI', unit: 'KH', actualKey: 'cif_moi', targetKey: 'target_cif_moi' },
+  { id: 'bidv_direct', label: 'BIDV DIRECT', unit: 'KH', actualKey: 'bidv_direct', targetKey: 'target_bidv_direct' },
+  { id: 'bh_nhan_tho', label: 'BẢO HIỂM NHÂN THỌ', unit: 'Triệu đồng', actualKey: 'bh_nhan_tho', targetKey: 'target_bh_nhan_tho' },
+  { id: 'bh_khoan_vay', label: 'BẢO HIỂM KHOẢN VAY', unit: 'Triệu đồng', actualKey: 'bh_khoan_vay', targetKey: 'target_bh_khoan_vay' },
+  { id: 'huy_dong_tang_rong', label: 'HUY ĐỘNG VỐN TĂNG RÒNG', unit: 'Tỷ đồng', scale: 1_000_000_000, actualKey: 'huy_dong_tang_rong', targetKey: 'target_huy_dong_tang_rong' },
+  { id: 'du_no_ngan_han_tang_rong', label: 'DƯ NỢ NGẮN HẠN TĂNG RÒNG', unit: 'Tỷ đồng', scale: 1_000_000_000, actualKey: 'du_no_ngan_han_tang_rong', targetKey: 'target_du_no_ngan_han_tang_rong' },
+  { id: 'du_no_trung_han_tang_rong', label: 'DƯ NỢ TRUNG/DÀI HẠN TĂNG RÒNG', unit: 'Tỷ đồng', scale: 1_000_000_000, actualKey: 'du_no_trung_han_tang_rong', targetKey: 'target_du_no_trung_han_tang_rong' },
+  { id: 'cap_moi_hmtd', label: 'CẤP MỚI HMTD (SL KH)', unit: 'KH', actualKey: 'cap_moi_hmtd', targetKey: 'target_cap_moi_hmtd' },
+  { id: 'other_spdv', label: 'CÁC SẢN PHẨM KHÁC', unit: 'SL', isProduct: true },
 ]
 
 export function KPISummaryTable() {
@@ -200,7 +219,7 @@ export function KPISummaryTable() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {METRICS.map((metric, index) => (
+                  {KPI_METRICS.map((metric, index) => (
                     <tr key={metric.id} className="hover:bg-slate-50 transition-colors">
                       <td className="py-3 px-4 text-center text-slate-500 font-medium border-r border-gray-100">{index + 1}</td>
                       <td className="py-3 px-4 font-medium text-slate-800 border-r border-gray-100">{metric.label}</td>
@@ -215,8 +234,14 @@ export function KPISummaryTable() {
                           }).format(displayValue);
                         }
 
-                        const monthTotalValue = monthData.reduce((sum, user) => sum + (user[metric.id as keyof typeof user] as number || 0), 0)
-                        const monthTotalTarget = monthData.reduce((sum, user) => sum + (user[`target_${metric.id}` as keyof typeof user] as number || 0), 0)
+                        const monthTotalValue = monthData.reduce((sum, user) => {
+                          if (metric.isProduct) return sum + Number(user.product_values?.[metric.id] || 0)
+                          return sum + Number(metric.actualKey ? user[metric.actualKey] || 0 : 0)
+                        }, 0)
+                        const monthTotalTarget = monthData.reduce((sum, user) => {
+                          if (metric.isProduct) return sum + Number(user.product_targets?.[metric.id] || 0)
+                          return sum + Number(metric.targetKey ? user[metric.targetKey] || 0 : 0)
+                        }, 0)
 
                         return (
                           <>
@@ -231,9 +256,8 @@ export function KPISummaryTable() {
                       })()}
 
                       {data.map((user) => {
-                        const value = user[metric.id as keyof typeof user] as number;
-                        const targetKey = `target_${metric.id}`;
-                        const target = user[targetKey as keyof typeof user] as number | undefined;
+                        const value = metric.isProduct ? Number(user.product_values?.[metric.id] || 0) : Number(metric.actualKey ? user[metric.actualKey] || 0 : 0);
+                        const target = metric.isProduct ? Number(user.product_targets?.[metric.id] || 0) : Number(metric.targetKey ? user[metric.targetKey] || 0 : 0);
 
                         const formatCell = (val: number | undefined) => {
                           if (!val) return val === 0 ? '-' : '0';

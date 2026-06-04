@@ -30,6 +30,7 @@ interface FormData {
 }
 
 const ROLE_LABELS: Record<UserRole, string> = {
+  'ADMIN_LEVEL_0': 'Admin Hệ Thống',
   'ADMIN_LEVEL_1': 'Admin Cấp 1',
   'ADMIN_LEVEL_2': 'Admin Cấp 2',
   'ADMIN_LEVEL_3': 'Admin Cấp 3',
@@ -38,6 +39,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 const ROLE_ICONS: Record<UserRole, typeof Shield> = {
+  'ADMIN_LEVEL_0': ShieldCheck,
   'ADMIN_LEVEL_1': ShieldCheck,
   'ADMIN_LEVEL_2': Shield,
   'ADMIN_LEVEL_3': UserCheck,
@@ -85,7 +87,7 @@ export default function TeamPage() {
 
   if (!mounted) return <TableSkeleton title="Quản Lý Nhân Sự" />
 
-  if (user?.role !== 'ADMIN_LEVEL_1' && user?.role !== 'ADMIN_LEVEL_2') {
+  if (user?.role !== 'ADMIN_LEVEL_0' && user?.role !== 'ADMIN_LEVEL_1' && user?.role !== 'ADMIN_LEVEL_2') {
     return (
       <DashboardLayout title="Quản Lý Nhân Sự">
         <div className="flex items-center justify-center h-[50vh] text-slate-500">
@@ -549,10 +551,11 @@ export default function TeamPage() {
                   <option value="USER">Chuyên Viên</option>
                   <option value="ADVISOR">Cố Vấn / Giám Sát</option>
                   <option value="ADMIN_LEVEL_3">Admin Cấp 3 (Phó Phòng)</option>
-                  {user?.role === 'ADMIN_LEVEL_1' && (
+                  {(user?.role === 'ADMIN_LEVEL_0' || user?.role === 'ADMIN_LEVEL_1') && (
                     <>
                       <option value="ADMIN_LEVEL_2">Admin Cấp 2 (Trưởng Phòng)</option>
                       <option value="ADMIN_LEVEL_1">Admin Cấp 1 (Giám Đốc)</option>
+                      {user?.role === 'ADMIN_LEVEL_0' && <option value="ADMIN_LEVEL_0">Admin Hệ Thống</option>}
                     </>
                   )}
                 </select>

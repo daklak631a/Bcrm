@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS weekly_plans (
     target_du_no_ngan_han_tang_rong DECIMAL(15, 2) DEFAULT 0,
     target_du_no_trung_han_tang_rong DECIMAL(15, 2) DEFAULT 0,
     target_cap_moi_hmtd INT DEFAULT 0,
+    product_targets JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
     CONSTRAINT unique_user_weekly UNIQUE (user_id, start_date)
@@ -39,10 +40,23 @@ CREATE TABLE IF NOT EXISTS daily_plans (
     target_du_no_ngan_han_tang_rong DECIMAL(15, 2) DEFAULT 0,
     target_du_no_trung_han_tang_rong DECIMAL(15, 2) DEFAULT 0,
     target_cap_moi_hmtd INT DEFAULT 0,
+    product_targets JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT now(),
     updated_at TIMESTAMPTZ DEFAULT now(),
     CONSTRAINT unique_user_daily UNIQUE (user_id, target_date)
 );
+
+ALTER TABLE weekly_plans
+  ADD COLUMN IF NOT EXISTS product_targets JSONB DEFAULT '{}'::jsonb;
+
+ALTER TABLE daily_plans
+  ADD COLUMN IF NOT EXISTS product_targets JSONB DEFAULT '{}'::jsonb;
+
+ALTER TABLE plan_assignments
+  ADD COLUMN IF NOT EXISTS product_targets JSONB DEFAULT '{}'::jsonb;
+
+ALTER TABLE cross_sell_products
+  ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
 
 -- 3. Enable RLS
 ALTER TABLE weekly_plans ENABLE ROW LEVEL SECURITY;

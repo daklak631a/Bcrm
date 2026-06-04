@@ -66,7 +66,7 @@ export function Header({
           schema: 'public', 
           table: 'notifications',
           filter: `user_id=eq.${user.id}`
-        }, (payload) => {
+        }, (payload: any) => {
           setNotifications(prev => [payload.new, ...prev])
         })
         .subscribe()
@@ -109,6 +109,7 @@ export function Header({
 
   const getRoleName = (role?: string) => {
     switch (role) {
+      case 'ADMIN_LEVEL_0': return 'Admin Hệ Thống'
       case 'ADMIN_LEVEL_1': return 'Hội Sở Chính'
       case 'ADMIN_LEVEL_2': return 'Quản lý Chi Nhánh'
       default: return 'Chuyên viên'

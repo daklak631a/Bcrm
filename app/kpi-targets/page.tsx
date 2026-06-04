@@ -37,9 +37,10 @@ export type FieldDefinition = {
 }
 
 const CORE_FIELDS: FieldDefinition[] = [
-  { key: "target_loans_amount", label: "Chỉ tiêu vay", unit: "VNĐ", step: "1000000" },
-  { key: "target_deposits_amount", label: "Chỉ tiêu gửi", unit: "VNĐ", step: "1000000" },
-  { key: "target_calls", label: "Chỉ tiêu gọi", unit: "Cuộc", step: "1" },
+  { key: "target_cif_moi", label: "CIF mới", unit: "KH", step: "1" },
+  { key: "target_bidv_direct", label: "BIDV Direct", unit: "KH", step: "1" },
+  { key: "target_bh_nhan_tho", label: "Bảo hiểm nhân thọ", unit: "Triệu đồng", step: "1" },
+  { key: "target_bh_khoan_vay", label: "Bảo hiểm khoản vay", unit: "Triệu đồng", step: "1" },
 ]
 
 const GROWTH_FIELDS: FieldDefinition[] = [
@@ -48,15 +49,25 @@ const GROWTH_FIELDS: FieldDefinition[] = [
   { key: "target_du_no_trung_han_tang_rong", label: "Dư nợ trung dài hạn tăng ròng", unit: "VNĐ", step: "1000000" },
 ]
 
+const CAP_FIELDS: FieldDefinition[] = [
+  { key: "target_cap_moi_hmtd", label: "Cấp mới HMTD", unit: "KH", step: "1" },
+]
+
+const OTHER_PRODUCT_FIELDS: FieldDefinition[] = [
+  { key: "prod_other_spdv", label: "Các sản phẩm khác", unit: "SL", step: "1", isProduct: true, productId: "other_spdv" },
+]
+
 function getFieldHeaderClass(field: FieldDefinition) {
   if (field.isProduct) return "bg-teal-100/60 text-[#005451]"
   if (CORE_FIELDS.some(f => f.key === field.key)) return "bg-teal-50 text-[#006b68]"
+  if (CAP_FIELDS.some(f => f.key === field.key)) return "bg-cyan-50 text-cyan-700"
   return "bg-[#ccedea]/40 text-[#003e3b]"
 }
 
 function getFieldInputTone(field: FieldDefinition) {
   if (field.isProduct) return "border-teal-300/70 bg-teal-100/30 group-hover:border-teal-400"
   if (CORE_FIELDS.some(f => f.key === field.key)) return "border-teal-200 bg-teal-50/60 group-hover:border-teal-300"
+  if (CAP_FIELDS.some(f => f.key === field.key)) return "border-cyan-200 bg-cyan-50/60 group-hover:border-cyan-300"
   return "border-teal-200 bg-[#ccedea]/20 group-hover:border-teal-300"
 }
 
@@ -80,6 +91,28 @@ function buildDraft(assignment: Partial<PlanAssignment> | null | undefined, allF
   return draft
 }
 
+function buildAssignmentPayloadFromDraft(draft: AssignmentDraft, productFields: FieldDefinition[]) {
+  const productTargets: Record<string, number> = {}
+  productFields.forEach((field) => {
+    if (field.productId) productTargets[field.productId] = Number(draft[field.key] || 0)
+  })
+
+  return {
+    target_loans_amount: Number(draft.target_loans_amount || 0),
+    target_deposits_amount: Number(draft.target_deposits_amount || 0),
+    target_calls: Number(draft.target_calls || 0),
+    target_cif_moi: Number(draft.target_cif_moi || 0),
+    target_bidv_direct: Number(draft.target_bidv_direct || 0),
+    target_bh_nhan_tho: Number(draft.target_bh_nhan_tho || 0),
+    target_bh_khoan_vay: Number(draft.target_bh_khoan_vay || 0),
+    target_huy_dong_tang_rong: Number(draft.target_huy_dong_tang_rong || 0),
+    target_du_no_ngan_han_tang_rong: Number(draft.target_du_no_ngan_han_tang_rong || 0),
+    target_du_no_trung_han_tang_rong: Number(draft.target_du_no_trung_han_tang_rong || 0),
+    target_cap_moi_hmtd: Number(draft.target_cap_moi_hmtd || 0),
+    product_targets: productTargets,
+  }
+}
+
 function draftsEqual(a: AssignmentDraft | undefined, b: AssignmentDraft | undefined, allFields: FieldDefinition[]) {
   const left = a || buildDefaultDraft(allFields)
   const right = b || buildDefaultDraft(allFields)
@@ -95,7 +128,7 @@ function formatCompact(value: number, fieldKey?: string) {
   if (!value) return "0"
   
   const isCurrency = fieldKey && [
-    'target_loans_amount', 'target_deposits_amount', 
+    'target_loans_amount', 'target_deposits_amount', 'target_bh_nhan_tho', 'target_bh_khoan_vay',
     'target_huy_dong_tang_rong', 'target_du_no_ngan_han_tang_rong', 'target_du_no_trung_han_tang_rong'
   ].includes(fieldKey)
 
@@ -143,7 +176,6 @@ export default function KpiTargetsPage() {
   const [loading, setLoading] = useState(true)
   const [plans, setPlans] = useState<Plan[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
-  const [products, setProducts] = useState<any[]>([])
   const [assignments, setAssignments] = useState<PlanAssignment[]>([])
   const [selectedPlanId, setSelectedPlanId] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
@@ -204,20 +236,13 @@ export default function KpiTargetsPage() {
     }, {})
   }, [assignments])
 
-  const productFields = useMemo<FieldDefinition[]>(() => {
-    return products.map(p => ({
-      key: `prod_${p.id}`,
-      label: p.name,
-      unit: p.unit_label || (p.metric_type === 'AMOUNT' ? 'VNĐ' : 'Số lượng'),
-      step: p.metric_type === 'AMOUNT' ? '1000000' : '1',
-      isProduct: true,
-      productId: p.id
-    }))
-  }, [products])
+  const productFields = useMemo<FieldDefinition[]>(() => OTHER_PRODUCT_FIELDS, [])
 
-  const ALL_ASSIGNMENT_FIELDS = useMemo(() => [...CORE_FIELDS, ...productFields, ...GROWTH_FIELDS], [productFields])
+  const ALL_ASSIGNMENT_FIELDS = useMemo(() => [...CORE_FIELDS, ...GROWTH_FIELDS, ...CAP_FIELDS, ...productFields], [productFields])
 
   const selectedPlan = useMemo(() => plans.find((plan) => plan.id === selectedPlanId) || null, [plans, selectedPlanId])
+
+  const personalPlanUserId = user?.id || ""
 
   const filteredUsers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -238,17 +263,12 @@ export default function KpiTargetsPage() {
   const loadBaseData = useCallback(async () => {
     try {
       setLoading(true)
-      const supabase = getSupabase()
-      const [plansData, profilesData, productsData] = await Promise.all([
+      const [plansData, profilesData] = await Promise.all([
          fetchPlans(), 
          fetchProfiles(),
-         supabase.from('cross_sell_products').select('*').eq('is_active', true).order('created_at', { ascending: true })
       ])
       setPlans(plansData)
       setProfiles(profilesData)
-      if (productsData.data) {
-        setProducts(productsData.data)
-      }
       if (!selectedPlanId && plansData.length > 0) {
         setSelectedPlanId(plansData[0].id)
       }
@@ -305,32 +325,30 @@ export default function KpiTargetsPage() {
   }, [ALL_ASSIGNMENT_FIELDS, toDateStr])
 
   // Load monthly actuals for current user and selected plan period
-  const loadMonthlyActuals = useCallback(async (plan: Plan) => {
-    if (!user?.id) return
+  const loadMonthlyActuals = useCallback(async (plan: Plan, targetUserId: string) => {
+    if (!targetUserId) return
     try {
-      const planDate = new Date(plan.target_date)
-      const year = planDate.getFullYear()
-      const month = planDate.getMonth()
-      const startDateStr = toDateStr(new Date(year, month, 1))
-      const endDateStr = toDateStr(new Date(year, month + 1, 0))
-
-      const supabase = getSupabase()
-      const { data, error } = await supabase.rpc('get_kpi_summary', {
-        start_date: startDateStr,
-        end_date: endDateStr
+      const supabase = getSupabase() as any
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      const response = await fetch('/api/reports/kpi-summary?period=month', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
-      if (error) throw error
-      
-      const userSummary = data?.find((row: any) => row.manager_id === user.id)
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(payload?.error || 'Không tải được kết quả KPI tháng')
+      }
+      const data = await response.json()
+      const userSummary = data?.find((row: any) => row.manager_id === targetUserId)
       setMonthlyActual(userSummary || null)
     } catch (err) {
       console.error("Failed to load monthly actuals:", err)
     }
-  }, [user?.id, toDateStr])
+  }, [])
 
   // Save personal weekly & daily plans
   const handleSavePersonal = async () => {
-    if (!user?.id) return
+    if (!personalPlanUserId) return
     try {
       setSavingPersonal(true)
       const mon = new Date(selectedMonday)
@@ -340,22 +358,22 @@ export default function KpiTargetsPage() {
 
       // Save weekly plan
       await upsertWeeklyPlan({
-        user_id: user.id,
+        user_id: personalPlanUserId,
         start_date: selectedMonday,
         end_date: fridayStr,
-        ...weeklyDraft
+        ...buildAssignmentPayloadFromDraft(weeklyDraft, productFields),
       })
 
       // Save daily plans
       const dailyPayloads = Object.keys(dailyDrafts).map((dStr) => ({
-        user_id: user.id,
+        user_id: personalPlanUserId,
         target_date: dStr,
-        ...dailyDrafts[dStr]
+        ...buildAssignmentPayloadFromDraft(dailyDrafts[dStr], productFields),
       }))
       await upsertDailyPlans(dailyPayloads)
 
       toast.success("Đã lưu kế hoạch tuần và ngày thành công!")
-      loadPersonalPlans(user.id, selectedMonday)
+      loadPersonalPlans(personalPlanUserId, selectedMonday)
     } catch (err: any) {
       toast.error("Lỗi lưu kế hoạch: " + err.message)
     } finally {
@@ -365,7 +383,7 @@ export default function KpiTargetsPage() {
 
   // Auto distribute monthly target to weekly target (Divide by 4)
   const handleAutoDistributeMonthToWeek = () => {
-    const myAssignment = assignments.find(a => a.user_id === user?.id)
+    const myAssignment = assignments.find(a => a.user_id === personalPlanUserId)
     if (!myAssignment) {
       toast.error("Bạn chưa được giao chỉ tiêu tháng cho kỳ này!")
       return
@@ -429,10 +447,10 @@ export default function KpiTargetsPage() {
   }, [loadAssignments, selectedPlanId])
 
   useEffect(() => {
-    if (mounted && user?.id && !canManage) {
-      loadPersonalPlans(user.id, selectedMonday)
+    if (mounted && !canManage && personalPlanUserId) {
+      loadPersonalPlans(personalPlanUserId, selectedMonday)
     }
-  }, [mounted, user?.id, selectedMonday, canManage, loadPersonalPlans])
+  }, [mounted, canManage, personalPlanUserId, selectedMonday, loadPersonalPlans])
 
   useEffect(() => {
     if (selectedMonday && !activeDayTab) {
@@ -441,10 +459,10 @@ export default function KpiTargetsPage() {
   }, [selectedMonday, activeDayTab])
 
   useEffect(() => {
-    if (mounted && selectedPlan && !canManage) {
-      loadMonthlyActuals(selectedPlan)
+    if (mounted && selectedPlan && !canManage && personalPlanUserId) {
+      loadMonthlyActuals(selectedPlan, personalPlanUserId)
     }
-  }, [mounted, selectedPlan, canManage, loadMonthlyActuals])
+  }, [mounted, selectedPlan, canManage, personalPlanUserId, loadMonthlyActuals])
 
   useEffect(() => {
     const nextDrafts: Record<string, AssignmentDraft> = {}
@@ -666,17 +684,8 @@ export default function KpiTargetsPage() {
       const payload: any = {
         plan_id: selectedPlanId,
         user_id: profile.id,
-        target_loans_amount: draft.target_loans_amount || 0,
-        target_deposits_amount: draft.target_deposits_amount || 0,
-        target_calls: draft.target_calls || 0,
-        target_huy_dong_tang_rong: draft.target_huy_dong_tang_rong || 0,
-        target_du_no_ngan_han_tang_rong: draft.target_du_no_ngan_han_tang_rong || 0,
-        target_du_no_trung_han_tang_rong: draft.target_du_no_trung_han_tang_rong || 0,
-        product_targets: {}
+        ...buildAssignmentPayloadFromDraft(draft, productFields),
       }
-      productFields.forEach(f => {
-        if (f.productId) payload.product_targets[f.productId] = draft[f.key] || 0
-      })
       await upsertPlanAssignment(payload)
       await loadAssignments(selectedPlanId)
       toast.success(`Đã lưu KPI cho ${profile.full_name}`)
@@ -704,17 +713,8 @@ export default function KpiTargetsPage() {
           const payload: any = {
             plan_id: selectedPlanId,
             user_id: userId,
-            target_loans_amount: draft.target_loans_amount || 0,
-            target_deposits_amount: draft.target_deposits_amount || 0,
-            target_calls: draft.target_calls || 0,
-            target_huy_dong_tang_rong: draft.target_huy_dong_tang_rong || 0,
-            target_du_no_ngan_han_tang_rong: draft.target_du_no_ngan_han_tang_rong || 0,
-            target_du_no_trung_han_tang_rong: draft.target_du_no_trung_han_tang_rong || 0,
-            product_targets: {}
+            ...buildAssignmentPayloadFromDraft(draft, productFields),
           }
-          productFields.forEach(f => {
-            if (f.productId) payload.product_targets[f.productId] = draft[f.key] || 0
-          })
           return upsertPlanAssignment(payload)
         })
       )
@@ -730,7 +730,7 @@ export default function KpiTargetsPage() {
   if (!mounted) return <TableSkeleton title="Thiết lập KPI mục tiêu" rows={6} columns={6} />
 
   const renderSpecialistView = () => {
-    const myAssignment = assignments.find(a => a.user_id === user?.id)
+    const myAssignment = assignments.find(a => a.user_id === personalPlanUserId)
     const mon = new Date(selectedMonday)
     const weekDates = Array.from({ length: 5 }).map((_, i) => {
       const d = new Date(mon)
@@ -743,6 +743,8 @@ export default function KpiTargetsPage() {
       if (fieldKey === 'target_loans_amount') return Number(myAssignment?.actual_loans_amount || 0)
       if (fieldKey === 'target_deposits_amount') return Number(myAssignment?.actual_deposits_amount || 0)
       if (fieldKey === 'target_calls') return Number(myAssignment?.actual_calls || 0)
+      const productField = productFields.find((field) => field.key === fieldKey)
+      if (productField?.productId) return Number(monthlyActual?.product_values?.[productField.productId] || 0)
       
       if (!monthlyActual) return 0
       const mapping: Record<string, string> = {
@@ -753,7 +755,7 @@ export default function KpiTargetsPage() {
         target_huy_dong_tang_rong: 'huy_dong_tang_rong',
         target_du_no_ngan_han_tang_rong: 'du_no_ngan_han_tang_rong',
         target_du_no_trung_han_tang_rong: 'du_no_trung_han_tang_rong',
-        target_cap_moi_hmtd: 'cap_moi_hmtd'
+        target_cap_moi_hmtd: 'cap_moi_hmtd',
       }
       const actualKey = mapping[fieldKey]
       return Number(monthlyActual[actualKey] || 0)
@@ -1155,8 +1157,6 @@ export default function KpiTargetsPage() {
           </section>
         )}
 
-
-
         {filteredUsers.length > 0 && (
           <section className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.06)]">
             <div className="flex flex-col gap-4 border-b border-slate-200/80 p-5 lg:flex-row lg:items-center lg:justify-between">
@@ -1168,9 +1168,9 @@ export default function KpiTargetsPage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">{filteredUsers.length} nhân sự</span>
-                <span className="inline-flex items-center rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-[#006b68]">{CORE_FIELDS.length} cột trọng tâm</span>
-                <span className="inline-flex items-center rounded-full bg-teal-100 px-3 py-1 text-xs font-medium text-[#005451]">{productFields.length} cột sản phẩm</span>
+                <span className="inline-flex items-center rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-[#006b68]">8 KPI chuẩn</span>
                 <span className="inline-flex items-center rounded-full bg-[#ccedea] px-3 py-1 text-xs font-medium text-[#003e3b]">{GROWTH_FIELDS.length} cột tăng ròng</span>
+                <span className="inline-flex items-center rounded-full bg-teal-100 px-3 py-1 text-xs font-medium text-[#005451]">{productFields.length} cột sản phẩm khác</span>
               </div>
             </div>
 
@@ -1185,15 +1185,16 @@ export default function KpiTargetsPage() {
                       Kết quả thực tế
                     </th>
                     <th colSpan={CORE_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-[#002b29] bg-[#003835] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-50">
-                      Chỉ tiêu trọng tâm
+                      KPI sản phẩm chuẩn
                     </th>
-                    {productFields.length > 0 && (
-                      <th colSpan={productFields.length} className="sticky top-0 z-40 border-b border-r border-[#003835] bg-[#004d4a] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-100">
-                        Chỉ tiêu sản phẩm
-                      </th>
-                    )}
                     <th colSpan={GROWTH_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-[#004744] bg-[#005c58] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-50">
                       Chỉ tiêu tăng ròng
+                    </th>
+                    <th colSpan={CAP_FIELDS.length} className="sticky top-0 z-40 border-b border-r border-[#004744] bg-cyan-700 px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-cyan-50">
+                      Hạn mức tín dụng
+                    </th>
+                    <th colSpan={productFields.length} className="sticky top-0 z-40 border-b border-r border-[#003835] bg-[#004d4a] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-teal-100">
+                      Sản phẩm khác
                     </th>
                     <th rowSpan={2} className="max-md:static sticky right-0 top-0 z-50 min-w-[180px] max-md:min-w-[120px] border-b border-l border-[#001f1e] bg-[#002625] px-4 py-4 text-center text-xs font-semibold uppercase tracking-[0.18em] text-white">
                       Tác vụ

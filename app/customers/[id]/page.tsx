@@ -3,7 +3,7 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useState, useEffect, useCallback, use } from "react"
 import { fetchCustomerById, fetchInteractionsByCustomer, fetchProfiles, fetchSalesRecordsByCustomer, getCustomerFullName, formatCurrency, updateCustomer, fetchProducts } from "@/lib/supabase/api"
-import { ArrowLeft, Edit, Save, X, Phone, Mail, MapPin, Calendar, FileText, Briefcase, CreditCard, ShoppingCart, Loader2, ArrowRight, Plus, Sparkles } from "lucide-react"
+import { ArrowLeft, Edit, Save, X, Phone, Mail, MapPin, Calendar, FileText, Briefcase, CreditCard, ShoppingCart, Loader2, ArrowRight, Plus, Sparkles, Network } from "lucide-react"
 import Link from "next/link"
 import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
 import { toast } from "sonner"
@@ -40,7 +40,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       const [cust, profiles] = await Promise.all([
         fetchCustomerById(customerId),
         fetchProfiles(),
-      ])
+      ]) as [any, any[]]
       if (!cust || !canAccessOwner(cust.assigned_manager_id, profiles, user)) {
         setCustomer(null)
         setEditForm({})
@@ -94,7 +94,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       setIsEditing(false)
     } catch (err) {
       console.error('Error updating customer:', err)
-      alert('Có lỗi xảy ra khi cập nhật thông tin!')
+      toast.error('Có lỗi xảy ra khi cập nhật thông tin!')
     } finally {
       setSaving(false)
     }
@@ -491,6 +491,12 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     >
                       <Plus className="w-3 h-3" /> Bán hàng
                     </Link>
+                    <Link
+                      href={`/sales?create=1&type=PROJECT&customerId=${customerId}`}
+                      className="inline-flex items-center gap-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg transition-colors text-xs font-bold shadow-sm"
+                    >
+                      <Network className="w-3 h-3" /> Tạo dự án
+                    </Link>
                     <div className="hidden sm:block h-5 w-px bg-slate-200 mx-1" />
                     <Link href={`/sales?customerId=${customerId}`} className="text-xs font-bold text-slate-500 hover:text-slate-700 flex items-center gap-1 border border-slate-200 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors">
                       Xem tất cả <ArrowRight className="w-3.5 h-3.5" />
@@ -803,4 +809,3 @@ function QuickInteractionModal({
     </div>
   )
 }
-

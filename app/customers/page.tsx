@@ -380,7 +380,7 @@ export default function CustomersPage() {
               merchant_qr: parseBooleanCell(item["Merchant QR"]),
             }
 
-            let customerData = null
+            let customerData: any = null
             if (existingCustomer) {
               customerData = await updateCustomer(existingCustomer.id, customerPayload)
             } else {

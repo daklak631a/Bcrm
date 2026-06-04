@@ -144,7 +144,7 @@ export function SalesSupportKanban() {
         fetchSupportRequests(),
       ])
 
-      const profileById = new Map(profilesData.map((profile: any) => [profile.id, profile]))
+      const profileById = new Map<string, any>(profilesData.map((profile: any) => [profile.id, profile]))
       setProfiles(profilesData)
       setSupportRequests(supportData)
 

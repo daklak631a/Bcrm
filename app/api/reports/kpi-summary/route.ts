@@ -2,8 +2,35 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import dayjs from 'dayjs'
 import { checkRateLimit, getClientIp } from '@/lib/middleware/rate-limit'
+import { getProductMetricValue } from '@/lib/product-metrics'
+
+const OTHER_PRODUCTS_ID = 'other_spdv'
+
+function classifyKpiProduct(product?: any): string {
+  const upperName = `${product?.name || ''}`.toUpperCase()
+  const upperType = `${product?.type || ''}`.toUpperCase()
+  const text = `${upperName} ${upperType}`
+
+  if (text.includes('CIF')) return 'cif_moi'
+  if (text.includes('DIRECT')) return 'bidv_direct'
+  if (text.includes('HMTD') || text.includes('HẠN MỨC') || text.includes('HAN MUC')) return 'cap_moi_hmtd'
+  if (text.includes('BẢO HIỂM') || text.includes('BAO HIEM') || text.includes('BH ') || text.includes('LIFE')) {
+    if (text.includes('KHOẢN VAY') || text.includes('KHOAN VAY') || text.includes('LOAN')) return 'bh_khoan_vay'
+    return 'bh_nhan_tho'
+  }
+  if (text.includes('HUY ĐỘNG') || text.includes('HUY DONG')) return 'huy_dong_tang_rong'
+  if (text.includes('DƯ NỢ') || text.includes('DU NO')) {
+    if (text.includes('NGẮN HẠN') || text.includes('NGAN HAN')) return 'du_no_ngan_han_tang_rong'
+    if (text.includes('TRUNG') || text.includes('DÀI HẠN') || text.includes('DAI HAN')) return 'du_no_trung_han_tang_rong'
+  }
+
+  return OTHER_PRODUCTS_ID
+}
 
 const TARGET_FIELDS = [
+  'target_loans_amount',
+  'target_deposits_amount',
+  'target_calls',
   'target_cif_moi',
   'target_bidv_direct',
   'target_bh_nhan_tho',
@@ -93,16 +120,34 @@ export async function GET(request: Request) {
         startDate = dayjs().startOf('month').format('YYYY-MM-DD')
     }
 
-    // Gọi RPC function đã tạo trong CSDL
-    const { data, error } = await supabase.rpc('get_kpi_summary', {
+    // RPC này có thể chưa được migrate ở một số DB deploy.
+    // Nếu thiếu function thì vẫn fallback sang logic tổng hợp thủ công bên dưới.
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_kpi_summary', {
       start_date: startDate,
       end_date: endDate
     })
 
-    if (error) {
-      console.error('Error fetching KPI summary:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (rpcError) {
+      const missingRpc = /function .*get_kpi_summary|Could not find the function/i.test(rpcError.message || '')
+      if (!missingRpc) {
+        console.error('Error fetching KPI summary:', rpcError)
+        return NextResponse.json({ error: rpcError.message }, { status: 500 })
+      }
+      console.warn('RPC get_kpi_summary is unavailable, using manual KPI aggregation fallback.')
     }
+    const data = rpcData || []
+
+    const { data: activeProductsData, error: activeProductsError } = await supabase
+      .from('cross_sell_products')
+      .select('id, name, type')
+      .order('name', { ascending: true })
+
+    if (activeProductsError) {
+      return NextResponse.json({ error: activeProductsError.message }, { status: 500 })
+    }
+
+    const activeProducts = activeProductsData || []
+    const productCategoryById = new Map(activeProducts.map((product: any) => [product.id, classifyKpiProduct(product)]))
 
     // Fetch targets based on period
     let targetsByUser = new Map<string, Record<string, number>>()
@@ -147,45 +192,188 @@ export async function GET(request: Request) {
     }
 
     let visibleManagerIds: Set<string> | null = null
+    let visibleProfilesQuery = supabase
+      .from('profiles')
+      .select('id, full_name, role, department_id')
+      .eq('role', 'USER')
+      .eq('is_active', true)
+      .order('full_name')
 
     if (currentProfile.role === 'USER') {
       visibleManagerIds = new Set([currentProfile.id])
+      visibleProfilesQuery = visibleProfilesQuery.eq('id', currentProfile.id)
     } else if (currentProfile.role === 'ADMIN_LEVEL_2') {
-      const { data: departmentProfiles, error: departmentError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('department_id', currentProfile.department_id)
-        .eq('is_active', true)
-
-      if (departmentError) {
-        return NextResponse.json({ error: departmentError.message }, { status: 500 })
-      }
-
-      visibleManagerIds = new Set((departmentProfiles || []).map((profile) => profile.id))
+      visibleProfilesQuery = visibleProfilesQuery.eq('department_id', currentProfile.department_id)
     }
 
-    const roleFilteredData = visibleManagerIds
-      ? (data || []).filter((row: any) => visibleManagerIds?.has(row.manager_id))
-      : (data || [])
+    const { data: visibleProfilesData, error: visibleProfilesError } = await visibleProfilesQuery
+
+    if (visibleProfilesError) {
+      return NextResponse.json({ error: visibleProfilesError.message }, { status: 500 })
+    }
+
+    if (currentProfile.role !== 'USER') {
+      visibleManagerIds = new Set((visibleProfilesData || []).map((profile: any) => profile.id))
+    }
+
+    const summaryByUser = new Map<string, any>((data || []).map((row: any) => [row.manager_id, row]))
+    const roleFilteredData = (visibleProfilesData || []).map((profile: any) => ({
+      ...(summaryByUser.get(profile.id) || {}),
+      manager_id: profile.id,
+      full_name: profile.full_name,
+      short_name: summaryByUser.get(profile.id)?.short_name || null,
+    }))
+
+    const coreActualsByUser = new Map<string, { loans_amount: number; deposits_amount: number; calls: number }>()
+    const getCoreActuals = (userId: string) => {
+      const current = coreActualsByUser.get(userId) || { loans_amount: 0, deposits_amount: 0, calls: 0 }
+      coreActualsByUser.set(userId, current)
+      return current
+    }
+
+    const { data: loanActualsData, error: loanActualsError } = await supabase
+      .from('loans')
+      .select('loan_amount, start_date, customer_id, customers(assigned_manager_id)')
+      .eq('status', 'ACTIVE')
+      .gte('start_date', startDate)
+      .lte('start_date', endDate)
+
+    if (loanActualsError) {
+      return NextResponse.json({ error: loanActualsError.message }, { status: 500 })
+    }
+
+    ;(loanActualsData || []).forEach((loan: any) => {
+      const managerId = loan.customers?.assigned_manager_id
+      if (!managerId) return
+      if (visibleManagerIds && !visibleManagerIds.has(managerId)) return
+      const actuals = getCoreActuals(managerId)
+      actuals.loans_amount += Number(loan.loan_amount || 0)
+    })
+
+    const { data: depositActualsData, error: depositActualsError } = await supabase
+      .from('deposits')
+      .select('amount, start_date, customer_id, customers(assigned_manager_id)')
+      .eq('status', 'ACTIVE')
+      .gte('start_date', startDate)
+      .lte('start_date', endDate)
+
+    if (depositActualsError) {
+      return NextResponse.json({ error: depositActualsError.message }, { status: 500 })
+    }
+
+    ;(depositActualsData || []).forEach((deposit: any) => {
+      const managerId = deposit.customers?.assigned_manager_id
+      if (!managerId) return
+      if (visibleManagerIds && !visibleManagerIds.has(managerId)) return
+      const actuals = getCoreActuals(managerId)
+      actuals.deposits_amount += Number(deposit.amount || 0)
+    })
+
+    const { data: callActualsData, error: callActualsError } = await supabase
+      .from('interactions')
+      .select('manager_id, type, interaction_date')
+      .eq('type', 'CALL')
+      .gte('interaction_date', startDate)
+      .lte('interaction_date', endDate)
+
+    if (callActualsError) {
+      return NextResponse.json({ error: callActualsError.message }, { status: 500 })
+    }
+
+    ;(callActualsData || []).forEach((interaction: any) => {
+      const managerId = interaction.manager_id
+      if (!managerId) return
+      if (visibleManagerIds && !visibleManagerIds.has(managerId)) return
+      const actuals = getCoreActuals(managerId)
+      actuals.calls += 1
+    })
+
+    const { data: productSalesData, error: productSalesError } = await supabase
+      .from('cross_sell_records')
+      .select('agent_id, product_id, result_value, sale_date, created_at, cross_sell_products(id, name, type)')
+      .or(`and(sale_date.gte.${startDate},sale_date.lte.${endDate}),and(sale_date.is.null,created_at.gte.${startDate},created_at.lt.${dayjs(endDate).add(1, 'day').format('YYYY-MM-DD')})`)
+
+    if (productSalesError) {
+      return NextResponse.json({ error: productSalesError.message }, { status: 500 })
+    }
+
+    const extraActualsByUser = new Map<string, Record<string, number>>()
+    const addExtraActual = (userId: string, key: string, value: number) => {
+      const current = extraActualsByUser.get(userId) || {}
+      current[key] = Number(current[key] || 0) + value
+      extraActualsByUser.set(userId, current)
+    }
+
+    ;(productSalesData || []).forEach((sale: any) => {
+      if (!sale.agent_id) return
+      if (visibleManagerIds && !visibleManagerIds.has(sale.agent_id)) return
+      const categoryKey = productCategoryById.get(sale.product_id) || classifyKpiProduct(sale.cross_sell_products)
+      addExtraActual(sale.agent_id, categoryKey, getProductMetricValue(sale, sale.cross_sell_products))
+    })
 
     const mergedData = roleFilteredData.map((row: any) => {
       const target = targetsByUser.get(row.manager_id)
+      const productTargets: Record<string, number> = { [OTHER_PRODUCTS_ID]: 0 }
+      const categoryTargets: Record<string, number> = {}
+      Object.entries(target || {}).forEach(([key, value]) => {
+        if (key.startsWith('target_')) return
+        const categoryKey = key === OTHER_PRODUCTS_ID ? OTHER_PRODUCTS_ID : productCategoryById.get(key) || OTHER_PRODUCTS_ID
+        if (categoryKey === OTHER_PRODUCTS_ID) {
+          productTargets[OTHER_PRODUCTS_ID] = Number(productTargets[OTHER_PRODUCTS_ID] || 0) + Number(value || 0)
+        } else {
+          categoryTargets[`target_${categoryKey}`] = Number(categoryTargets[`target_${categoryKey}`] || 0) + Number(value || 0)
+        }
+      })
+      const extraActuals = extraActualsByUser.get(row.manager_id) || {}
+      const productActuals = row.product_actuals || {}
+      const getProductActualByCategory = (categoryKey: string) => {
+        return Object.entries(productActuals).reduce((sum, [productId, value]) => {
+          const productCategory = productId === OTHER_PRODUCTS_ID ? OTHER_PRODUCTS_ID : productCategoryById.get(productId) || OTHER_PRODUCTS_ID
+          return productCategory === categoryKey ? sum + Number(value || 0) : sum
+        }, 0)
+      }
+      const getActualValue = (actualKey: string) => {
+        const legacyValue = Number(row?.[actualKey] || 0)
+        if (legacyValue !== 0) return legacyValue
+        const productActualValue = getProductActualByCategory(actualKey)
+        if (productActualValue !== 0) return productActualValue
+        return Number(extraActuals[actualKey] || 0)
+      }
+      const otherProductActual = getProductActualByCategory(OTHER_PRODUCTS_ID) || Number(extraActuals[OTHER_PRODUCTS_ID] || 0)
+
       return {
         ...row,
-        product_targets: target || {},
+        ...getCoreActuals(row.manager_id),
+        product_targets: productTargets,
+        product_values: { [OTHER_PRODUCTS_ID]: otherProductActual },
+        cif_moi: getActualValue('cif_moi'),
+        bidv_direct: getActualValue('bidv_direct'),
+        bh_nhan_tho: getActualValue('bh_nhan_tho'),
+        bh_khoan_vay: getActualValue('bh_khoan_vay'),
+        huy_dong_tang_rong: getActualValue('huy_dong_tang_rong'),
+        du_no_ngan_han_tang_rong: getActualValue('du_no_ngan_han_tang_rong'),
+        du_no_trung_han_tang_rong: getActualValue('du_no_trung_han_tang_rong'),
+        cap_moi_hmtd: getActualValue('cap_moi_hmtd'),
         // Fallback backward compatibility
-        target_cif_moi: target?.target_cif_moi || 0,
-        target_bidv_direct: target?.target_bidv_direct || 0,
-        target_bh_nhan_tho: target?.target_bh_nhan_tho || 0,
-        target_bh_khoan_vay: target?.target_bh_khoan_vay || 0,
-        target_huy_dong_tang_rong: target?.target_huy_dong_tang_rong || 0,
-        target_du_no_ngan_han_tang_rong: target?.target_du_no_ngan_han_tang_rong || 0,
-        target_du_no_trung_han_tang_rong: target?.target_du_no_trung_han_tang_rong || 0,
-        target_cap_moi_hmtd: target?.target_cap_moi_hmtd || 0,
+        target_loans_amount: target?.target_loans_amount || 0,
+        target_deposits_amount: target?.target_deposits_amount || 0,
+        target_calls: target?.target_calls || 0,
+        target_cif_moi: Number(target?.target_cif_moi || 0) + Number(categoryTargets.target_cif_moi || 0),
+        target_bidv_direct: Number(target?.target_bidv_direct || 0) + Number(categoryTargets.target_bidv_direct || 0),
+        target_bh_nhan_tho: Number(target?.target_bh_nhan_tho || 0) + Number(categoryTargets.target_bh_nhan_tho || 0),
+        target_bh_khoan_vay: Number(target?.target_bh_khoan_vay || 0) + Number(categoryTargets.target_bh_khoan_vay || 0),
+        target_huy_dong_tang_rong: Number(target?.target_huy_dong_tang_rong || 0) + Number(categoryTargets.target_huy_dong_tang_rong || 0),
+        target_du_no_ngan_han_tang_rong: Number(target?.target_du_no_ngan_han_tang_rong || 0) + Number(categoryTargets.target_du_no_ngan_han_tang_rong || 0),
+        target_du_no_trung_han_tang_rong: Number(target?.target_du_no_trung_han_tang_rong || 0) + Number(categoryTargets.target_du_no_trung_han_tang_rong || 0),
+        target_cap_moi_hmtd: Number(target?.target_cap_moi_hmtd || 0) + Number(categoryTargets.target_cap_moi_hmtd || 0),
       }
     }) || []
 
-    return NextResponse.json({ data: mergedData, startDate, endDate })
+    const productsForSummary = [
+      { id: OTHER_PRODUCTS_ID, label: 'Các sản phẩm khác', unit: 'SL', metric_type: 'QUANTITY' },
+    ]
+
+    return NextResponse.json({ data: mergedData, products: productsForSummary, startDate, endDate })
   } catch (error: any) {
     console.error('API Error:', error)
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 })

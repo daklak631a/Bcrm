@@ -16,8 +16,8 @@ export default function LoginPage() {
     const loadSettings = async () => {
       try {
         const settings = await fetchSystemSettings()
-        const logo = settings.find(s => s.key === 'logo_url')?.value
-        const name = settings.find(s => s.key === 'app_name')?.value
+        const logo = settings.find((s: any) => s.key === 'logo_url')?.value
+        const name = settings.find((s: any) => s.key === 'app_name')?.value
         if (logo) setLogoUrl(logo)
         if (name) setAppName(name)
       } catch (err) {
