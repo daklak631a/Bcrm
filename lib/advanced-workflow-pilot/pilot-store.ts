@@ -16,10 +16,15 @@ export async function loadPilotSnapshot<T>(snapshotKey: string): Promise<PilotSt
   const supabase = getPilotSupabase()
   if (!supabase) return { mode: "local", payload: null }
 
+  const { data: userResult } = await supabase.auth.getUser()
+  const userId = userResult.user?.id
+  if (!userId) return { mode: "local", payload: null }
+
   const table = (supabase as any).schema("pilot_crm").from("pilot_state_snapshots")
   const { data, error } = await table
     .select("payload, updated_at")
     .eq("snapshot_key", snapshotKey)
+    .eq("user_id", userId)
     .maybeSingle() as {
       data: { payload: unknown; updated_at?: string } | null
       error: { message: string } | null
