@@ -31,7 +31,6 @@ type PhaseStatus = "done" | "active" | "risk" | "planned"
 type CardStatus = "todo" | "doing" | "review" | "done"
 type WorkspaceSection = "gantt" | "kanban" | "task-detail" | "task-forms" | "task-discussion" | "templates"
 type TemplateStatus = "draft" | "lv2_review" | "lv1_review" | "published" | "returned"
-type TemplateAdminRole = "user" | "admin_lv2" | "admin_lv1"
 
 interface WorkflowStep {
   id: string
@@ -183,6 +182,10 @@ let workspaceUserOptions: string[] = []
 let workspaceProfilesByKey = new Map<string, { id: string; full_name?: string; email?: string }>()
 let workspaceProfilesById = new Map<string, { id: string; full_name?: string; email?: string }>()
 
+function getProfileDisplayName(profile: { id: string; full_name?: string; email?: string }) {
+  return profile.full_name || profile.email || profile.id
+}
+
 function getUserIdFromName(name: string) {
   return workspaceProfilesByKey.get(name.trim().toLowerCase())?.id || ""
 }
@@ -190,7 +193,7 @@ function getUserIdFromName(name: string) {
 function getUserNameFromId(userId?: string, fallback = "") {
   if (!userId) return fallback
   const profile = workspaceProfilesById.get(userId)
-  return profile?.full_name || profile?.email || fallback || userId
+  return profile ? getProfileDisplayName(profile) : fallback || userId
 }
 
 function getUserNamesFromIds(userIds?: string[], fallback: string[] = []) {
@@ -218,26 +221,34 @@ function timelineDateMeta(item: Pick<PhaseTimelineItem, "startDate" | "endDate">
   return duration ? `${range} · ${duration} ngày` : range
 }
 
-function collectWorkspaceUsers(phases: Phase[], cards: WorkCard[], phaseTimelines: Record<string, PhaseTimelineItem[]>) {
-  const names = new Set<string>()
-  for (const phase of phases) {
-    ;[phase.owner, phase.receiver, phase.handoffTo, ...(phase.participants || []), ...(phase.supporters || [])]
-      .filter(Boolean)
-      .forEach((name) => names.add(name))
-  }
-  for (const card of cards) {
-    ;[card.assignee, ...card.supervisors, ...card.participants, ...card.approvers]
-      .filter(Boolean)
-      .forEach((name) => names.add(name))
-  }
-  for (const items of Object.values(phaseTimelines)) {
-    for (const item of items) {
-      ;[item.owner, ...(item.participants || []), ...(item.supporters || [])]
-        .filter(Boolean)
-        .forEach((name) => names.add(name))
-    }
-  }
-  return Array.from(names)
+function parseLocalDate(value?: string) {
+  if (!value) return null
+  const [year, month, day] = value.split("-").map(Number)
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day)
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+  return next
+}
+
+function startOfWeek(date: Date) {
+  const next = new Date(date)
+  const day = next.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  next.setHours(0, 0, 0, 0)
+  next.setDate(next.getDate() + diff)
+  return next
+}
+
+function formatShortDate(date: Date) {
+  return new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(date)
+}
+
+function overlapsDateRange(start: Date, end: Date, rangeStart: Date, rangeEnd: Date) {
+  return start <= rangeEnd && end >= rangeStart
 }
 
 function createDefaultFormChecks(seed: { forms?: string[]; attachments?: string[]; stickNotes?: string[] } = {}): WorkCard["formChecks"] {
@@ -361,6 +372,32 @@ function statusTone(status: WorkflowStatus | StepStatus | PhaseStatus) {
   }
 }
 
+function ganttBarTone(status: PhaseStatus) {
+  switch (status) {
+    case "done":
+      return "bg-emerald-500 shadow-[0_6px_14px_rgba(16,185,129,0.22)]"
+    case "active":
+      return "bg-gradient-to-r from-[#006b68] via-emerald-500 to-teal-400 shadow-[0_6px_16px_rgba(0,107,104,0.28)]"
+    case "risk":
+      return "bg-gradient-to-r from-amber-400 to-orange-400 shadow-[0_6px_14px_rgba(245,158,11,0.24)]"
+    case "planned":
+      return "bg-gradient-to-r from-cyan-100 via-sky-100 to-emerald-100 ring-1 ring-cyan-300"
+  }
+}
+
+function ganttLegendTone(status: PhaseStatus) {
+  switch (status) {
+    case "done":
+      return "bg-emerald-500"
+    case "active":
+      return "bg-gradient-to-r from-[#006b68] to-teal-400"
+    case "risk":
+      return "bg-gradient-to-r from-amber-400 to-orange-400"
+    case "planned":
+      return "bg-gradient-to-r from-cyan-100 to-emerald-100 ring-1 ring-cyan-300"
+  }
+}
+
 function nextCardStatus(status: CardStatus, direction: 1 | -1) {
   const order: CardStatus[] = ["todo", "doing", "review", "done"]
   const index = order.indexOf(status)
@@ -380,9 +417,6 @@ export default function AdvancedWorkflowPilotPage() {
   const [cards, setCards] = useState(initialCards)
   const [templates, setTemplates] = useState(projectTemplates)
   const [selectedTemplateId, setSelectedTemplateId] = useState(projectTemplates[0].id)
-  const [draftTemplateName, setDraftTemplateName] = useState("")
-  const [templateAdminRole, setTemplateAdminRole] = useState<TemplateAdminRole>("user")
-  const [templateApprovalNote, setTemplateApprovalNote] = useState("")
   const [selectedPhaseId, setSelectedPhaseId] = useState("")
   const [editingPhaseId, setEditingPhaseId] = useState("")
   const [selectedTimelineItemId, setSelectedTimelineItemId] = useState("")
@@ -678,7 +712,6 @@ export default function AdvancedWorkflowPilotPage() {
   const selectedPhase = phases.find((phase) => phase.id === selectedPhaseId) || phases[0]
   const phaseCards = selectedWorkflow ? cards.filter((card) => card.workflowId === selectedWorkflow.id && card.phaseId === selectedPhase?.id) : []
   const selectedCard = phaseCards.find((card) => card.id === selectedCardId) || phaseCards[0]
-  workspaceUserOptions = useMemo(() => collectWorkspaceUsers(phases, cards, phaseTimelines), [phases, cards, phaseTimelines])
   const profileDirectory = useMemo(() => {
     const byKey = new Map<string, { id: string; full_name?: string; email?: string }>()
     const byId = new Map<string, { id: string; full_name?: string; email?: string }>()
@@ -696,6 +729,7 @@ export default function AdvancedWorkflowPilotPage() {
     })
     return { byKey, byId }
   }, [profiles])
+  workspaceUserOptions = useMemo(() => profiles.map(getProfileDisplayName), [profiles])
   workspaceProfilesByKey = profileDirectory.byKey
   workspaceProfilesById = profileDirectory.byId
   const currentActorName = user?.full_name || user?.name || user?.email || "Hệ thống"
@@ -1094,126 +1128,6 @@ export default function AdvancedWorkflowPilotPage() {
     setSelectedCardId(nextPhases[0] ? `${nextPhases[0].id}-card-template` : "")
   }
 
-  const proposeTemplate = () => {
-    const name = draftTemplateName.trim()
-    if (!name) return
-    const template: ProjectTemplate = {
-      id: `tpl-draft-${Date.now()}`,
-      name,
-      scope: "Template đề xuất từ thực tế dự án, cần Admin LV2 và LV1 duyệt trước khi dùng làm mẫu chung.",
-      category: selectedWorkflow.workflowType === "Đề xuất" ? "Hạn mức" : "CRM",
-      direction: selectedWorkflow.direction,
-      version: 1,
-      createdBy: selectedWorkflow.initiator,
-      updatedAt: "02/06/2026",
-      status: "lv2_review",
-      approvalNote: "Vừa đề xuất từ cấu hình dự án hiện tại; chờ Admin LV2 kiểm tra.",
-      phaseCount: phases.length,
-      lv2Approved: false,
-      lv1Approved: false,
-      phases: phases.map((phase) => ({
-        title: phase.title,
-        span: phase.span,
-        owner: phase.owner,
-        receiver: phase.receiver,
-        handoffTo: phase.handoffTo,
-        acceptance: phase.acceptance,
-        timeline: (phaseTimelines[phase.id] || []).map((item) => item.title),
-        checklists: cards
-          .filter((card) => card.phaseId === phase.id)
-          .flatMap((card) => card.checklist.map((item) => item.text)),
-        forms: cards
-          .filter((card) => card.phaseId === phase.id)
-          .flatMap((card) => (card.formChecks || []).filter((item) => item.type === "Biểu mẫu").map((item) => item.text)),
-        attachments: cards
-          .filter((card) => card.phaseId === phase.id)
-          .flatMap((card) => (card.formChecks || []).filter((item) => item.type === "Hồ sơ").map((item) => item.text)),
-        stickNotes: cards
-          .filter((card) => card.phaseId === phase.id)
-          .flatMap((card) => (card.formChecks || []).filter((item) => item.type === "Sticknote").map((item) => item.text)),
-      })),
-    }
-    setTemplates((current) => [template, ...current])
-    setSelectedTemplateId(template.id)
-    setDraftTemplateName("")
-  }
-
-  const updateTemplateFromCurrent = () => {
-    setTemplates((current) => current.map((template) => {
-      if (template.id !== selectedTemplateId) return template
-      return {
-        ...template,
-        scope: `Cập nhật từ dự án ${selectedWorkflow.title}. Template bị đưa về trạng thái chờ Admin LV2/LV1 duyệt lại trước khi dùng.`,
-        direction: selectedWorkflow.direction,
-        version: template.version + 1,
-        updatedAt: "02/06/2026",
-        status: "lv2_review",
-        approvalNote: "Template vừa được cập nhật từ dự án hiện tại; cần duyệt lại từ Admin LV2.",
-        phaseCount: phases.length,
-        lv2Approved: false,
-        lv1Approved: false,
-        phases: phases.map((phase) => ({
-          title: phase.title,
-          span: phase.span,
-          owner: phase.owner,
-          receiver: phase.receiver,
-          handoffTo: phase.handoffTo,
-          acceptance: phase.acceptance,
-          timeline: (phaseTimelines[phase.id] || []).map((item) => item.title),
-          checklists: cards
-            .filter((card) => card.phaseId === phase.id)
-            .flatMap((card) => card.checklist.map((item) => item.text)),
-          forms: cards
-            .filter((card) => card.phaseId === phase.id)
-            .flatMap((card) => (card.formChecks || []).filter((item) => item.type === "Biểu mẫu").map((item) => item.text)),
-          attachments: cards
-            .filter((card) => card.phaseId === phase.id)
-            .flatMap((card) => (card.formChecks || []).filter((item) => item.type === "Hồ sơ").map((item) => item.text)),
-          stickNotes: cards
-            .filter((card) => card.phaseId === phase.id)
-            .flatMap((card) => (card.formChecks || []).filter((item) => item.type === "Sticknote").map((item) => item.text)),
-        })),
-      }
-    }))
-  }
-
-  const approveTemplate = (level: "lv2" | "lv1") => {
-    setTemplates((current) => current.map((template) => {
-      if (template.id !== selectedTemplateId) return template
-      if (level === "lv2") {
-        return {
-          ...template,
-          status: "lv1_review",
-          lv2Approved: true,
-          lv1Approved: false,
-          approvalNote: templateApprovalNote.trim() || "Admin LV2 đã duyệt, chờ Admin LV1 đồng thuận xuất bản.",
-        }
-      }
-      return {
-        ...template,
-        status: "published",
-        lv2Approved: true,
-        lv1Approved: true,
-        approvalNote: templateApprovalNote.trim() || "Admin LV1 đã đồng thuận, template được xuất bản làm mẫu chung.",
-      }
-    }))
-    setTemplateApprovalNote("")
-  }
-
-  const returnTemplate = () => {
-    setTemplates((current) => current.map((template) => {
-      if (template.id !== selectedTemplateId) return template
-      return {
-        ...template,
-        status: "returned",
-        lv2Approved: false,
-        lv1Approved: false,
-        approvalNote: templateApprovalNote.trim() || "Template bị trả lại để bổ sung cấu hình, timeline hoặc checklist.",
-      }
-    }))
-    setTemplateApprovalNote("")
-  }
-
   const addCard = () => {
     if (!selectedPhase || !newCardTitle.trim()) return
     const card: WorkCard = {
@@ -1445,17 +1359,7 @@ export default function AdvancedWorkflowPilotPage() {
             <TemplatePanel
               templates={templates}
               selectedTemplateId={selectedTemplateId}
-              draftTemplateName={draftTemplateName}
-              templateAdminRole={templateAdminRole}
-              templateApprovalNote={templateApprovalNote}
               onSelectTemplate={setSelectedTemplateId}
-              onDraftTemplateNameChange={setDraftTemplateName}
-              onTemplateAdminRoleChange={setTemplateAdminRole}
-              onTemplateApprovalNoteChange={setTemplateApprovalNote}
-              onProposeTemplate={proposeTemplate}
-              onUpdateTemplateFromCurrent={updateTemplateFromCurrent}
-              onApproveTemplate={approveTemplate}
-              onReturnTemplate={returnTemplate}
               onApplyTemplate={applyTemplate}
             />
           </section>
@@ -1558,240 +1462,111 @@ function SectionTitle({ title, description }: { title: string; description: stri
 function TemplatePanel({
   templates,
   selectedTemplateId,
-  draftTemplateName,
-  templateAdminRole,
-  templateApprovalNote,
   onSelectTemplate,
-  onDraftTemplateNameChange,
-  onTemplateAdminRoleChange,
-  onTemplateApprovalNoteChange,
-  onProposeTemplate,
-  onUpdateTemplateFromCurrent,
-  onApproveTemplate,
-  onReturnTemplate,
   onApplyTemplate,
 }: {
   templates: ProjectTemplate[]
   selectedTemplateId: string
-  draftTemplateName: string
-  templateAdminRole: TemplateAdminRole
-  templateApprovalNote: string
   onSelectTemplate: (id: string) => void
-  onDraftTemplateNameChange: (value: string) => void
-  onTemplateAdminRoleChange: (role: TemplateAdminRole) => void
-  onTemplateApprovalNoteChange: (value: string) => void
-  onProposeTemplate: () => void
-  onUpdateTemplateFromCurrent: () => void
-  onApproveTemplate: (level: "lv2" | "lv1") => void
-  onReturnTemplate: () => void
   onApplyTemplate: () => void
 }) {
-  const selectedTemplate = templates.find((item) => item.id === selectedTemplateId) || templates[0]
-  const approved = selectedTemplate.status === "published" && selectedTemplate.lv1Approved && selectedTemplate.lv2Approved
+  const approvedTemplates = templates.filter((template) => template.status === "published" && template.lv1Approved && template.lv2Approved)
+  const selectedTemplate = approvedTemplates.find((item) => item.id === selectedTemplateId) || approvedTemplates[0]
+
+  if (!selectedTemplate) {
+    return (
+      <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+        <p className="text-sm font-semibold text-amber-800">Chưa có mẫu dự án đã xuất bản</p>
+        <p className="mt-1 text-sm leading-6 text-amber-700">
+          Vào trang admin mẫu dự án để tạo và phê duyệt template trước, sau đó quay lại đây để áp vào dự án.
+        </p>
+        <a
+          href="/advanced-workflow-pilot/templates"
+          className="mt-3 inline-flex h-10 items-center rounded-lg bg-[#006b68] px-4 text-sm font-semibold text-white hover:bg-[#005250]"
+        >
+          Mở quản trị mẫu
+        </a>
+      </section>
+    )
+  }
+
   const totalTimeline = selectedTemplate.phases.reduce((sum, phase) => sum + phase.timeline.length, 0)
   const totalChecklist = selectedTemplate.phases.reduce((sum, phase) => sum + phase.checklists.length, 0)
-  const canApproveLv2 = templateAdminRole === "admin_lv2" && selectedTemplate.status === "lv2_review"
-  const canApproveLv1 = templateAdminRole === "admin_lv1" && selectedTemplate.status === "lv1_review" && selectedTemplate.lv2Approved
-  const canReturn = templateAdminRole !== "user" && selectedTemplate.status !== "published"
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-emerald-50 via-white to-slate-50 p-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-[#006b68] ring-1 ring-emerald-100">Thư viện biểu mẫu dự án</span>
-              <span className="rounded-md bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white">v{selectedTemplate.version}</span>
-              <span className="rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">{selectedTemplate.category}</span>
-              <span className="rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">{directionLabel(selectedTemplate.direction)}</span>
-              <span className={clsx("rounded-md border px-2.5 py-1 text-xs font-semibold", templateStatusTone(selectedTemplate.status))}>
-                {templateStatusLabel(selectedTemplate.status)}
-              </span>
-            </div>
-            <h2 className="mt-3 text-xl font-semibold tracking-tight text-slate-950">{selectedTemplate.name}</h2>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{selectedTemplate.scope}</p>
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-3xl">
+          <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-[#006b68] ring-1 ring-emerald-100">
+            Áp biểu mẫu vào dự án
+          </span>
+          <h2 className="mt-3 text-xl font-semibold tracking-tight text-slate-950">{selectedTemplate.name}</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Chọn một mẫu đã xuất bản. Khi bấm áp, hệ thống sẽ chuyển cấu trúc mẫu thành giai đoạn, timeline con, Kanban và checklist của dự án hiện tại.
+          </p>
+        </div>
+        <a
+          href="/advanced-workflow-pilot/templates"
+          className="inline-flex h-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+        >
+          Quản trị mẫu
+        </a>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <label className="block">
+            <span className="text-xs font-semibold text-slate-500">Mẫu sẽ áp</span>
+            <select
+              value={selectedTemplate.id}
+              onChange={(event) => onSelectTemplate(event.target.value)}
+              className="mt-1 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-[#006b68] focus:ring-2 focus:ring-[#006b68]/15"
+            >
+              {approvedTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name} · v{template.version}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
             <TemplateStat label="Giai đoạn" value={selectedTemplate.phaseCount} />
             <TemplateStat label="Timeline con" value={totalTimeline} />
             <TemplateStat label="Checklist" value={totalChecklist} />
           </div>
-        </div>
-      </div>
-
-      <div className="grid gap-0 lg:grid-cols-[310px_1fr]">
-        <aside className="border-b border-slate-100 bg-slate-50 p-3 lg:border-b-0 lg:border-r">
-          <div className="space-y-2">
-            {templates.map((template) => {
-              const isActive = template.id === selectedTemplate.id
-              const isApproved = template.status === "published" && template.lv1Approved && template.lv2Approved
-              return (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => onSelectTemplate(template.id)}
-                  className={clsx(
-                    "w-full rounded-lg border p-3 text-left transition",
-                    isActive ? "border-[#006b68] bg-white shadow-sm ring-2 ring-[#006b68]/10" : "border-slate-200 bg-white/70 hover:bg-white"
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-950">{template.name}</p>
-                      <p className="mt-1 text-xs text-slate-500">{template.phaseCount} giai đoạn · v{template.version} · {templateStatusLabel(template.status)}</p>
-                    </div>
-                    <span className={clsx("shrink-0 rounded-md border px-2 py-1 text-[11px] font-semibold", isApproved ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700")}>
-                      {isApproved ? "Đã duyệt" : "Chờ duyệt"}
-                    </span>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
 
           <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
-            <p className="text-xs font-semibold text-slate-500">Tạo/cập nhật biểu mẫu</p>
-            <input
-              value={draftTemplateName}
-              onChange={(event) => onDraftTemplateNameChange(event.target.value)}
-              placeholder="Tên template mới từ dự án hiện tại..."
-              className="mt-2 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#006b68] focus:ring-2 focus:ring-[#006b68]/15"
-            />
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={onProposeTemplate}
-                className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Đề xuất mới
-              </button>
-              <button
-                type="button"
-                onClick={onUpdateTemplateFromCurrent}
-                className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-100"
-              >
-                Cập nhật mẫu
-              </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{selectedTemplate.category}</span>
+              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">{directionLabel(selectedTemplate.direction)}</span>
+              <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-[#006b68]">Đã xuất bản</span>
+              <span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">Cập nhật: {selectedTemplate.updatedAt}</span>
             </div>
-            <p className="mt-2 text-[11px] leading-4 text-slate-500">Cập nhật mẫu sẽ đưa template về trạng thái chờ duyệt lại.</p>
-          </div>
-        </aside>
-
-        <div className="p-4">
-          <div className="grid gap-3 xl:grid-cols-[1fr_260px]">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold text-slate-950">Preview cấu trúc mẫu</p>
-                  <p className="mt-1 text-xs text-slate-500">Khi áp, hệ thống sinh Gantt, timeline con, Kanban và checklist theo các giai đoạn dưới đây.</p>
-                </div>
-                <span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-slate-500 ring-1 ring-slate-200">Cập nhật: {selectedTemplate.updatedAt}</span>
-              </div>
-              <div className="mt-3 grid gap-3 xl:grid-cols-2">
-                {selectedTemplate.phases.map((phase, index) => (
-                  <article key={`${phase.title}-${index}`} className="rounded-lg border border-slate-200 bg-white p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-950">{index + 1}. {phase.title}</p>
-                        <p className="mt-1 text-xs text-slate-500">{phase.owner} · {phase.span} tuần · bàn giao tới {phase.handoffTo}</p>
-                      </div>
-                      <span className="rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-[#006b68] ring-1 ring-emerald-100">{phase.timeline.length} mốc</span>
-                    </div>
-                    <p className="mt-2 rounded-md bg-slate-50 p-2 text-xs leading-5 text-slate-600">{phase.acceptance}</p>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Timeline con</p>
-                        <div className="mt-2 space-y-1">
-                          {phase.timeline.map((item) => (
-                            <p key={item} className="rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-600">• {item}</p>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Checklist mẫu</p>
-                        <div className="mt-2 space-y-1">
-                          {phase.checklists.map((item) => (
-                            <p key={item} className="rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-600">□ {item}</p>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
+            <p className="mt-3 text-sm leading-6 text-slate-600">{selectedTemplate.scope}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {selectedTemplate.phases.map((phase, index) => (
+                <span key={`${phase.title}-${index}`} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
+                  {index + 1}. {phase.title}
+                </span>
+              ))}
             </div>
-
-            <aside className="space-y-3">
-              <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <p className="text-sm font-semibold text-slate-950">Cổng duyệt template</p>
-                <label className="mt-3 block">
-                  <span className="text-xs font-semibold text-slate-500">Vai trò đang thao tác</span>
-                  <select
-                    value={templateAdminRole}
-                    onChange={(event) => onTemplateAdminRoleChange(event.target.value as TemplateAdminRole)}
-                    className="mt-1 h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#006b68] focus:ring-2 focus:ring-[#006b68]/15"
-                  >
-                    <option value="user">User thường</option>
-                    <option value="admin_lv2">Admin LV2</option>
-                    <option value="admin_lv1">Admin LV1</option>
-                  </select>
-                </label>
-                <div className="mt-3 space-y-2">
-                  <ApprovalRow label="Admin LV2" approved={selectedTemplate.lv2Approved} />
-                  <ApprovalRow label="Admin LV1" approved={selectedTemplate.lv1Approved} />
-                </div>
-                <textarea
-                  value={templateApprovalNote}
-                  onChange={(event) => onTemplateApprovalNoteChange(event.target.value)}
-                  placeholder="Ghi chú duyệt hoặc lý do trả lại..."
-                  rows={3}
-                  className="mt-3 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 outline-none focus:border-[#006b68] focus:ring-2 focus:ring-[#006b68]/15"
-                />
-                <div className="mt-3 grid gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onApproveTemplate("lv2")}
-                    disabled={!canApproveLv2}
-                    className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 disabled:opacity-50"
-                  >
-                    Admin LV2 duyệt
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onApproveTemplate("lv1")}
-                    disabled={!canApproveLv1}
-                    className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-semibold text-sky-700 disabled:opacity-50"
-                  >
-                    Admin LV1 duyệt
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onReturnTemplate}
-                    disabled={!canReturn}
-                    className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 disabled:opacity-50"
-                  >
-                    Trả lại để bổ sung
-                  </button>
-                </div>
-                <p className="mt-3 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-500">{selectedTemplate.approvalNote}</p>
-              </div>
-
-              <button
-                type="button"
-                onClick={onApplyTemplate}
-                disabled={!approved}
-                className="inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-[#006b68] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005250] disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                Áp template vào dự án
-              </button>
-              {!approved && (
-                <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-700">
-                  Template chưa đủ duyệt LV2 và LV1 nên chưa được dùng làm mẫu chung.
-                </p>
-              )}
-            </aside>
           </div>
         </div>
+
+        <aside className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+          <p className="text-sm font-semibold text-[#006b68]">Sẵn sàng áp vào dự án</p>
+          <p className="mt-2 text-xs leading-5 text-emerald-800">
+            Thao tác này sẽ thay cấu hình giai đoạn hiện tại bằng cấu trúc từ mẫu đã chọn.
+          </p>
+          <button
+            type="button"
+            onClick={onApplyTemplate}
+            className="mt-4 inline-flex min-h-12 w-full items-center justify-center rounded-xl bg-[#006b68] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#005250]"
+          >
+            Áp template vào dự án
+          </button>
+        </aside>
       </div>
     </section>
   )
@@ -1804,46 +1579,6 @@ function TemplateStat({ label, value }: { label: string; value: number }) {
       <p className="mt-1 text-lg font-semibold text-slate-950">{value}</p>
     </div>
   )
-}
-
-function ApprovalRow({ label, approved }: { label: string; approved: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-      <span className="text-sm font-semibold text-slate-700">{label}</span>
-      <span className={clsx("rounded-md border px-2 py-1 text-[11px] font-semibold", approved ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700")}>
-        {approved ? "Đã duyệt" : "Chờ duyệt"}
-      </span>
-    </div>
-  )
-}
-
-function templateStatusLabel(status: TemplateStatus) {
-  switch (status) {
-    case "draft":
-      return "Nháp"
-    case "lv2_review":
-      return "Chờ Admin LV2"
-    case "lv1_review":
-      return "Chờ Admin LV1"
-    case "published":
-      return "Đã xuất bản"
-    case "returned":
-      return "Bị trả lại"
-  }
-}
-
-function templateStatusTone(status: TemplateStatus) {
-  switch (status) {
-    case "published":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700"
-    case "lv2_review":
-    case "lv1_review":
-      return "border-sky-200 bg-sky-50 text-sky-700"
-    case "returned":
-      return "border-rose-200 bg-rose-50 text-rose-700"
-    default:
-      return "border-slate-200 bg-slate-50 text-slate-600"
-  }
 }
 
 function ProjectPickerBar({
@@ -1985,6 +1720,26 @@ function GanttBoard({
   onEditPhase: (phaseId: string) => void
   onUpdatePhase: (phaseId: string, patch: Partial<Phase>) => void
 }) {
+  const ganttColumns = useMemo(() => {
+    const datedItems = Object.values(phaseTimelines)
+      .flat()
+      .flatMap((item) => [parseLocalDate(item.startDate), parseLocalDate(item.endDate)])
+      .filter((date): date is Date => Boolean(date))
+    const baseDate = startOfWeek(datedItems.sort((a, b) => a.getTime() - b.getTime())[0] || new Date())
+
+    return Array.from({ length: 16 }, (_, index) => {
+      const startDate = addDays(baseDate, index * 7)
+      const endDate = addDays(startDate, 6)
+      return {
+        index,
+        week: index + 1,
+        startDate,
+        endDate,
+        label: `${formatShortDate(startDate)} - ${formatShortDate(endDate)}`,
+      }
+    })
+  }, [phaseTimelines])
+
   return (
     <div className="space-y-3">
       <div className={clsx("rounded-xl border border-slate-200 bg-white p-2 md:hidden", mobileTimelineOpen && "hidden")}>
@@ -2037,11 +1792,29 @@ function GanttBoard({
           })}
         </div>
       </div>
+      <div className="hidden items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-cyan-50 px-3 py-2 text-xs text-slate-600 md:flex">
+        <div className="flex flex-wrap items-center gap-3">
+          {(["active", "planned", "risk", "done"] as PhaseStatus[]).map((status) => (
+            <span key={status} className="inline-flex items-center gap-1.5 font-semibold">
+              <span className={clsx("h-2.5 w-8 rounded-full", ganttLegendTone(status))} />
+              {statusLabel(status)}
+            </span>
+          ))}
+        </div>
+        <span className="text-right text-[11px] font-medium text-slate-500">
+          Thanh ưu tiên ngày bắt đầu/kết thúc của timeline con; nếu chưa đặt ngày sẽ tạm dùng tuần tương đối.
+        </span>
+      </div>
       <div className={clsx("overflow-x-auto rounded-xl border border-slate-200 bg-white", !mobileTimelineOpen && "max-md:hidden")}>
-      <div className="min-w-[1680px] p-3">
-        <div className="grid grid-cols-[260px_repeat(16,80px)_90px] border-b border-slate-200 pb-2 text-xs font-semibold text-slate-500">
+      <div className="min-w-[1940px] p-3">
+        <div className="grid grid-cols-[260px_repeat(16,96px)_90px] border-b border-slate-200 pb-2 text-xs font-semibold text-slate-500">
           <div>Giai đoạn</div>
-          {Array.from({ length: 16 }, (_, index) => <div key={index} className="text-center">T{index + 1}</div>)}
+          {ganttColumns.map((column) => (
+            <div key={column.week} className="text-center leading-4">
+              <span className="block text-[11px] font-bold text-slate-700">{column.label}</span>
+              <span className="block text-[10px] font-medium text-slate-400">Tuần {column.week}</span>
+            </div>
+          ))}
           <div className="text-right">Kanban</div>
         </div>
         <div className="divide-y divide-slate-100">
@@ -2049,8 +1822,10 @@ function GanttBoard({
             const phaseCards = cards.filter((card) => card.phaseId === phase.id)
             const done = phaseCards.filter((card) => card.status === "done").length
             const timelineCount = phaseTimelines[phase.id]?.length || 0
+            const timelineItems = phaseTimelines[phase.id] || []
+            const hasDatedTimeline = timelineItems.some((item) => parseLocalDate(item.startDate) || parseLocalDate(item.endDate))
             return (
-              <div key={phase.id} className="grid grid-cols-[260px_repeat(16,80px)_90px] items-start py-3">
+              <div key={phase.id} className="grid grid-cols-[260px_repeat(16,96px)_90px] items-start py-3">
                 <button
                   type="button"
                   onClick={() => onSelectPhase(phase.id)}
@@ -2083,40 +1858,51 @@ function GanttBoard({
                   </span>
                   <p className="mt-1 text-xs text-slate-500">{phase.owner} · {phase.progress}% · {timelineCount} mốc con</p>
                 </button>
-                {Array.from({ length: 16 }, (_, index) => {
-                  const week = index + 1
-                  const active = week >= phase.start && week < phase.start + phase.span
-                  const timelineItems = phaseTimelines[phase.id] || []
-                  const timelineIndex = active && phase.span > 0
+                {ganttColumns.map((column) => {
+                  const week = column.week
+                  const datedChildItem = timelineItems.find((item) => {
+                    const itemStart = parseLocalDate(item.startDate)
+                    const itemEnd = parseLocalDate(item.endDate)
+                    if (!itemStart && !itemEnd) return false
+                    return overlapsDateRange(itemStart || itemEnd!, itemEnd || itemStart!, column.startDate, column.endDate)
+                  })
+                  const previousDatedChildItem = timelineItems.find((item) => {
+                    const itemStart = parseLocalDate(item.startDate)
+                    const itemEnd = parseLocalDate(item.endDate)
+                    if (!itemStart && !itemEnd) return false
+                    return overlapsDateRange(itemStart || itemEnd!, itemEnd || itemStart!, addDays(column.startDate, -7), addDays(column.endDate, -7))
+                  })
+                  const fallbackActive = week >= phase.start && week < phase.start + phase.span
+                  const active = hasDatedTimeline ? Boolean(datedChildItem) : fallbackActive
+                  const timelineIndex = fallbackActive && phase.span > 0
                     ? Math.floor(((week - phase.start) / Math.max(phase.span, 1)) * Math.max(timelineItems.length, 1))
                     : -1
-                  const previousTimelineIndex = active && week > phase.start && phase.span > 0
+                  const previousTimelineIndex = fallbackActive && week > phase.start && phase.span > 0
                     ? Math.floor(((week - phase.start - 1) / Math.max(phase.span, 1)) * Math.max(timelineItems.length, 1))
                     : -1
-                  const childItem = timelineIndex !== previousTimelineIndex ? timelineItems[timelineIndex] : undefined
+                  const fallbackChildItem = timelineIndex !== previousTimelineIndex ? timelineItems[timelineIndex] : undefined
+                  const activeChildItem = datedChildItem || (hasDatedTimeline ? undefined : fallbackChildItem)
+                  const childItem = datedChildItem && datedChildItem.id === previousDatedChildItem?.id ? undefined : activeChildItem
                   return (
                     <button
                       key={week}
                       type="button"
                       onClick={() => {
-                        if (childItem) {
-                          onSelectTimelineItem(phase.id, childItem.id)
+                        if (activeChildItem) {
+                          onSelectTimelineItem(phase.id, activeChildItem.id)
                           return
                         }
                         onSelectPhase(phase.id)
                         if (!active) onUpdatePhase(phase.id, { start: week })
                       }}
                       className="group relative h-14 border-l border-slate-100"
-                      aria-label={`Chọn ${phase.title} tuần ${week}`}
+                      aria-label={`Chọn ${phase.title} tuần ${formatShortDate(column.startDate)} đến ${formatShortDate(column.endDate)}`}
                     >
                       {active && (
                         <span
                           className={clsx(
-                            "absolute left-0 right-0 top-1 h-6 rounded-sm",
-                            phase.status === "done" && "bg-emerald-500",
-                            phase.status === "active" && "bg-[#006b68]",
-                            phase.status === "risk" && "bg-amber-400",
-                            phase.status === "planned" && "bg-slate-300"
+                            "absolute left-0 right-0 top-1 h-6 rounded-sm transition-all group-hover:-translate-y-0.5 group-hover:brightness-105",
+                            ganttBarTone(phase.status)
                           )}
                         />
                       )}
@@ -2538,7 +2324,7 @@ function RoleMultiPicker({
 
   const addValue = (name: string) => {
     const cleaned = name.trim()
-    if (!cleaned || values.includes(cleaned)) return
+    if (!cleaned || values.includes(cleaned) || !workspaceUserOptions.includes(cleaned)) return
     onChange([...values, cleaned])
     setQuery("")
   }
@@ -2549,9 +2335,12 @@ function RoleMultiPicker({
         <div className="min-w-0">
           <p className="text-xs font-semibold text-slate-500">{label}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {values.slice(0, 4).map((name) => (
-              <span key={name} className={clsx("inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold", toneClass)}>
+            {values.slice(0, 4).map((name) => {
+              const isRealUser = Boolean(getUserIdFromName(name))
+              return (
+              <span key={name} className={clsx("inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold", isRealUser ? toneClass : "border-rose-100 bg-rose-50 text-rose-600")}>
                 {name}
+                {!isRealUser && <span className="text-[10px] font-semibold">(cũ)</span>}
                 <span
                   role="button"
                   tabIndex={0}
@@ -2572,7 +2361,7 @@ function RoleMultiPicker({
                   ×
                 </span>
               </span>
-            ))}
+            )})}
             {values.length > 4 && <span className="rounded-md bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-500">+{values.length - 4}</span>}
             {values.length === 0 && <span className="text-xs text-rose-500">Chưa chọn</span>}
           </div>
@@ -2588,7 +2377,7 @@ function RoleMultiPicker({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") addValue(query || options[0] || "")
+              if (event.key === "Enter") addValue(options[0] || "")
             }}
             placeholder={`Tìm hoặc nhập ${label.toLowerCase()}...`}
             className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 pl-8 pr-2 text-xs outline-none focus:border-[#006b68] focus:bg-white focus:ring-2 focus:ring-[#006b68]/15"
@@ -2596,8 +2385,9 @@ function RoleMultiPicker({
         </label>
         <button
           type="button"
-          onClick={() => addValue(query || options[0] || "")}
-          className="inline-flex h-9 items-center gap-1 rounded-md bg-slate-900 px-3 text-xs font-semibold text-white"
+          disabled={options.length === 0}
+          onClick={() => addValue(options[0] || "")}
+          className="inline-flex h-9 items-center gap-1 rounded-md bg-slate-900 px-3 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
         >
           <Plus className="h-3.5 w-3.5" />
           Thêm
@@ -2616,6 +2406,9 @@ function RoleMultiPicker({
             </button>
           ))}
         </div>
+      )}
+      {workspaceUserOptions.length === 0 && (
+        <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">Chưa tải được danh sách user active từ Supabase.</p>
       )}
         </>
       )}
@@ -2897,7 +2690,7 @@ function CardDetail({
               <option key={user} value={user}>{user}</option>
             ))}
             {!workspaceUserOptions.includes(card.assignee) && (
-              <option value={card.assignee}>{card.assignee}</option>
+              <option value={card.assignee} disabled>{card.assignee} (giá trị cũ - chọn user thật)</option>
             )}
           </select>
         </label>
@@ -3073,7 +2866,7 @@ function UserSelectField({ label, value, onChange }: { label: string; value: str
         {workspaceUserOptions.map((user) => (
           <option key={user} value={user}>{user}</option>
         ))}
-        {value && !workspaceUserOptions.includes(value) && <option value={value}>{value}</option>}
+        {value && !workspaceUserOptions.includes(value) && <option value={value} disabled>{value} (giá trị cũ - chọn user thật)</option>}
       </select>
     </label>
   )
