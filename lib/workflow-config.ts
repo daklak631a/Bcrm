@@ -1,5 +1,7 @@
 "use client"
 
+import { getSupabase } from "@/lib/supabase/client"
+
 export type ConfigOption = {
   id: string
   label: string
@@ -55,6 +57,14 @@ export type WorkflowConfig = {
   roleRules: WorkflowRoleRule[]
   canvasNodes: WorkflowCanvasNode[]
   canvasEdges: WorkflowCanvasEdge[]
+}
+
+export type WorkflowConfigStorageMode = "supabase" | "local"
+
+export type WorkflowConfigLoadResult = {
+  config: WorkflowConfig
+  mode: WorkflowConfigStorageMode
+  savedAt?: string
 }
 
 export const workflowConfigStorageKey = "bcrm-workflow-config:v1"
@@ -182,27 +192,87 @@ function normalizeCanvasEdges(edges?: Array<WorkflowCanvasEdge | Omit<WorkflowCa
   }))
 }
 
+function normalizeWorkflowConfig(config?: Partial<WorkflowConfig> | null): WorkflowConfig {
+  return {
+    ...defaultWorkflowConfig,
+    ...(config || {}),
+    categories: { ...defaultWorkflowConfig.categories, ...(config?.categories || {}) },
+    roleRules: Array.isArray(config?.roleRules) && config.roleRules.length ? config.roleRules : defaultWorkflowConfig.roleRules,
+    canvasNodes: normalizeCanvasNodes(config?.canvasNodes),
+    canvasEdges: normalizeCanvasEdges(config?.canvasEdges),
+  }
+}
+
+function cacheWorkflowConfig(config: WorkflowConfig) {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(workflowConfigStorageKey, JSON.stringify(config))
+  window.dispatchEvent(new StorageEvent("storage", { key: workflowConfigStorageKey }))
+}
+
 export function getWorkflowConfig(): WorkflowConfig {
   if (typeof window === "undefined") return defaultWorkflowConfig
   try {
     const raw = window.localStorage.getItem(workflowConfigStorageKey)
     if (!raw) return defaultWorkflowConfig
-    const parsed = JSON.parse(raw) as WorkflowConfig
-    return {
-      ...defaultWorkflowConfig,
-      ...parsed,
-      categories: { ...defaultWorkflowConfig.categories, ...(parsed.categories || {}) },
-      canvasNodes: normalizeCanvasNodes(parsed.canvasNodes),
-      canvasEdges: normalizeCanvasEdges(parsed.canvasEdges),
-    }
+    const parsed = JSON.parse(raw) as Partial<WorkflowConfig>
+    return normalizeWorkflowConfig(parsed)
   } catch {
     return defaultWorkflowConfig
   }
 }
 
-export function saveWorkflowConfig(config: WorkflowConfig) {
-  window.localStorage.setItem(workflowConfigStorageKey, JSON.stringify(config))
-  window.dispatchEvent(new StorageEvent("storage", { key: workflowConfigStorageKey }))
+export async function loadWorkflowConfig(): Promise<WorkflowConfigLoadResult> {
+  const localConfig = getWorkflowConfig()
+
+  try {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from("workflow_configs")
+      .select("payload, updated_at")
+      .eq("key", workflowConfigStorageKey)
+      .maybeSingle()
+
+    if (error) throw error
+
+    if (!data?.payload || Object.keys(data.payload).length === 0) {
+      return { config: localConfig, mode: "local" }
+    }
+
+    const config = normalizeWorkflowConfig(data.payload as Partial<WorkflowConfig>)
+    cacheWorkflowConfig(config)
+    return { config, mode: "supabase", savedAt: data.updated_at }
+  } catch (error) {
+    console.warn("Không đọc được workflow config từ Supabase, dùng localStorage.", error)
+    return { config: localConfig, mode: "local" }
+  }
+}
+
+export async function saveWorkflowConfig(config: WorkflowConfig): Promise<WorkflowConfigStorageMode> {
+  const normalizedConfig = normalizeWorkflowConfig(config)
+  cacheWorkflowConfig(normalizedConfig)
+
+  try {
+    const supabase = getSupabase()
+    const { data: userResult } = await supabase.auth.getUser()
+    const userId = userResult.user?.id || null
+    const { error } = await supabase
+      .from("workflow_configs")
+      .upsert(
+        {
+          key: workflowConfigStorageKey,
+          payload: normalizedConfig,
+          updated_by: userId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "key" }
+      )
+
+    if (error) throw error
+    return "supabase"
+  } catch (error) {
+    console.warn("Không lưu được workflow config lên Supabase, đã lưu localStorage.", error)
+    return "local"
+  }
 }
 
 export function getActiveOptions(key: ConfigCategoryKey) {

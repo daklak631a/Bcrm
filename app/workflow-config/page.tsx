@@ -11,8 +11,9 @@ import {
   WorkflowCanvasBinding,
   WorkflowCanvasBindingSource,
   WorkflowConfig,
+  WorkflowConfigStorageMode,
   defaultWorkflowConfig,
-  getWorkflowConfig,
+  loadWorkflowConfig,
   saveWorkflowConfig,
 } from "@/lib/workflow-config"
 
@@ -92,13 +93,25 @@ export default function WorkflowConfigPage() {
   const [connectFromId, setConnectFromId] = useState("")
   const [edgeLabel, setEdgeLabel] = useState("Luồng dữ liệu")
   const [saveStatus, setSaveStatus] = useState("")
+  const [storageMode, setStorageMode] = useState<WorkflowConfigStorageMode>("local")
   const canManage = user?.role === "ADMIN_LEVEL_0"
 
   useEffect(() => {
+    let active = true
     setMounted(true)
-    const persisted = getWorkflowConfig()
-    setConfig(persisted)
-    setSelectedNodeId(persisted.canvasNodes.find((node) => node.role === "ADMIN_LEVEL_0")?.id || persisted.canvasNodes[0]?.id || "")
+
+    const loadConfig = async () => {
+      const result = await loadWorkflowConfig()
+      if (!active) return
+      setConfig(result.config)
+      setStorageMode(result.mode)
+      setSelectedNodeId(result.config.canvasNodes.find((node) => node.role === "ADMIN_LEVEL_0")?.id || result.config.canvasNodes[0]?.id || "")
+    }
+
+    loadConfig()
+    return () => {
+      active = false
+    }
   }, [])
 
   const activeOptions = config.categories[activeKey] || []
@@ -139,9 +152,10 @@ export default function WorkflowConfigPage() {
     }))
   }
 
-  const save = () => {
-    saveWorkflowConfig(config)
-    setSaveStatus("Đã lưu cấu hình workflow LV0.")
+  const save = async () => {
+    const mode = await saveWorkflowConfig(config)
+    setStorageMode(mode)
+    setSaveStatus(mode === "supabase" ? "Đã lưu lên Supabase." : "Đã lưu local, chưa ghi được Supabase.")
     window.setTimeout(() => setSaveStatus(""), 1600)
   }
 
@@ -312,6 +326,9 @@ export default function WorkflowConfigPage() {
               <h1 className="mt-2 text-2xl font-bold text-slate-950">Cấu hình luồng quy trình chung</h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                 Canvas này lưu cấu trúc node, đường kết nối và binding dữ liệu dùng chung cho user/admin.
+              </p>
+              <p className="mt-1 text-xs font-semibold text-slate-400">
+                Nguồn cấu hình: {storageMode === "supabase" ? "Supabase" : "Local fallback"}
               </p>
             </div>
             <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">

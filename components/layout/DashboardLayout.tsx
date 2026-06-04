@@ -5,6 +5,7 @@ import { Sidebar } from "./Sidebar"
 import { Header } from "./Header"
 import { cn } from "@/lib/utils"
 import { useAuthStore } from "@/store/useAuthStore"
+import { loadWorkflowConfig } from "@/lib/workflow-config"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -43,10 +44,32 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true)
   const { user, isLoading } = useAuthStore()
   const [mounted, setMounted] = useState(false)
+  const [workflowConfigReady, setWorkflowConfigReady] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    let active = true
+
+    if (!user) {
+      setWorkflowConfigReady(false)
+      return
+    }
+
+    setWorkflowConfigReady(false)
+
+    const hydrateWorkflowConfig = async () => {
+      await loadWorkflowConfig()
+      if (active) setWorkflowConfigReady(true)
+    }
+
+    hydrateWorkflowConfig()
+    return () => {
+      active = false
+    }
+  }, [user])
 
   if (!mounted || isLoading) {
     return <DashboardLayoutShell title="Đang tải không gian làm việc" description="Hệ thống đang xác thực phiên đăng nhập và chuẩn bị dữ liệu hiển thị cho bạn." />
@@ -54,6 +77,10 @@ export function DashboardLayout({ children, title }: DashboardLayoutProps) {
 
   if (!user) {
     return <DashboardLayoutShell title="Đang chuyển đến trang đăng nhập" description="Bạn chưa có phiên truy cập hợp lệ hoặc phiên đã hết hạn. Hệ thống đang chuyển hướng an toàn." />
+  }
+
+  if (!workflowConfigReady) {
+    return <DashboardLayoutShell title="Đang tải cấu hình hệ thống" description="Hệ thống đang đồng bộ cấu hình workflow và droplist dùng chung." />
   }
 
   return (
