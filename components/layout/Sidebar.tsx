@@ -53,7 +53,7 @@ export function Sidebar({ onClose }: SidebarProps) {
     return () => window.removeEventListener("storage", loadSettings)
   }, [])
 
-  const links: SidebarLink[] = [
+  let links: SidebarLink[] = [
     { href: "/dashboard", label: "Tổng Quan", icon: PieChart },
     { href: "/sales-support", label: "Kanban Bán Hàng", icon: ClipboardList },
     { href: "/advanced-workflow-pilot", label: "Dự Án", icon: Network },
@@ -63,40 +63,52 @@ export function Sidebar({ onClose }: SidebarProps) {
     { href: "/interactions", label: "Tương Tác", icon: MessageSquare },
   ]
 
-  if (user?.role !== "USER" && user?.role !== "ADVISOR") {
-    links.splice(3, 0, { href: "/products", label: "Danh Mục Sản Phẩm", icon: Package })
-  }
-
-  const configChildren: SidebarLink[] = []
-
   if (user?.role === "ADMIN_LEVEL_0") {
-    configChildren.push({ href: "/workflow-config", label: "Workflow Chung", icon: Network })
-  }
+    links = [
+      {
+        href: "/workflow-config",
+        label: "Cấu Hình Hệ Thống",
+        icon: Settings,
+        children: [
+          { href: "/workflow-config", label: "Workflow Chung", icon: Network },
+          { href: "/advanced-workflow-pilot/templates", label: "Template Dự Án", icon: ClipboardList },
+          { href: "/audit-logs", label: "Lịch Sử Hệ Thống", icon: Package },
+          { href: "/settings", label: "Thiết Lập Chung", icon: Settings },
+        ],
+      },
+    ]
+  } else {
+    if (user?.role !== "USER" && user?.role !== "ADVISOR") {
+      links.splice(3, 0, { href: "/products", label: "Danh Mục Sản Phẩm", icon: Package })
+    }
 
-  if (user?.role === "ADMIN_LEVEL_0" || user?.role === "ADMIN_LEVEL_1" || user?.role === "ADMIN_LEVEL_2") {
-    configChildren.push({ href: "/advanced-workflow-pilot/templates", label: "Template Dự Án", icon: ClipboardList })
-  }
+    const configChildren: SidebarLink[] = []
 
-  if (["ADMIN_LEVEL_1", "ADVISOR"].includes(user?.role || "")) {
-    configChildren.push({ href: "/team", label: "Phân Bổ Nhân Sự", icon: Users })
-  }
+    if (user?.role === "ADMIN_LEVEL_1" || user?.role === "ADMIN_LEVEL_2") {
+      configChildren.push({ href: "/advanced-workflow-pilot/templates", label: "Template Dự Án", icon: ClipboardList })
+    }
 
-  if (user?.role === "ADMIN_LEVEL_2") {
-    configChildren.push({ href: "/team", label: "Đội Ngũ Chi Nhánh", icon: Users })
-  }
+    if (["ADMIN_LEVEL_1", "ADVISOR"].includes(user?.role || "")) {
+      configChildren.push({ href: "/team", label: "Phân Bổ Nhân Sự", icon: Users })
+    }
 
-  if (user?.role === "ADMIN_LEVEL_0" || user?.role === "ADMIN_LEVEL_1") {
-    configChildren.push({ href: "/audit-logs", label: "Lịch Sử Hệ Thống", icon: Package })
-    configChildren.push({ href: "/settings", label: "Thiết Lập Chung", icon: Settings })
-  }
+    if (user?.role === "ADMIN_LEVEL_2") {
+      configChildren.push({ href: "/team", label: "Đội Ngũ Chi Nhánh", icon: Users })
+    }
 
-  if (configChildren.length > 0) {
-    links.push({ href: "/settings", label: "Cấu Hình Hệ Thống", icon: Settings, children: configChildren })
-  }
+    if (user?.role === "ADMIN_LEVEL_1") {
+      configChildren.push({ href: "/audit-logs", label: "Lịch Sử Hệ Thống", icon: Package })
+      configChildren.push({ href: "/settings", label: "Thiết Lập Chung", icon: Settings })
+    }
 
-  if (user?.role === "ADMIN_LEVEL_0" || user?.role === "ADMIN_LEVEL_1" || user?.role === "ADMIN_LEVEL_2") {
-    links.push({ href: "/kpi-targets", label: "KPI Mục Tiêu", icon: Target })
-    links.push({ href: "/team/delegations", label: "Ủy Quyền Phó Phòng", icon: Shield })
+    if (configChildren.length > 0) {
+      links.push({ href: "/settings", label: "Cấu Hình Hệ Thống", icon: Settings, children: configChildren })
+    }
+
+    if (user?.role === "ADMIN_LEVEL_1" || user?.role === "ADMIN_LEVEL_2") {
+      links.push({ href: "/kpi-targets", label: "KPI Mục Tiêu", icon: Target })
+      links.push({ href: "/team/delegations", label: "Ủy Quyền Phó Phòng", icon: Shield })
+    }
   }
 
   return (

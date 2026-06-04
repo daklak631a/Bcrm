@@ -22,11 +22,39 @@ export type WorkflowRoleRule = {
   actions: string[]
 }
 
+export type WorkflowCanvasBindingSource =
+  | ConfigCategoryKey
+  | "productUsageResults"
+  | "userProductKpi"
+
+export type WorkflowCanvasBinding = {
+  id: string
+  source: WorkflowCanvasBindingSource
+  value: string
+  label: string
+}
+
+export type WorkflowCanvasNode = {
+  id: string
+  title: string
+  role: string
+  x: number
+  y: number
+  bindings?: WorkflowCanvasBinding[]
+}
+
+export type WorkflowCanvasEdge = {
+  id: string
+  from: string
+  to: string
+  label: string
+}
+
 export type WorkflowConfig = {
   categories: Record<ConfigCategoryKey, ConfigOption[]>
   roleRules: WorkflowRoleRule[]
-  canvasNodes: Array<{ id: string; title: string; role: string; x: number; y: number }>
-  canvasEdges: Array<{ from: string; to: string; label: string }>
+  canvasNodes: WorkflowCanvasNode[]
+  canvasEdges: WorkflowCanvasEdge[]
 }
 
 export const workflowConfigStorageKey = "bcrm-workflow-config:v1"
@@ -85,16 +113,73 @@ export const defaultWorkflowConfig: WorkflowConfig = {
     { role: "USER", scope: "Dữ liệu được giao", actions: ["Tạo tương tác", "Tạo giao dịch bán", "Cập nhật công việc cá nhân"] },
   ],
   canvasNodes: [
-    { id: "n-user", title: "User bán hàng phòng A", role: "USER", x: 60, y: 110 },
-    { id: "n-lv2", title: "Admin LV2 phòng A", role: "ADMIN_LEVEL_2", x: 330, y: 70 },
-    { id: "n-lv1", title: "Admin LV1", role: "ADMIN_LEVEL_1", x: 610, y: 110 },
-    { id: "n-lv0", title: "Admin LV0 cấu hình chung", role: "ADMIN_LEVEL_0", x: 330, y: 250 },
+    {
+      id: "n-user",
+      title: "User bán hàng phòng A",
+      role: "USER",
+      x: 60,
+      y: 120,
+      bindings: [
+        { id: "bind-user-product", source: "salesGroups", value: "PRODUCT", label: "Giao dịch sản phẩm" },
+        { id: "bind-user-product-result", source: "productUsageResults", value: "cross_sell_records.result_value", label: "Kết quả sử dụng sản phẩm" },
+      ],
+    },
+    {
+      id: "n-lv2",
+      title: "Admin LV2 phòng A",
+      role: "ADMIN_LEVEL_2",
+      x: 330,
+      y: 70,
+      bindings: [
+        { id: "bind-lv2-follow-up", source: "interactionResults", value: "FOLLOW_UP", label: "Theo dõi tiếp" },
+        { id: "bind-lv2-kpi", source: "userProductKpi", value: "department_product_values", label: "KPI sản phẩm theo phòng" },
+      ],
+    },
+    {
+      id: "n-lv1",
+      title: "Admin LV1",
+      role: "ADMIN_LEVEL_1",
+      x: 610,
+      y: 120,
+      bindings: [
+        { id: "bind-lv1-completed", source: "orderStatuses", value: "COMPLETED", label: "Đơn hàng thành công" },
+        { id: "bind-lv1-product-kpi", source: "userProductKpi", value: "product_values_vs_targets", label: "Kết quả so với chỉ tiêu" },
+      ],
+    },
+    {
+      id: "n-lv0",
+      title: "Admin LV0 cấu hình chung",
+      role: "ADMIN_LEVEL_0",
+      x: 330,
+      y: 260,
+      bindings: [
+        { id: "bind-lv0-droplist", source: "salesGroups", value: "PRODUCT", label: "Nhóm bán hàng: sản phẩm" },
+        { id: "bind-lv0-status", source: "orderStatuses", value: "COMPLETED", label: "Trạng thái kết quả" },
+      ],
+    },
   ],
   canvasEdges: [
-    { from: "n-user", to: "n-lv2", label: "Dữ liệu phòng A" },
-    { from: "n-lv2", to: "n-lv1", label: "Báo cáo/duyệt cấp cao" },
-    { from: "n-lv0", to: "n-user", label: "Droplist và workflow chung" },
+    { id: "e-user-lv2", from: "n-user", to: "n-lv2", label: "Dữ liệu phòng A" },
+    { id: "e-lv2-lv1", from: "n-lv2", to: "n-lv1", label: "Báo cáo/duyệt cấp cao" },
+    { id: "e-lv0-user", from: "n-lv0", to: "n-user", label: "Droplist và workflow chung" },
   ],
+}
+
+function normalizeCanvasNodes(nodes?: WorkflowCanvasNode[]) {
+  const fallbackBindingsById = new Map(defaultWorkflowConfig.canvasNodes.map((node) => [node.id, node.bindings || []]))
+  return (nodes?.length ? nodes : defaultWorkflowConfig.canvasNodes).map((node) => ({
+    ...node,
+    x: Number.isFinite(Number(node.x)) ? Number(node.x) : 0,
+    y: Number.isFinite(Number(node.y)) ? Number(node.y) : 0,
+    bindings: Array.isArray(node.bindings) ? node.bindings : fallbackBindingsById.get(node.id) || [],
+  }))
+}
+
+function normalizeCanvasEdges(edges?: Array<WorkflowCanvasEdge | Omit<WorkflowCanvasEdge, "id">>) {
+  return (edges?.length ? edges : defaultWorkflowConfig.canvasEdges).map((edge, index) => ({
+    ...edge,
+    id: "id" in edge && edge.id ? edge.id : `edge-${edge.from}-${edge.to}-${index}`,
+  }))
 }
 
 export function getWorkflowConfig(): WorkflowConfig {
@@ -107,6 +192,8 @@ export function getWorkflowConfig(): WorkflowConfig {
       ...defaultWorkflowConfig,
       ...parsed,
       categories: { ...defaultWorkflowConfig.categories, ...(parsed.categories || {}) },
+      canvasNodes: normalizeCanvasNodes(parsed.canvasNodes),
+      canvasEdges: normalizeCanvasEdges(parsed.canvasEdges),
     }
   } catch {
     return defaultWorkflowConfig
