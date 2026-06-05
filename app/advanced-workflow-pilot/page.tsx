@@ -249,6 +249,16 @@ function overlapsDateRange(start: Date, end: Date, rangeStart: Date, rangeEnd: D
   return start <= rangeEnd && end >= rangeStart
 }
 
+function daysBetween(start: Date, end: Date) {
+  return Math.floor((end.getTime() - start.getTime()) / 86_400_000)
+}
+
+function clampDate(date: Date, min: Date, max: Date) {
+  if (date < min) return min
+  if (date > max) return max
+  return date
+}
+
 function createDefaultFormChecks(seed: { forms?: string[]; attachments?: string[]; stickNotes?: string[] } = {}): WorkCard["formChecks"] {
   const forms = seed.forms?.length ? seed.forms : ["Biểu mẫu xử lý công việc"]
   const attachments = seed.attachments?.length ? seed.attachments : ["Hồ sơ đính kèm"]
@@ -1287,7 +1297,7 @@ export default function AdvancedWorkflowPilotPage() {
                 </button>
               </div>
             </div>
-            <GanttBoard
+            <GanttBoardV2
               phases={phases}
               selectedPhaseId={selectedPhase?.id || ""}
               selectedTimelineItemId={selectedTimelineItemId}
@@ -1544,6 +1554,277 @@ function WorkflowHeader({
       </div>
       </div>
     </section>
+  )
+}
+
+function GanttBoardV2({
+  phases,
+  selectedPhaseId,
+  selectedTimelineItemId,
+  mobileTimelineOpen,
+  cards,
+  phaseTimelines,
+  onSelectPhase,
+  onSelectTimelineItem,
+  onEditPhase,
+  onUpdatePhase,
+}: {
+  phases: Phase[]
+  selectedPhaseId: string
+  selectedTimelineItemId: string
+  mobileTimelineOpen: boolean
+  cards: WorkCard[]
+  phaseTimelines: Record<string, PhaseTimelineItem[]>
+  onSelectPhase: (phaseId: string) => void
+  onSelectTimelineItem: (phaseId: string, timelineItemId: string) => void
+  onEditPhase: (phaseId: string) => void
+  onUpdatePhase: (phaseId: string, patch: Partial<Phase>) => void
+}) {
+  const ganttColumns = useMemo(() => {
+    const datedItems = Object.values(phaseTimelines)
+      .flat()
+      .flatMap((item) => [parseLocalDate(item.startDate), parseLocalDate(item.endDate)])
+      .filter((date): date is Date => Boolean(date))
+    const baseDate = startOfWeek(datedItems.sort((a, b) => a.getTime() - b.getTime())[0] || new Date())
+
+    return Array.from({ length: 16 }, (_, index) => {
+      const startDate = addDays(baseDate, index * 7)
+      const endDate = addDays(startDate, 6)
+      return {
+        week: index + 1,
+        startDate,
+        endDate,
+        label: `${formatShortDate(startDate)} - ${formatShortDate(endDate)}`,
+      }
+    })
+  }, [phaseTimelines])
+  const timelineStart = ganttColumns[0]?.startDate || startOfWeek(new Date())
+  const timelineEnd = ganttColumns[ganttColumns.length - 1]?.endDate || addDays(timelineStart, 111)
+  const timelineDays = Math.max(1, daysBetween(timelineStart, timelineEnd) + 1)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const todayOffset = today >= timelineStart && today <= timelineEnd
+    ? (daysBetween(timelineStart, today) / timelineDays) * 100
+    : null
+  const gridTemplateColumns = "repeat(16, minmax(0, 1fr))"
+
+  return (
+    <div className="space-y-3">
+      <div className={clsx("rounded-xl border border-slate-200 bg-white p-2 md:hidden", mobileTimelineOpen && "hidden")}>
+        <div className="space-y-2">
+          {phases.map((phase) => {
+            const phaseCards = cards.filter((card) => card.phaseId === phase.id)
+            const done = phaseCards.filter((card) => card.status === "done").length
+            const timelineCount = phaseTimelines[phase.id]?.length || 0
+            return (
+              <button
+                key={phase.id}
+                type="button"
+                onClick={() => onSelectPhase(phase.id)}
+                className={clsx(
+                  "w-full rounded-lg border p-3 text-left transition",
+                  selectedPhaseId === phase.id ? "border-[#006b68] bg-emerald-50 text-[#006b68]" : "border-slate-200 bg-white text-slate-800"
+                )}
+              >
+                <span className="flex items-start justify-between gap-2">
+                  <span>
+                    <span className="block text-sm font-semibold">{phase.title}</span>
+                    <span className="mt-1 block text-xs text-slate-500">{phase.owner} · {phase.progress}% · {timelineCount} mốc con</span>
+                  </span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onEditPhase(phase.id)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        onEditPhase(phase.id)
+                      }
+                    }}
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500"
+                    aria-label={`Cấu hình ${phase.title}`}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </span>
+                </span>
+                <span className="mt-3 flex items-center justify-between text-[11px] font-semibold text-slate-500">
+                  <span>{statusLabel(phase.status)}</span>
+                  <span>{done}/{phaseCards.length} công việc</span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="hidden items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-gradient-to-r from-emerald-50 via-white to-cyan-50 px-3 py-2 text-xs text-slate-600 md:flex">
+        <div className="flex flex-wrap items-center gap-3">
+          {(["active", "planned", "risk", "done"] as PhaseStatus[]).map((status) => (
+            <span key={status} className="inline-flex items-center gap-1.5 font-semibold">
+              <span className={clsx("h-2.5 w-8 rounded-full", ganttLegendTone(status))} />
+              {statusLabel(status)}
+            </span>
+          ))}
+        </div>
+        <span className="text-right text-[11px] font-medium text-slate-500">
+          Timeline dùng ngày bắt đầu/kết thúc của mốc con; mốc chưa có ngày sẽ được đặt tạm theo tuần của giai đoạn.
+        </span>
+      </div>
+
+      <div className={clsx("overflow-x-auto rounded-xl border border-slate-200 bg-white", !mobileTimelineOpen && "max-md:hidden")}>
+        <div className="min-w-[1500px]">
+          <div className="sticky top-0 z-10 grid grid-cols-[280px_minmax(1120px,1fr)_96px] border-b border-slate-200 bg-white">
+            <div className="border-r border-slate-200 p-3 text-xs font-semibold text-slate-500">Giai đoạn</div>
+            <div className="relative grid" style={{ gridTemplateColumns }}>
+              {ganttColumns.map((column) => (
+                <div key={column.week} className="border-r border-slate-100 px-2 py-2 text-center leading-4">
+                  <span className="block text-[11px] font-bold text-slate-700">{column.label}</span>
+                  <span className="block text-[10px] font-medium text-slate-400">Tuần {column.week}</span>
+                </div>
+              ))}
+              {todayOffset !== null && (
+                <div className="pointer-events-none absolute bottom-0 top-0 w-px bg-rose-500" style={{ left: `${todayOffset}%` }}>
+                  <span className="absolute -top-1 left-1 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-600 ring-1 ring-rose-100">Hôm nay</span>
+                </div>
+              )}
+            </div>
+            <div className="p-3 text-right text-xs font-semibold text-slate-500">Kanban</div>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {phases.map((phase) => {
+              const phaseCards = cards.filter((card) => card.phaseId === phase.id)
+              const done = phaseCards.filter((card) => card.status === "done").length
+              const timelineItems = phaseTimelines[phase.id] || []
+              const visibleItems = timelineItems.length ? timelineItems : [{
+                id: `${phase.id}-fallback`,
+                title: phase.title,
+                owner: phase.owner,
+                participants: phase.participants || [],
+                supporters: phase.supporters || [],
+                startDate: "",
+                endDate: "",
+                status: statusLabel(phase.status),
+              } as PhaseTimelineItem]
+              const rowHeight = Math.max(96, 24 + visibleItems.length * 40)
+
+              return (
+                <div key={phase.id} className="grid grid-cols-[280px_minmax(1120px,1fr)_96px]">
+                  <button
+                    type="button"
+                    onClick={() => onSelectPhase(phase.id)}
+                    className={clsx(
+                      "border-r border-slate-200 p-3 text-left transition",
+                      selectedPhaseId === phase.id ? "bg-emerald-50 text-[#006b68]" : "bg-white hover:bg-slate-50"
+                    )}
+                  >
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold">{phase.title}</span>
+                        <span className="mt-1 block truncate text-xs text-slate-500">{phase.owner} · {phase.progress}% · {timelineItems.length} mốc con</span>
+                      </span>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onEditPhase(phase.id)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            onEditPhase(phase.id)
+                          }
+                        }}
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:border-[#006b68] hover:text-[#006b68]"
+                        aria-label={`Cấu hình ${phase.title}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </span>
+                    </span>
+                    <span className="mt-3 block h-1.5 rounded-full bg-slate-100">
+                      <span className={clsx("block h-full rounded-full", ganttBarTone(phase.status))} style={{ width: `${Math.max(0, Math.min(100, phase.progress))}%` }} />
+                    </span>
+                  </button>
+
+                  <div className="relative bg-slate-50/50" style={{ minHeight: rowHeight }}>
+                    <div className="absolute inset-0 grid" style={{ gridTemplateColumns }}>
+                      {ganttColumns.map((column) => (
+                        <button
+                          key={column.week}
+                          type="button"
+                          onClick={() => {
+                            onSelectPhase(phase.id)
+                            onUpdatePhase(phase.id, { start: column.week })
+                          }}
+                          className="border-r border-slate-100 transition hover:bg-emerald-50/60"
+                          aria-label={`Chọn ${phase.title} tuần ${formatShortDate(column.startDate)} đến ${formatShortDate(column.endDate)}`}
+                        />
+                      ))}
+                    </div>
+                    {todayOffset !== null && <div className="pointer-events-none absolute bottom-0 top-0 z-[1] w-px bg-rose-400" style={{ left: `${todayOffset}%` }} />}
+                    {visibleItems.map((item, index) => {
+                      const segmentDays = Math.max(4, Math.floor((Math.max(1, phase.span) * 7) / Math.max(visibleItems.length, 1)))
+                      const fallbackStart = addDays(timelineStart, Math.max(0, phase.start - 1) * 7 + index * segmentDays)
+                      const fallbackEnd = addDays(fallbackStart, segmentDays - 1)
+                      const rawStart = parseLocalDate(item.startDate) || fallbackStart
+                      const rawEnd = parseLocalDate(item.endDate) || fallbackEnd
+                      const start = clampDate(rawStart <= rawEnd ? rawStart : rawEnd, timelineStart, timelineEnd)
+                      const end = clampDate(rawEnd >= rawStart ? rawEnd : rawStart, timelineStart, timelineEnd)
+                      const left = (daysBetween(timelineStart, start) / timelineDays) * 100
+                      const width = Math.max(2.8, ((daysBetween(start, end) + 1) / timelineDays) * 100)
+                      const selected = item.id === selectedTimelineItemId
+
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => {
+                            if (item.id.endsWith("-fallback")) {
+                              onSelectPhase(phase.id)
+                              return
+                            }
+                            onSelectTimelineItem(phase.id, item.id)
+                          }}
+                          className={clsx(
+                            "group absolute z-[2] h-8 rounded-md px-2 text-left text-[11px] font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:brightness-105",
+                            selected ? "bg-slate-950 ring-2 ring-slate-300" : ganttBarTone(phase.status)
+                          )}
+                          style={{ left: `${left}%`, top: 12 + index * 40, width: `${width}%` }}
+                        >
+                          <span className="block truncate">{item.title}</span>
+                          <span className="pointer-events-none absolute bottom-9 left-1/2 z-20 hidden w-72 -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs font-normal text-slate-600 shadow-lg group-hover:block">
+                            <span className="block font-semibold text-slate-950">{item.title}</span>
+                            <span className="mt-1 block">Phụ trách: {item.owner}</span>
+                            <span className="block">Thời gian: {timelineDateMeta(item)}</span>
+                            <span className="block">Trạng thái: {item.status}</span>
+                            <span className="block">Tham gia: {item.participants.length ? item.participants.join(", ") : "Chưa chọn"}</span>
+                            <span className="block">Hỗ trợ: {item.supporters.length ? item.supporters.join(", ") : "Chưa chọn"}</span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onSelectPhase(phase.id)}
+                    className="flex items-center justify-end border-l border-slate-200 bg-white p-3 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  >
+                    {done}/{phaseCards.length}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 

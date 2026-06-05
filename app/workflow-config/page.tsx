@@ -1,8 +1,22 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import clsx from "clsx"
-import { Check, Grip, Link2, MousePointer2, Plus, Save, Trash2, Workflow, X } from "lucide-react"
+import {
+  Background,
+  Controls,
+  Handle,
+  MarkerType,
+  MiniMap,
+  Position,
+  ReactFlow,
+  type Edge,
+  type Node,
+  type NodeChange,
+  type NodeProps,
+} from "@xyflow/react"
+import "@xyflow/react/dist/style.css"
+import { Check, Database, Grip, Link2, MousePointer2, Plus, Save, ShieldCheck, Trash2, Workflow, X } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useAuthStore } from "@/store/useAuthStore"
 import {
@@ -52,12 +66,14 @@ const productUsageBindings = [
 
 type CanvasMode = "select" | "connect"
 type BindingOption = WorkflowCanvasBinding & { groupLabel: string }
-
-type DragState = {
-  nodeId: string
-  offsetX: number
-  offsetY: number
-}
+type WorkflowFlowNodeData = {
+  title: string
+  role: string
+  bindings: WorkflowCanvasBinding[]
+  selected: boolean
+  connecting: boolean
+} & Record<string, unknown>
+type WorkflowFlowNode = Node<WorkflowFlowNodeData, "workflowNode">
 
 function findOpenCanvasPosition(nodes: WorkflowConfig["canvasNodes"]) {
   const columns = [70, 330, 590]
@@ -81,9 +97,6 @@ function findOpenCanvasPosition(nodes: WorkflowConfig["canvasNodes"]) {
 
 export default function WorkflowConfigPage() {
   const { user } = useAuthStore()
-  const canvasRef = useRef<HTMLDivElement | null>(null)
-  const dragRef = useRef<DragState | null>(null)
-  const dragMovedRef = useRef(false)
   const [mounted, setMounted] = useState(false)
   const [config, setConfig] = useState<WorkflowConfig>(defaultWorkflowConfig)
   const [activeKey, setActiveKey] = useState<ConfigCategoryKey>("salesGroups")
@@ -117,6 +130,35 @@ export default function WorkflowConfigPage() {
   const activeOptions = config.categories[activeKey] || []
   const selectedNode = useMemo(() => config.canvasNodes.find((node) => node.id === selectedNodeId), [config.canvasNodes, selectedNodeId])
   const selectedEdge = useMemo(() => config.canvasEdges.find((edge) => edge.id === selectedEdgeId), [config.canvasEdges, selectedEdgeId])
+  const flowNodes = useMemo<WorkflowFlowNode[]>(() => config.canvasNodes.map((node) => ({
+    id: node.id,
+    type: "workflowNode",
+    position: { x: node.x, y: node.y },
+    data: {
+      title: node.title,
+      role: node.role,
+      bindings: node.bindings || [],
+      selected: selectedNodeId === node.id,
+      connecting: connectFromId === node.id,
+    },
+  })), [config.canvasNodes, connectFromId, selectedNodeId])
+  const flowEdges = useMemo<Edge[]>(() => config.canvasEdges.map((edge) => ({
+    id: edge.id,
+    source: edge.from,
+    target: edge.to,
+    label: edge.label,
+    type: "smoothstep",
+    animated: selectedEdgeId === edge.id,
+    markerEnd: { type: MarkerType.ArrowClosed, color: selectedEdgeId === edge.id ? "#0f172a" : "#006b68" },
+    style: {
+      stroke: selectedEdgeId === edge.id ? "#0f172a" : "#006b68",
+      strokeWidth: selectedEdgeId === edge.id ? 3 : 2,
+    },
+    labelStyle: { fill: "#334155", fontWeight: 700, fontSize: 11 },
+    labelBgStyle: { fill: "#ffffff", stroke: selectedEdgeId === edge.id ? "#0f172a" : "#cbd5e1" },
+    labelBgPadding: [8, 5],
+    labelBgBorderRadius: 6,
+  })), [config.canvasEdges, selectedEdgeId])
   const selectedRoleRule = useMemo(() => {
     if (!selectedNode) return null
     return config.roleRules.find((rule) => rule.role === selectedNode.role) || null
@@ -259,11 +301,6 @@ export default function WorkflowConfigPage() {
   }, [edgeLabel])
 
   const handleNodeClick = (nodeId: string) => {
-    if (dragMovedRef.current) {
-      dragMovedRef.current = false
-      return
-    }
-
     setSelectedNodeId(nodeId)
     setSelectedEdgeId("")
 
@@ -278,41 +315,27 @@ export default function WorkflowConfigPage() {
     }
   }
 
-  const startDrag = (event: React.PointerEvent<HTMLDivElement>, nodeId: string) => {
-    if (!canManage || canvasMode === "connect") return
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const node = config.canvasNodes.find((item) => item.id === nodeId)
-    if (!node) return
-    const rect = canvas.getBoundingClientRect()
-    dragRef.current = {
-      nodeId,
-      offsetX: event.clientX - rect.left + canvas.scrollLeft - node.x,
-      offsetY: event.clientY - rect.top + canvas.scrollTop - node.y,
-    }
-    dragMovedRef.current = false
-    event.currentTarget.setPointerCapture(event.pointerId)
-  }
+  const handleNodesChange = useCallback((changes: NodeChange<WorkflowFlowNode>[]) => {
+    if (!canManage || canvasMode !== "select") return
+    const positionChanges = changes.flatMap((change) => {
+      if (change.type !== "position" || !("id" in change) || !change.position) return []
+      return [{ id: change.id, position: change.position }]
+    })
+    if (positionChanges.length === 0) return
 
-  const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current
-    const canvas = canvasRef.current
-    if (!drag || !canvas) return
-    const rect = canvas.getBoundingClientRect()
-    const x = Math.max(0, Math.min(canvasWidth - nodeWidth, event.clientX - rect.left + canvas.scrollLeft - drag.offsetX))
-    const y = Math.max(0, Math.min(canvasHeight - nodeHeight, event.clientY - rect.top + canvas.scrollTop - drag.offsetY))
-    dragMovedRef.current = true
-    updateNode(drag.nodeId, { x, y })
-  }
-
-  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return
-    dragRef.current = null
-    event.currentTarget.releasePointerCapture(event.pointerId)
-    window.setTimeout(() => {
-      dragMovedRef.current = false
-    }, 0)
-  }
+    setConfig((current) => ({
+      ...current,
+      canvasNodes: current.canvasNodes.map((node) => {
+        const change = positionChanges.find((item) => item.id === node.id)
+        if (!change?.position) return node
+        return {
+          ...node,
+          x: Math.max(0, Math.min(canvasWidth - nodeWidth, change.position.x)),
+          y: Math.max(0, Math.min(canvasHeight - nodeHeight, change.position.y)),
+        }
+      }),
+    }))
+  }, [canManage, canvasMode])
 
   if (!mounted) return null
 
@@ -461,78 +484,45 @@ export default function WorkflowConfigPage() {
               </div>
             </div>
 
-            <div ref={canvasRef} className="mt-4 overflow-auto rounded-lg border border-slate-200 bg-[radial-gradient(circle_at_1px_1px,#cbd5e1_1px,transparent_0)] [background-size:24px_24px]">
-              <div className="relative" style={{ width: canvasWidth, height: canvasHeight }}>
-                <svg className="absolute inset-0 h-full w-full overflow-visible">
-                  <defs>
-                    <marker id="workflow-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-                      <path d="M0,0 L0,6 L9,3 z" fill="#006b68" />
-                    </marker>
-                  </defs>
-                  {config.canvasEdges.map((edge) => {
-                    const from = config.canvasNodes.find((node) => node.id === edge.from)
-                    const to = config.canvasNodes.find((node) => node.id === edge.to)
-                    if (!from || !to) return null
-                    const x1 = from.x + nodeWidth / 2
-                    const y1 = from.y + nodeHeight / 2
-                    const x2 = to.x + nodeWidth / 2
-                    const y2 = to.y + nodeHeight / 2
-                    const labelX = (x1 + x2) / 2
-                    const labelY = (y1 + y2) / 2
-                    const active = selectedEdgeId === edge.id
-                    return (
-                      <g key={edge.id} className="cursor-pointer" onClick={() => {
-                        setSelectedEdgeId(edge.id)
-                        setSelectedNodeId("")
-                      }}>
-                        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={active ? "#0f172a" : "#006b68"} strokeWidth={active ? 3 : 2} strokeLinecap="round" markerEnd="url(#workflow-arrow)" />
-                        <rect x={labelX - 72} y={labelY - 13} width="144" height="26" rx="6" fill="white" stroke={active ? "#0f172a" : "#cbd5e1"} />
-                        <text x={labelX} y={labelY + 4} textAnchor="middle" className="fill-slate-700 text-[11px] font-semibold">{edge.label}</text>
-                      </g>
-                    )
-                  })}
-                </svg>
-
-                {config.canvasNodes.map((node) => {
-                  const selected = selectedNodeId === node.id
-                  const connecting = connectFromId === node.id
-                  return (
-                    <div
-                      key={node.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => handleNodeClick(node.id)}
-                      onPointerDown={(event) => startDrag(event, node.id)}
-                      onPointerMove={moveDrag}
-                      onPointerUp={endDrag}
-                      onPointerCancel={endDrag}
-                      className={clsx(
-                        "absolute select-none rounded-lg border bg-white p-3 shadow-sm transition",
-                        canManage && canvasMode === "select" && "cursor-grab active:cursor-grabbing",
-                        canvasMode === "connect" && "cursor-crosshair",
-                        selected ? "border-[#006b68] ring-2 ring-[#006b68]/20" : "border-slate-200",
-                        connecting && "border-sky-500 ring-2 ring-sky-200"
-                      )}
-                      style={{ left: node.x, top: node.y, width: nodeWidth, minHeight: nodeHeight }}
-                    >
-                      <div className="flex items-start gap-2">
-                        <Grip className="mt-0.5 h-4 w-4 shrink-0 text-slate-300" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-bold text-slate-950" title={node.title}>{node.title}</p>
-                          <p className="mt-1 w-fit rounded-md bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-[#006b68]">{node.role}</p>
-                        </div>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {(node.bindings || []).slice(0, 3).map((binding) => (
-                          <span key={binding.id} className="max-w-full truncate rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500" title={`${bindingSourceLabels[binding.source]}: ${binding.label}`}>
-                            {binding.label}
-                          </span>
-                        ))}
-                        {(node.bindings || []).length > 3 && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">+{(node.bindings || []).length - 3}</span>}
-                      </div>
-                    </div>
-                  )
-                })}
+            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white">
+              <div className="h-[520px] min-h-[520px]">
+                <ReactFlow
+                  nodes={flowNodes}
+                  edges={flowEdges}
+                  nodeTypes={workflowNodeTypes}
+                  onNodesChange={handleNodesChange}
+                  onNodeClick={(_, node) => handleNodeClick(node.id)}
+                  onEdgeClick={(_, edge) => {
+                    setSelectedEdgeId(edge.id)
+                    setSelectedNodeId("")
+                  }}
+                  onConnect={(connection) => {
+                    if (!canManage || !connection.source || !connection.target) return
+                    createEdge(connection.source, connection.target)
+                    setCanvasMode("select")
+                    setConnectFromId("")
+                  }}
+                  nodesDraggable={canManage && canvasMode === "select"}
+                  nodesConnectable={canManage && canvasMode === "connect"}
+                  elementsSelectable
+                  fitView
+                  fitViewOptions={{ padding: 0.18, maxZoom: 1.1 }}
+                  minZoom={0.45}
+                  maxZoom={1.45}
+                  defaultViewport={{ x: 24, y: 24, zoom: 0.9 }}
+                  proOptions={{ hideAttribution: true }}
+                  className="bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)]"
+                >
+                  <Background color="#cbd5e1" gap={24} size={1.2} />
+                  <MiniMap
+                    pannable
+                    zoomable
+                    nodeColor={(node) => node.id === selectedNodeId ? "#006b68" : "#cbd5e1"}
+                    maskColor="rgba(15, 23, 42, 0.08)"
+                    className="!rounded-md !border !border-slate-200 !bg-white"
+                  />
+                  <Controls className="!border !border-slate-200 !shadow-sm" />
+                </ReactFlow>
               </div>
             </div>
           </div>
@@ -578,6 +568,60 @@ export default function WorkflowConfigPage() {
         </section>
       </div>
     </DashboardLayout>
+  )
+}
+
+const workflowNodeTypes = {
+  workflowNode: WorkflowFlowNodeCard,
+}
+
+function WorkflowFlowNodeCard({ data }: NodeProps<WorkflowFlowNode>) {
+  const bindings = data.bindings || []
+
+  return (
+    <div
+      className={clsx(
+        "w-[210px] select-none rounded-lg border bg-white p-3 shadow-sm ring-offset-2 transition",
+        data.selected ? "border-[#006b68] shadow-md ring-2 ring-[#006b68]/20" : "border-slate-200",
+        data.connecting && "border-sky-500 ring-2 ring-sky-200"
+      )}
+    >
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="!h-3 !w-3 !border-2 !border-white !bg-[#006b68]"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-3 !w-3 !border-2 !border-white !bg-[#006b68]"
+      />
+
+      <div className="flex items-start gap-2">
+        <span className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-[#006b68]">
+          {data.role === "ADMIN_LEVEL_0" ? <ShieldCheck className="h-4 w-4" /> : <Workflow className="h-4 w-4" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-slate-950" title={data.title}>{data.title}</p>
+          <p className="mt-1 w-fit rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600">{data.role}</p>
+        </div>
+        <Grip className="mt-1 h-4 w-4 shrink-0 text-slate-300" />
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5 text-[11px] font-semibold text-slate-500">
+        <Database className="h-3.5 w-3.5 text-[#006b68]" />
+        <span>{bindings.length} binding</span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-1">
+        {bindings.slice(0, 3).map((binding) => (
+          <span key={binding.id} className="max-w-full truncate rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-[#006b68]" title={binding.label}>
+            {binding.label}
+          </span>
+        ))}
+        {bindings.length > 3 && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">+{bindings.length - 3}</span>}
+      </div>
+    </div>
   )
 }
 
