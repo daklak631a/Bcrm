@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import clsx from "clsx"
 import {
   Background,
@@ -16,12 +16,13 @@ import {
   type NodeProps,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
-import { Check, Database, Grip, Link2, MousePointer2, Plus, Save, ShieldCheck, Trash2, Workflow, X } from "lucide-react"
+import { Brain, Check, Database, GitBranch, Grip, Layers3, Link2, LockKeyhole, MousePointer2, Plus, Save, ShieldCheck, Trash2, Workflow, X } from "lucide-react"
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useAuthStore } from "@/store/useAuthStore"
 import {
   ConfigCategoryKey,
   ConfigOption,
+  PermissionActionKey,
   WorkflowCanvasBinding,
   WorkflowCanvasBindingSource,
   WorkflowConfig,
@@ -48,6 +49,25 @@ const canvasWidth = 940
 const canvasHeight = 430
 
 const roleOptions = ["USER", "ADMIN_LEVEL_3", "ADMIN_LEVEL_2", "ADMIN_LEVEL_1", "ADMIN_LEVEL_0", "ADVISOR"]
+
+const roleLabels: Record<string, string> = {
+  ADMIN_LEVEL_0: "Admin LV0",
+  ADMIN_LEVEL_1: "Admin LV1",
+  ADMIN_LEVEL_2: "Admin LV2",
+  ADMIN_LEVEL_3: "Admin LV3",
+  USER: "User",
+  ADVISOR: "Cố vấn",
+}
+
+const permissionActionOptions: Array<{ key: PermissionActionKey; label: string }> = [
+  { key: "view", label: "Xem" },
+  { key: "create", label: "Tạo" },
+  { key: "update", label: "Sửa" },
+  { key: "approve", label: "Duyệt" },
+  { key: "assign", label: "Phân công" },
+  { key: "export", label: "Xuất" },
+  { key: "configure", label: "Cấu hình" },
+]
 
 const bindingSourceLabels: Record<WorkflowCanvasBindingSource, string> = {
   ...categoryLabels,
@@ -191,6 +211,68 @@ export default function WorkflowConfigPage() {
     setConfig((current) => ({
       ...current,
       categories: { ...current.categories, [activeKey]: rows },
+    }))
+  }
+
+  const toggleBusinessPermission = (groupId: string, role: string, action: PermissionActionKey) => {
+    setConfig((current) => ({
+      ...current,
+      businessPermissions: current.businessPermissions.map((group) => {
+        if (group.id !== groupId) return group
+
+        const currentActions = group.permissions[role] || []
+        const nextActions = currentActions.includes(action)
+          ? currentActions.filter((item) => item !== action)
+          : [...currentActions, action]
+
+        return {
+          ...group,
+          permissions: {
+            ...group.permissions,
+            [role]: nextActions,
+          },
+        }
+      }),
+    }))
+  }
+
+  const toggleWorkflowStepAction = (workflowId: string, stepId: string, action: PermissionActionKey) => {
+    setConfig((current) => ({
+      ...current,
+      workflowPermissions: current.workflowPermissions.map((workflowRule) => {
+        if (workflowRule.id !== workflowId) return workflowRule
+
+        return {
+          ...workflowRule,
+          steps: workflowRule.steps.map((step) => {
+            if (step.id !== stepId) return step
+
+            const nextActions = step.actions.includes(action)
+              ? step.actions.filter((item) => item !== action)
+              : [...step.actions, action]
+
+            return { ...step, actions: nextActions }
+          }),
+        }
+      }),
+    }))
+  }
+
+  const updateWorkflowStep = (
+    workflowId: string,
+    stepId: string,
+    patch: Partial<WorkflowConfig["workflowPermissions"][number]["steps"][number]>
+  ) => {
+    setConfig((current) => ({
+      ...current,
+      workflowPermissions: current.workflowPermissions.map((workflowRule) => (
+        workflowRule.id === workflowId
+          ? {
+              ...workflowRule,
+              steps: workflowRule.steps.map((step) => (step.id === stepId ? { ...step, ...patch } : step)),
+            }
+          : workflowRule
+      )),
     }))
   }
 
@@ -425,6 +507,25 @@ export default function WorkflowConfigPage() {
           </div>
         </section>
 
+        <section className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <PermissionLogicGraph
+            businessPermissions={config.businessPermissions}
+            workflowPermissions={config.workflowPermissions}
+          />
+          <BusinessPermissionMatrix
+            canManage={canManage}
+            groups={config.businessPermissions}
+            onToggle={toggleBusinessPermission}
+          />
+        </section>
+
+        <WorkflowSpecificPermissionMatrix
+          canManage={canManage}
+          workflows={config.workflowPermissions}
+          onToggleAction={toggleWorkflowStepAction}
+          onUpdateStep={updateWorkflowStep}
+        />
+
         <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -568,6 +669,227 @@ export default function WorkflowConfigPage() {
         </section>
       </div>
     </DashboardLayout>
+  )
+}
+
+function PermissionLogicGraph({
+  businessPermissions,
+  workflowPermissions,
+}: {
+  businessPermissions: WorkflowConfig["businessPermissions"]
+  workflowPermissions: WorkflowConfig["workflowPermissions"]
+}) {
+  const businessGrantCount = businessPermissions.reduce((total, group) => total + Object.values(group.permissions).reduce((sum, actions) => sum + actions.length, 0), 0)
+  const workflowStepCount = workflowPermissions.reduce((total, workflowRule) => total + workflowRule.steps.length, 0)
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center gap-2">
+        <Brain className="h-5 w-5 text-[#006b68]" />
+        <h2 className="text-lg font-bold text-slate-950">Graph logic phân quyền</h2>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-slate-600">
+        Quyền hiệu lực không lấy từ một role đơn lẻ. Hệ thống cần thỏa đồng thời quyền chung theo khối nghiệp vụ và quyền riêng của workflow đang chạy.
+      </p>
+
+      <div className="mt-4 grid gap-3">
+        <LogicNode icon={<ShieldCheck className="h-4 w-4" />} title="User / Role" detail={`${roleOptions.length} nhóm vai trò`} />
+        <LogicArrow label="được tick theo" />
+        <LogicNode icon={<Layers3 className="h-4 w-4" />} title="Khối nghiệp vụ" detail={`${businessPermissions.length} khối · ${businessGrantCount} quyền`} />
+        <LogicArrow label="giao với" />
+        <LogicNode icon={<GitBranch className="h-4 w-4" />} title="Workflow cụ thể" detail={`${workflowPermissions.length} workflow · ${workflowStepCount} bước`} />
+        <LogicArrow label="tạo thành" />
+        <LogicNode icon={<LockKeyhole className="h-4 w-4" />} title="Quyền hiệu lực" detail="Allow = role có quyền khối và có quyền tại bước workflow" strong />
+      </div>
+    </section>
+  )
+}
+
+function LogicNode({ icon, title, detail, strong }: { icon: ReactNode; title: string; detail: string; strong?: boolean }) {
+  return (
+    <div className={clsx("flex items-start gap-3 rounded-lg border p-3", strong ? "border-[#006b68] bg-emerald-50" : "border-slate-200 bg-slate-50")}>
+      <span className={clsx("inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md", strong ? "bg-[#006b68] text-white" : "bg-white text-[#006b68]")}>
+        {icon}
+      </span>
+      <div>
+        <p className="text-sm font-bold text-slate-950">{title}</p>
+        <p className="mt-1 text-xs leading-5 text-slate-600">{detail}</p>
+      </div>
+    </div>
+  )
+}
+
+function LogicArrow({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-2 px-4 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+      <span className="h-px flex-1 bg-slate-200" />
+      {label}
+      <span className="h-px flex-1 bg-slate-200" />
+    </div>
+  )
+}
+
+function BusinessPermissionMatrix({
+  canManage,
+  groups,
+  onToggle,
+}: {
+  canManage: boolean
+  groups: WorkflowConfig["businessPermissions"]
+  onToggle: (groupId: string, role: string, action: PermissionActionKey) => void
+}) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">1. Phân quyền chung</p>
+          <h2 className="mt-1 text-lg font-bold text-slate-950">Theo khối nghiệp vụ</h2>
+        </div>
+        <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{groups.length} khối</span>
+      </div>
+      <div className="mt-4 space-y-4">
+        {groups.map((group) => (
+          <div key={group.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-950">{group.title}</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-600">{group.description}</p>
+              </div>
+            </div>
+            <div className="mt-3 overflow-x-auto rounded-md border border-slate-200 bg-white">
+              <table className="min-w-[760px] w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500">
+                  <tr>
+                    <th className="w-32 px-3 py-2 font-semibold">Role</th>
+                    {permissionActionOptions.map((action) => (
+                      <th key={action.key} className="px-2 py-2 text-center font-semibold">{action.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {roleOptions.map((role) => (
+                    <tr key={role}>
+                      <td className="px-3 py-2 font-semibold text-slate-700">{roleLabels[role]}</td>
+                      {permissionActionOptions.map((action) => {
+                        const checked = (group.permissions[role] || []).includes(action.key)
+                        return (
+                          <td key={action.key} className="px-2 py-2 text-center">
+                            <input
+                              type="checkbox"
+                              disabled={!canManage}
+                              checked={checked}
+                              onChange={() => onToggle(group.id, role, action.key)}
+                              className="h-4 w-4 rounded border-slate-300 text-[#006b68] focus:ring-[#006b68] disabled:opacity-40"
+                              aria-label={`${group.title} ${roleLabels[role]} ${action.label}`}
+                            />
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function WorkflowSpecificPermissionMatrix({
+  canManage,
+  workflows,
+  onToggleAction,
+  onUpdateStep,
+}: {
+  canManage: boolean
+  workflows: WorkflowConfig["workflowPermissions"]
+  onToggleAction: (workflowId: string, stepId: string, action: PermissionActionKey) => void
+  onUpdateStep: (workflowId: string, stepId: string, patch: Partial<WorkflowConfig["workflowPermissions"][number]["steps"][number]>) => void
+}) {
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">2. Phân quyền workflow cụ thể</p>
+          <h2 className="mt-1 text-lg font-bold text-slate-950">Theo từng luồng và từng bước xử lý</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Mỗi workflow có role phụ trách và bộ quyền riêng. Quyền này dùng để khóa thao tác theo đúng bước, không thay thế ma trận quyền chung.
+          </p>
+        </div>
+        <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{workflows.length} workflow</span>
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+        {workflows.map((workflowRule) => (
+          <div key={workflowRule.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-start gap-2">
+              <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white text-[#006b68]">
+                <GitBranch className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-slate-950">{workflowRule.workflowName}</h3>
+                <p className="mt-1 text-[11px] font-semibold text-slate-500">{workflowRule.ownerUnit}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-600">{workflowRule.description}</p>
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-3">
+              {workflowRule.steps.map((step, index) => (
+                <div key={step.id} className="rounded-md border border-slate-200 bg-white p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded bg-emerald-50 text-xs font-bold text-[#006b68]">{index + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <input
+                        disabled={!canManage}
+                        value={step.title}
+                        onChange={(event) => onUpdateStep(workflowRule.id, step.id, { title: event.target.value })}
+                        className="h-8 w-full rounded-md border border-slate-200 px-2 text-sm font-semibold text-slate-900 outline-none disabled:border-transparent disabled:bg-transparent disabled:px-0"
+                      />
+                      <select
+                        disabled={!canManage}
+                        value={step.role}
+                        onChange={(event) => onUpdateStep(workflowRule.id, step.id, { role: event.target.value })}
+                        className="mt-2 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 outline-none disabled:bg-slate-100"
+                      >
+                        {roleOptions.map((role) => (
+                          <option key={role} value={role}>{roleLabels[role]}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {permissionActionOptions.map((action) => (
+                      <label key={action.key} className="flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600">
+                        <input
+                          type="checkbox"
+                          disabled={!canManage}
+                          checked={step.actions.includes(action.key)}
+                          onChange={() => onToggleAction(workflowRule.id, step.id, action.key)}
+                          className="h-4 w-4 rounded border-slate-300 text-[#006b68] focus:ring-[#006b68] disabled:opacity-40"
+                        />
+                        {action.label}
+                      </label>
+                    ))}
+                  </div>
+
+                  <textarea
+                    disabled={!canManage}
+                    value={step.notes.join("\n")}
+                    onChange={(event) => onUpdateStep(workflowRule.id, step.id, { notes: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })}
+                    rows={2}
+                    className="mt-3 w-full rounded-md border border-slate-200 px-2 py-2 text-xs leading-5 text-slate-600 outline-none disabled:bg-slate-100"
+                    placeholder="Ghi chú điều kiện quyền"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   )
 }
 

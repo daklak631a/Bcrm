@@ -24,6 +24,38 @@ export type WorkflowRoleRule = {
   actions: string[]
 }
 
+export type PermissionActionKey =
+  | "view"
+  | "create"
+  | "update"
+  | "approve"
+  | "assign"
+  | "export"
+  | "configure"
+
+export type BusinessPermissionGroup = {
+  id: string
+  title: string
+  description: string
+  permissions: Record<string, PermissionActionKey[]>
+}
+
+export type WorkflowPermissionStep = {
+  id: string
+  title: string
+  role: string
+  actions: PermissionActionKey[]
+  notes: string[]
+}
+
+export type WorkflowPermissionRule = {
+  id: string
+  workflowName: string
+  ownerUnit: string
+  description: string
+  steps: WorkflowPermissionStep[]
+}
+
 export type WorkflowCanvasBindingSource =
   | ConfigCategoryKey
   | "productUsageResults"
@@ -55,6 +87,8 @@ export type WorkflowCanvasEdge = {
 export type WorkflowConfig = {
   categories: Record<ConfigCategoryKey, ConfigOption[]>
   roleRules: WorkflowRoleRule[]
+  businessPermissions: BusinessPermissionGroup[]
+  workflowPermissions: WorkflowPermissionRule[]
   canvasNodes: WorkflowCanvasNode[]
   canvasEdges: WorkflowCanvasEdge[]
 }
@@ -121,6 +155,95 @@ export const defaultWorkflowConfig: WorkflowConfig = {
     { role: "ADMIN_LEVEL_1", scope: "Toàn hệ thống nghiệp vụ", actions: ["Xem toàn bộ dữ liệu", "Duyệt/xuất bản mẫu", "Xem báo cáo tổng hợp", "Điều chỉnh chính sách vận hành"] },
     { role: "ADMIN_LEVEL_2", scope: "Phòng/chi nhánh quản lý", actions: ["Xem user phòng mình", "Sửa giao dịch/user thuộc phòng", "Duyệt cấu trúc template", "Phân công xử lý"] },
     { role: "USER", scope: "Dữ liệu được giao", actions: ["Tạo tương tác", "Tạo giao dịch bán", "Cập nhật công việc cá nhân"] },
+  ],
+  businessPermissions: [
+    {
+      id: "sales",
+      title: "Khối bán hàng",
+      description: "Khách hàng, tương tác, bán chéo, sản phẩm và chỉ tiêu bán hàng.",
+      permissions: {
+        ADMIN_LEVEL_0: ["configure"],
+        ADMIN_LEVEL_1: ["view", "approve", "export"],
+        ADMIN_LEVEL_2: ["view", "update", "assign", "approve"],
+        ADMIN_LEVEL_3: ["view", "update", "assign"],
+        USER: ["view", "create", "update"],
+        ADVISOR: ["view"],
+      },
+    },
+    {
+      id: "credit",
+      title: "Khối tín dụng",
+      description: "Khoản vay, hồ sơ cấp hạn mức, chuyển giao quản lý và rà soát điều kiện.",
+      permissions: {
+        ADMIN_LEVEL_0: ["configure"],
+        ADMIN_LEVEL_1: ["view", "approve", "export"],
+        ADMIN_LEVEL_2: ["view", "update", "approve", "assign"],
+        ADMIN_LEVEL_3: ["view", "update"],
+        USER: ["view", "create", "update"],
+        ADVISOR: ["view"],
+      },
+    },
+    {
+      id: "operations",
+      title: "Khối vận hành",
+      description: "Yêu cầu hỗ trợ, phân công xử lý, template dự án và nhật ký vận hành.",
+      permissions: {
+        ADMIN_LEVEL_0: ["configure"],
+        ADMIN_LEVEL_1: ["view", "approve", "export"],
+        ADMIN_LEVEL_2: ["view", "update", "approve", "assign"],
+        ADMIN_LEVEL_3: ["view", "update", "assign"],
+        USER: ["view", "create", "update"],
+        ADVISOR: ["view"],
+      },
+    },
+    {
+      id: "governance",
+      title: "Khối quản trị hệ thống",
+      description: "Droplist, cấu hình workflow, role, audit log và tham số hệ thống.",
+      permissions: {
+        ADMIN_LEVEL_0: ["view", "update", "configure"],
+        ADMIN_LEVEL_1: ["view", "approve", "export"],
+        ADMIN_LEVEL_2: ["view"],
+        ADMIN_LEVEL_3: [],
+        USER: [],
+        ADVISOR: ["view"],
+      },
+    },
+  ],
+  workflowPermissions: [
+    {
+      id: "wf-customer-sales",
+      workflowName: "Workflow bán hàng khách hàng",
+      ownerUnit: "Khối bán hàng",
+      description: "Luồng từ tạo tương tác đến cập nhật kết quả bán sản phẩm.",
+      steps: [
+        { id: "sales-create", title: "Tạo lead/tương tác", role: "USER", actions: ["view", "create", "update"], notes: ["Chỉ thao tác dữ liệu được giao."] },
+        { id: "sales-assign", title: "Phân công và giám sát", role: "ADMIN_LEVEL_2", actions: ["view", "update", "assign"], notes: ["Giới hạn trong phòng/chi nhánh quản lý."] },
+        { id: "sales-report", title: "Tổng hợp hiệu quả", role: "ADMIN_LEVEL_1", actions: ["view", "export"], notes: ["Xem toàn hệ thống nghiệp vụ."] },
+      ],
+    },
+    {
+      id: "wf-credit-review",
+      workflowName: "Workflow hồ sơ tín dụng",
+      ownerUnit: "Khối tín dụng",
+      description: "Luồng tạo hồ sơ vay, rà soát phòng và duyệt cấp nghiệp vụ.",
+      steps: [
+        { id: "credit-create", title: "Nhập hồ sơ khoản vay", role: "USER", actions: ["view", "create", "update"], notes: ["Không được duyệt hồ sơ của chính mình."] },
+        { id: "credit-branch-review", title: "Rà soát cấp phòng", role: "ADMIN_LEVEL_2", actions: ["view", "update", "approve", "assign"], notes: ["Duyệt trong phạm vi phòng/chi nhánh."] },
+        { id: "credit-business-approve", title: "Duyệt nghiệp vụ hội sở", role: "ADMIN_LEVEL_1", actions: ["view", "approve", "export"], notes: ["Chỉ duyệt khi bước phòng đã hoàn tất."] },
+      ],
+    },
+    {
+      id: "wf-system-config",
+      workflowName: "Workflow cấu hình hệ thống",
+      ownerUnit: "Khối quản trị hệ thống",
+      description: "Luồng thay đổi droplist, template workflow và ma trận quyền.",
+      steps: [
+        { id: "system-design", title: "Thiết kế cấu hình chung", role: "ADMIN_LEVEL_0", actions: ["view", "update", "configure"], notes: ["Không xử lý nội dung dự án cụ thể."] },
+        { id: "system-business-review", title: "Xác nhận chính sách nghiệp vụ", role: "ADMIN_LEVEL_1", actions: ["view", "approve"], notes: ["Xác nhận trước khi áp dụng rộng."] },
+        { id: "system-branch-rollout", title: "Áp dụng tại chi nhánh", role: "ADMIN_LEVEL_2", actions: ["view", "assign"], notes: ["Phân công user theo cấu hình đã được duyệt."] },
+      ],
+    },
   ],
   canvasNodes: [
     {
@@ -198,6 +321,8 @@ function normalizeWorkflowConfig(config?: Partial<WorkflowConfig> | null): Workf
     ...(config || {}),
     categories: { ...defaultWorkflowConfig.categories, ...(config?.categories || {}) },
     roleRules: Array.isArray(config?.roleRules) && config.roleRules.length ? config.roleRules : defaultWorkflowConfig.roleRules,
+    businessPermissions: Array.isArray(config?.businessPermissions) && config.businessPermissions.length ? config.businessPermissions : defaultWorkflowConfig.businessPermissions,
+    workflowPermissions: Array.isArray(config?.workflowPermissions) && config.workflowPermissions.length ? config.workflowPermissions : defaultWorkflowConfig.workflowPermissions,
     canvasNodes: normalizeCanvasNodes(config?.canvasNodes),
     canvasEdges: normalizeCanvasEdges(config?.canvasEdges),
   }
