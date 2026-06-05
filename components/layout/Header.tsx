@@ -112,9 +112,14 @@ export function Header({
       case 'ADMIN_LEVEL_0': return 'Admin Hệ Thống'
       case 'ADMIN_LEVEL_1': return 'Hội Sở Chính'
       case 'ADMIN_LEVEL_2': return 'Quản lý Chi Nhánh'
+      case 'ADMIN_LEVEL_3': return 'Phó Phòng'
+      case 'ADVISOR': return 'Cố vấn'
+      case 'USER': return 'Chuyên viên'
       default: return 'Chuyên viên'
     }
   }
+
+  const isDelegatedRole = !!user?.original_role && user.original_role !== user.role
 
   return (
     <header className="relative z-30 h-16 bg-white border-b flex items-center justify-between px-4 md:px-6 flex-shrink-0">
@@ -197,7 +202,10 @@ export function Header({
           </div>
           <div className="hidden md:block">
             <p className="text-sm font-medium text-slate-700">{mounted && user ? (user.name || user.email) : 'Đang tải...'}</p>
-            <p className="text-xs text-slate-500">{mounted ? getRoleName(user?.role) : ''}</p>
+            <p className="text-xs text-slate-500">
+              {mounted ? getRoleName(user?.role) : ''}
+              {mounted && isDelegatedRole ? ` (ủy quyền từ ${getRoleName(user?.original_role)})` : ''}
+            </p>
           </div>
           <button onClick={handleLogout} className="p-2 ml-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors" title="Đăng xuất">
             <LogOut className="w-5 h-5" />

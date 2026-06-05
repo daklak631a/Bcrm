@@ -101,6 +101,13 @@ export type WorkflowConfigLoadResult = {
   savedAt?: string
 }
 
+export type EffectiveWorkflowPermissionInput = {
+  role?: string | null
+  workflowId: string
+  stepId: string
+  action: PermissionActionKey
+}
+
 export const workflowConfigStorageKey = "bcrm-workflow-config:v1"
 
 export const defaultWorkflowConfig: WorkflowConfig = {
@@ -402,4 +409,55 @@ export async function saveWorkflowConfig(config: WorkflowConfig): Promise<Workfl
 
 export function getActiveOptions(key: ConfigCategoryKey) {
   return getWorkflowConfig().categories[key].filter((option) => option.active)
+}
+
+export function getBusinessPermissionGroupForWorkflow(
+  config: WorkflowConfig,
+  workflowRule: Pick<WorkflowPermissionRule, "ownerUnit">
+) {
+  return config.businessPermissions.find((group) => (
+    group.title === workflowRule.ownerUnit
+    || group.id === workflowRule.ownerUnit
+    || workflowRule.ownerUnit.toLowerCase().includes(group.id.toLowerCase())
+  )) || null
+}
+
+export function getBusinessActionsForRole(
+  config: WorkflowConfig,
+  workflowRule: Pick<WorkflowPermissionRule, "ownerUnit">,
+  role?: string | null
+) {
+  if (!role) return []
+  const businessGroup = getBusinessPermissionGroupForWorkflow(config, workflowRule)
+  return businessGroup?.permissions[role] || []
+}
+
+export function getWorkflowRolePresetActions(
+  config: WorkflowConfig,
+  workflowRule: Pick<WorkflowPermissionRule, "ownerUnit">,
+  role?: string | null
+) {
+  return getBusinessActionsForRole(config, workflowRule, role)
+}
+
+export function getEffectiveWorkflowStepActions(
+  config: WorkflowConfig,
+  workflowId: string,
+  stepId: string,
+  role?: string | null
+) {
+  if (!role) return []
+  const workflowRule = config.workflowPermissions.find((item) => item.id === workflowId)
+  const step = workflowRule?.steps.find((item) => item.id === stepId)
+  if (!workflowRule || !step || step.role !== role) return []
+
+  const businessActions = getBusinessActionsForRole(config, workflowRule, role)
+  return step.actions.filter((action) => businessActions.includes(action))
+}
+
+export function hasWorkflowStepPermission(
+  config: WorkflowConfig,
+  input: EffectiveWorkflowPermissionInput
+) {
+  return getEffectiveWorkflowStepActions(config, input.workflowId, input.stepId, input.role).includes(input.action)
 }

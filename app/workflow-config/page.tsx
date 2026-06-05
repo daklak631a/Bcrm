@@ -28,6 +28,9 @@ import {
   WorkflowConfig,
   WorkflowConfigStorageMode,
   defaultWorkflowConfig,
+  getEffectiveWorkflowStepActions,
+  getWorkflowRolePresetActions,
+  hasWorkflowStepPermission,
   loadWorkflowConfig,
   saveWorkflowConfig,
 } from "@/lib/workflow-config"
@@ -127,7 +130,13 @@ export default function WorkflowConfigPage() {
   const [edgeLabel, setEdgeLabel] = useState("Luồng dữ liệu")
   const [saveStatus, setSaveStatus] = useState("")
   const [storageMode, setStorageMode] = useState<WorkflowConfigStorageMode>("local")
-  const canManage = user?.role === "ADMIN_LEVEL_0"
+  const isDelegatedRole = !!user?.original_role && user.original_role !== user.role
+  const canManage = hasWorkflowStepPermission(config, {
+    role: user?.role,
+    workflowId: "wf-system-config",
+    stepId: "system-design",
+    action: "configure",
+  })
 
   useEffect(() => {
     let active = true
@@ -273,6 +282,23 @@ export default function WorkflowConfigPage() {
             }
           : workflowRule
       )),
+    }))
+  }
+
+  const updateWorkflowStepRole = (workflowId: string, stepId: string, role: string) => {
+    setConfig((current) => ({
+      ...current,
+      workflowPermissions: current.workflowPermissions.map((workflowRule) => {
+        if (workflowRule.id !== workflowId) return workflowRule
+        const presetActions = getWorkflowRolePresetActions(current, workflowRule, role)
+
+        return {
+          ...workflowRule,
+          steps: workflowRule.steps.map((step) => (
+            step.id === stepId ? { ...step, role, actions: presetActions } : step
+          )),
+        }
+      }),
     }))
   }
 
@@ -451,10 +477,19 @@ export default function WorkflowConfigPage() {
           </div>
           {!canManage && (
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-              Chỉ Admin LV0 được thêm, sửa, xóa cấu hình workflow/droplist chung.
+              Chỉ user có quyền hiệu lực cấu hình hệ thống mới được thêm, sửa, xóa cấu hình workflow/droplist chung.
             </div>
           )}
         </section>
+
+        <CurrentUserPermissionState
+          userName={user?.full_name || user?.name || user?.email || "Người dùng hiện tại"}
+          role={user?.role || ""}
+          originalRole={user?.original_role || user?.role || ""}
+          isDelegatedRole={isDelegatedRole}
+          canManage={canManage}
+          config={config}
+        />
 
         <section className="grid gap-5 xl:grid-cols-[360px_minmax(0,1fr)]">
           <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -522,8 +557,11 @@ export default function WorkflowConfigPage() {
         <WorkflowSpecificPermissionMatrix
           canManage={canManage}
           workflows={config.workflowPermissions}
+          config={config}
+          currentRole={user?.role || ""}
           onToggleAction={toggleWorkflowStepAction}
           onUpdateStep={updateWorkflowStep}
+          onUpdateStepRole={updateWorkflowStepRole}
         />
 
         <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
@@ -705,6 +743,55 @@ function PermissionLogicGraph({
   )
 }
 
+function CurrentUserPermissionState({
+  userName,
+  role,
+  originalRole,
+  isDelegatedRole,
+  canManage,
+  config,
+}: {
+  userName: string
+  role: string
+  originalRole: string
+  isDelegatedRole: boolean
+  canManage: boolean
+  config: WorkflowConfig
+}) {
+  const systemActions = getEffectiveWorkflowStepActions(config, "wf-system-config", "system-design", role)
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Quyền hiệu lực của user đang đăng nhập</p>
+          <h2 className="mt-1 text-lg font-bold text-slate-950">{userName}</h2>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+            <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-slate-600">Role gốc: {roleLabels[originalRole] || originalRole}</span>
+            <span className={clsx("rounded-md border px-2 py-1", isDelegatedRole ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-100 bg-emerald-50 text-emerald-800")}>
+              Role hiệu lực: {roleLabels[role] || role}
+            </span>
+          </div>
+        </div>
+        <div className={clsx("rounded-lg border px-3 py-2 text-sm font-semibold", canManage ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900")}>
+          {canManage ? "Được cấu hình workflow" : "Chỉ xem cấu hình"}
+        </div>
+      </div>
+      <p className="mt-3 text-sm leading-6 text-slate-600">
+        Trang này đang kiểm quyền bằng ma trận mới: role hiệu lực phải có quyền <span className="font-semibold">Cấu hình</span> ở khối quản trị hệ thống và đúng bước workflow cấu hình.
+        {isDelegatedRole ? " User này đang dùng quyền ủy quyền khi đăng nhập." : " User này không có role ủy quyền đang áp dụng."}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {(systemActions.length ? systemActions : ["Không có quyền hiệu lực"]).map((action) => (
+          <span key={action} className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+            {permissionActionOptions.find((item) => item.key === action)?.label || action}
+          </span>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function LogicNode({ icon, title, detail, strong }: { icon: ReactNode; title: string; detail: string; strong?: boolean }) {
   return (
     <div className={clsx("flex items-start gap-3 rounded-lg border p-3", strong ? "border-[#006b68] bg-emerald-50" : "border-slate-200 bg-slate-50")}>
@@ -800,13 +887,19 @@ function BusinessPermissionMatrix({
 function WorkflowSpecificPermissionMatrix({
   canManage,
   workflows,
+  config,
+  currentRole,
   onToggleAction,
   onUpdateStep,
+  onUpdateStepRole,
 }: {
   canManage: boolean
   workflows: WorkflowConfig["workflowPermissions"]
+  config: WorkflowConfig
+  currentRole: string
   onToggleAction: (workflowId: string, stepId: string, action: PermissionActionKey) => void
   onUpdateStep: (workflowId: string, stepId: string, patch: Partial<WorkflowConfig["workflowPermissions"][number]["steps"][number]>) => void
+  onUpdateStepRole: (workflowId: string, stepId: string, role: string) => void
 }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -837,7 +930,53 @@ function WorkflowSpecificPermissionMatrix({
 
             <div className="mt-3 space-y-3">
               {workflowRule.steps.map((step, index) => (
-                <div key={step.id} className="rounded-md border border-slate-200 bg-white p-3">
+                <WorkflowPermissionStepCard
+                  key={step.id}
+                  canManage={canManage}
+                  config={config}
+                  currentRole={currentRole}
+                  workflowRule={workflowRule}
+                  step={step}
+                  index={index}
+                  onToggleAction={onToggleAction}
+                  onUpdateStep={onUpdateStep}
+                  onUpdateStepRole={onUpdateStepRole}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function WorkflowPermissionStepCard({
+  canManage,
+  config,
+  currentRole,
+  workflowRule,
+  step,
+  index,
+  onToggleAction,
+  onUpdateStep,
+  onUpdateStepRole,
+}: {
+  canManage: boolean
+  config: WorkflowConfig
+  currentRole: string
+  workflowRule: WorkflowConfig["workflowPermissions"][number]
+  step: WorkflowConfig["workflowPermissions"][number]["steps"][number]
+  index: number
+  onToggleAction: (workflowId: string, stepId: string, action: PermissionActionKey) => void
+  onUpdateStep: (workflowId: string, stepId: string, patch: Partial<WorkflowConfig["workflowPermissions"][number]["steps"][number]>) => void
+  onUpdateStepRole: (workflowId: string, stepId: string, role: string) => void
+}) {
+  const businessPresetActions = getWorkflowRolePresetActions(config, workflowRule, step.role)
+  const effectiveActionsForCurrentUser = getEffectiveWorkflowStepActions(config, workflowRule.id, step.id, currentRole)
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3">
                   <div className="flex items-start gap-2">
                     <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded bg-emerald-50 text-xs font-bold text-[#006b68]">{index + 1}</span>
                     <div className="min-w-0 flex-1">
@@ -850,7 +989,7 @@ function WorkflowSpecificPermissionMatrix({
                       <select
                         disabled={!canManage}
                         value={step.role}
-                        onChange={(event) => onUpdateStep(workflowRule.id, step.id, { role: event.target.value })}
+                        onChange={(event) => onUpdateStepRole(workflowRule.id, step.id, event.target.value)}
                         className="mt-2 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-600 outline-none disabled:bg-slate-100"
                       >
                         {roleOptions.map((role) => (
@@ -862,7 +1001,10 @@ function WorkflowSpecificPermissionMatrix({
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     {permissionActionOptions.map((action) => (
-                      <label key={action.key} className="flex items-center gap-2 rounded-md border border-slate-100 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600">
+                      <label key={action.key} className={clsx(
+                        "flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs font-semibold",
+                        businessPresetActions.includes(action.key) ? "border-slate-100 bg-slate-50 text-slate-600" : "border-amber-100 bg-amber-50 text-amber-800"
+                      )}>
                         <input
                           type="checkbox"
                           disabled={!canManage}
@@ -883,13 +1025,14 @@ function WorkflowSpecificPermissionMatrix({
                     className="mt-3 w-full rounded-md border border-slate-200 px-2 py-2 text-xs leading-5 text-slate-600 outline-none disabled:bg-slate-100"
                     placeholder="Ghi chú điều kiện quyền"
                   />
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+      <div className="mt-3 rounded-md bg-slate-50 px-2 py-2 text-[11px] leading-5 text-slate-600 ring-1 ring-slate-200">
+        <span className="font-semibold">Preset theo khối:</span>{" "}
+        {businessPresetActions.length ? businessPresetActions.map((action) => permissionActionOptions.find((item) => item.key === action)?.label || action).join(", ") : "Không có quyền theo khối"}
+        <br />
+        <span className="font-semibold">User hiện tại tại bước này:</span>{" "}
+        {effectiveActionsForCurrentUser.length ? effectiveActionsForCurrentUser.map((action) => permissionActionOptions.find((item) => item.key === action)?.label || action).join(", ") : "Không có quyền hiệu lực"}
       </div>
-    </section>
+    </div>
   )
 }
 

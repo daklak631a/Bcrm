@@ -83,7 +83,7 @@ export async function POST(request: Request) {
           .eq('status', 'ACTIVE')
           .lte('start_date', today)
           .gte('end_date', today)
-          .single();
+          .maybeSingle();
           
         if (delegation && delegation.delegated_role) {
           effectiveRole = delegation.delegated_role;
