@@ -1,81 +1,81 @@
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js'
+import { NextResponse } from 'next/server'
+import { logger } from '@/lib/logger'
+import { getErrorMessage } from '@/lib/errors'
 
 /**
  * POST /api/auth/verify
  * Server-side auth verification using SERVICE_ROLE_KEY to bypass RLS.
  * Called by AuthProvider after Google OAuth sign-in.
- * 
+ *
  * Body: { userId: string, userEmail: string }
  * Returns: { profile: Profile } or { error: string }
  */
 export async function POST(request: Request) {
   try {
-    const { userId, userEmail } = await request.json();
-    const authHeader = request.headers.get('Authorization');
+    const { userId, userEmail } = await request.json()
+    const authHeader = request.headers.get('Authorization')
 
     if (!userId || !userEmail || !authHeader) {
       return NextResponse.json(
         { error: 'Thiếu thông tin xác thực.' },
         { status: 400 }
-      );
+      )
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!supabaseUrl || !anonKey || !serviceRoleKey) {
-      console.error('[Auth Verify] Missing Supabase credentials or SERVICE_ROLE_KEY');
+      logger.error('[Auth Verify] Missing Supabase server credentials', undefined, { production: true })
       return NextResponse.json(
-        { error: 'Server configuration error: SERVICE_ROLE_KEY required' },
+        { error: 'Hệ thống xác thực chưa được cấu hình đầy đủ.' },
         { status: 500 }
-      );
+      )
     }
 
     const authSupabase = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
       auth: { autoRefreshToken: false, persistSession: false },
-    });
+    })
 
-    const { data: { user }, error: authError } = await authSupabase.auth.getUser();
+    const { data: { user }, error: authError } = await authSupabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json(
         { error: 'Phiên đăng nhập không hợp lệ.' },
         { status: 401 }
-      );
+      )
     }
 
     if (user.id !== userId || user.email !== userEmail) {
       return NextResponse.json(
         { error: 'Thông tin xác thực không khớp.' },
         { status: 403 }
-      );
+      )
     }
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
-    });
+    })
 
-    // 1. Check if profile already exists
     const { data: existingProfile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
-      .single();
+      .single()
 
     if (existingProfile && !profileError) {
       if (existingProfile.is_active === false) {
         return NextResponse.json(
           { error: 'Tài khoản đã bị vô hiệu hóa.' },
           { status: 403 }
-        );
+        )
       }
-      
-      let effectiveRole = existingProfile.role;
-      // If L3, check for active delegation
+
+      let effectiveRole = existingProfile.role
       if (effectiveRole === 'ADMIN_LEVEL_3') {
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const today = new Date().toISOString().split('T')[0]
         const { data: delegation } = await supabase
           .from('role_delegations')
           .select('delegated_role')
@@ -83,40 +83,36 @@ export async function POST(request: Request) {
           .eq('status', 'ACTIVE')
           .lte('start_date', today)
           .gte('end_date', today)
-          .maybeSingle();
-          
-        if (delegation && delegation.delegated_role) {
-          effectiveRole = delegation.delegated_role;
+          .maybeSingle()
+
+        if (delegation?.delegated_role) {
+          effectiveRole = delegation.delegated_role
         }
       }
 
-      return NextResponse.json({ profile: { ...existingProfile, effective_role: effectiveRole } });
+      return NextResponse.json({ profile: { ...existingProfile, effective_role: effectiveRole } })
     }
 
-    console.log(`[Auth Verify] No profile for ${userEmail}, checking allowed_emails...`);
+    logger.debug('[Auth Verify] Profile not found, checking allowed_emails')
 
-    // 2. Check allowed_emails
     const { data: allowed, error: allowedError } = await supabase
       .from('allowed_emails')
       .select('*')
       .eq('email', userEmail)
       .eq('is_active', true)
-      .single();
+      .single()
 
     if (allowedError) {
-      console.error('[Auth Verify] allowed_emails query error:', allowedError);
+      logger.warn('[Auth Verify] allowed_emails query failed', { error: getErrorMessage(allowedError) })
     }
 
     if (!allowed) {
-      console.log(`[Auth Verify] Email ${userEmail} not in allowed_emails`);
       return NextResponse.json(
-        { error: `Tài khoản ${userEmail} chưa được cấp quyền truy cập vào hệ thống.` },
+        { error: 'Tài khoản chưa được cấp quyền truy cập vào hệ thống.' },
         { status: 403 }
-      );
+      )
     }
 
-    // 3. Auto-create profile from allowed_emails
-    console.log(`[Auth Verify] Creating profile for ${userEmail} with role ${allowed.role}`);
     const { data: newProfile, error: insertError } = await supabase
       .from('profiles')
       .insert({
@@ -128,22 +124,22 @@ export async function POST(request: Request) {
         is_active: true,
       })
       .select()
-      .single();
+      .single()
 
     if (insertError) {
-      console.error('[Auth Verify] Profile insert error:', insertError);
+      logger.error('[Auth Verify] Profile insert failed', { error: getErrorMessage(insertError) })
       return NextResponse.json(
-        { error: `Không thể tạo hồ sơ: ${insertError.message}` },
+        { error: 'Không thể tạo hồ sơ người dùng. Vui lòng liên hệ quản trị hệ thống.' },
         { status: 500 }
-      );
+      )
     }
 
-    return NextResponse.json({ profile: newProfile });
-  } catch (err: any) {
-    console.error('[Auth Verify] Unexpected error:', err);
+    return NextResponse.json({ profile: newProfile })
+  } catch (err) {
+    logger.error('[Auth Verify] Unexpected error', { error: getErrorMessage(err) })
     return NextResponse.json(
-      { error: err.message || 'Internal Server Error' },
+      { error: 'Lỗi xác thực. Vui lòng thử lại.' },
       { status: 500 }
-    );
+    )
   }
 }

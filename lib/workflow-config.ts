@@ -1,6 +1,8 @@
 "use client"
 
 import { getSupabase } from "@/lib/supabase/client"
+import { getErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 
 export type ConfigOption = {
   id: string
@@ -388,7 +390,7 @@ export async function loadWorkflowConfig(): Promise<WorkflowConfigLoadResult> {
     workflowConfigMemoryCacheExpiresAt = Date.now() + workflowConfigCacheTtlMs
     return result
   } catch (error) {
-    console.warn("Không đọc được workflow config từ Supabase, dùng localStorage.", error)
+    logger.warn("Không đọc được workflow config từ Supabase, dùng localStorage.", { error: getErrorMessage(error) })
     const result: WorkflowConfigLoadResult = { config: localConfig, mode: "local" }
     workflowConfigMemoryCache = result
     workflowConfigMemoryCacheExpiresAt = Date.now() + 60_000
@@ -423,7 +425,7 @@ export async function saveWorkflowConfig(config: WorkflowConfig): Promise<Workfl
     workflowConfigMemoryCacheExpiresAt = Date.now() + workflowConfigCacheTtlMs
     return "supabase"
   } catch (error) {
-    console.warn("Không lưu được workflow config lên Supabase, đã lưu localStorage.", error)
+    logger.warn("Không lưu được workflow config lên Supabase, đã lưu localStorage.", { error: getErrorMessage(error) })
     return "local"
   }
 }
