@@ -87,6 +87,30 @@ const productUsageBindings = [
   { source: "userProductKpi" as const, value: "department_product_values", label: "Kết quả sản phẩm theo phòng" },
 ]
 
+const bindingRuntimeImpact: Record<WorkflowCanvasBindingSource, { status: "active" | "reference"; screens: string[]; manages: string }> = {
+  salesGroups: { status: "active", screens: ["/sales"], manages: "Nhóm nghiệp vụ bán hàng: khoản vay, tiền gửi, sản phẩm, dự án." },
+  loanTypes: { status: "active", screens: ["/sales"], manages: "Loại khoản vay dùng khi tạo/cập nhật giao dịch bán." },
+  depositTypes: { status: "active", screens: ["/sales"], manages: "Loại tiền gửi dùng khi tạo/cập nhật giao dịch bán." },
+  interactionTypes: { status: "active", screens: ["/interactions"], manages: "Loại tương tác khách hàng." },
+  interactionPurposes: { status: "active", screens: ["/interactions"], manages: "Mục đích tương tác khách hàng." },
+  interactionResults: { status: "active", screens: ["/interactions"], manages: "Kết quả tương tác và trạng thái theo dõi." },
+  orderStatuses: { status: "active", screens: ["/sales"], manages: "Trạng thái đơn hàng/giao dịch bán." },
+  productUsageResults: { status: "reference", screens: ["/products", "/sales", "/reports"], manages: "Kết quả sử dụng sản phẩm bán chéo, đang dùng làm binding tham chiếu trên canvas." },
+  userProductKpi: { status: "reference", screens: ["/kpi-targets", "/dashboard", "/reports"], manages: "KPI sản phẩm theo user/phòng, đang dùng làm binding tham chiếu trên canvas." },
+}
+
+const businessAppModules = [
+  { title: "Khách hàng", screens: "/customers", detail: "Hồ sơ khách hàng cá nhân/doanh nghiệp, người quản lý, CIF và thông tin chăm sóc." },
+  { title: "Tương tác", screens: "/interactions", detail: "Lịch sử gọi, gặp, email, mục đích, kết quả và follow-up." },
+  { title: "Bán hàng", screens: "/sales", detail: "Pipeline khoản vay, tiền gửi, sản phẩm khác và dự án." },
+  { title: "Khoản vay", screens: "/loans", detail: "Dư nợ, loại vay, kỳ hạn, cảnh báo, mục đích giải ngân." },
+  { title: "Tiền gửi", screens: "/deposits", detail: "Sổ tiền gửi, số dư, kỳ hạn và trạng thái." },
+  { title: "Sản phẩm/KPI", screens: "/products, /kpi-targets", detail: "Danh mục sản phẩm bán chéo, chỉ tiêu user/phòng, kết quả thực hiện." },
+  { title: "Báo cáo", screens: "/dashboard, /reports", detail: "Tổng hợp hiệu quả kinh doanh, KPI, dữ liệu theo vai trò." },
+  { title: "Vận hành", screens: "/sales-support, /advanced-workflow-pilot", detail: "Yêu cầu hỗ trợ, template dự án, workflow dự án và phân công." },
+  { title: "Quản trị", screens: "/team, /team/delegations, /audit-logs, /settings", detail: "Nhân sự, ủy quyền, nhật ký hệ thống và thiết lập chung." },
+]
+
 type CanvasMode = "select" | "connect"
 type BindingOption = WorkflowCanvasBinding & { groupLabel: string }
 type WorkflowFlowNodeData = {
@@ -681,6 +705,8 @@ export default function WorkflowConfigPage() {
           />
         </section>
 
+        <CanvasRuntimeImpactPanel config={config} />
+
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Ma trận quyền mẫu</p>
           <div className="mt-3 grid gap-3 lg:grid-cols-2">
@@ -1032,6 +1058,147 @@ function WorkflowPermissionStepCard({
         <span className="font-semibold">User hiện tại tại bước này:</span>{" "}
         {effectiveActionsForCurrentUser.length ? effectiveActionsForCurrentUser.map((action) => permissionActionOptions.find((item) => item.key === action)?.label || action).join(", ") : "Không có quyền hiệu lực"}
       </div>
+    </div>
+  )
+}
+
+function CanvasRuntimeImpactPanel({ config }: { config: WorkflowConfig }) {
+  const bindingRows = useMemo(() => {
+    const bindings = config.canvasNodes.flatMap((node) => (node.bindings || []).map((binding) => ({ node, binding })))
+    const seen = new Set<string>()
+
+    return bindings.filter(({ binding }) => {
+      const key = `${binding.source}:${binding.value}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [config.canvasNodes])
+
+  const activeBindingCount = bindingRows.filter(({ binding }) => bindingRuntimeImpact[binding.source]?.status === "active").length
+  const referenceBindingCount = bindingRows.length - activeBindingCount
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Tác động thực tế của canvas</p>
+          <h2 className="mt-1 text-lg font-bold text-slate-950">Canvas đang là sơ đồ quyền và binding dữ liệu dùng chung</h2>
+          <p className="mt-1 max-w-4xl text-sm leading-6 text-slate-600">
+            Node và đường nối trên canvas giúp mô tả luồng role, dữ liệu và trách nhiệm. Phần đang tác động trực tiếp ra app là các droplist đã cấu hình;
+            node/edge chưa tự khóa route, API hay thao tác nghiệp vụ nếu màn đó chưa gọi helper quyền hiệu lực.
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
+          <SmallMetric label="Node" value={config.canvasNodes.length} />
+          <SmallMetric label="Kết nối" value={config.canvasEdges.length} />
+          <SmallMetric label="Binding" value={bindingRows.length} />
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <ImpactCard
+          tone="green"
+          title="Đang ăn trực tiếp"
+          value={`${activeBindingCount} binding`}
+          detail="Droplist trong workflow config đang cấp option cho màn Bán hàng và Tương tác qua getActiveOptions()."
+        />
+        <ImpactCard
+          tone="amber"
+          title="Đang là tham chiếu"
+          value={`${referenceBindingCount} binding`}
+          detail="KPI sản phẩm và kết quả bán chéo đang được gắn lên canvas để mô tả dữ liệu, chưa tự khóa logic nghiệp vụ."
+        />
+        <ImpactCard
+          tone="slate"
+          title="Chưa tự enforce"
+          value="Node/edge"
+          detail="Sơ đồ role chưa tự chặn menu, API hoặc quyền sửa dữ liệu ở các màn kinh doanh nếu màn đó chưa tích hợp helper quyền."
+        />
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="min-w-[760px] w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-500">
+              <tr>
+                <th className="px-3 py-2 font-semibold">Binding canvas</th>
+                <th className="px-3 py-2 font-semibold">Tác động</th>
+                <th className="px-3 py-2 font-semibold">Màn liên quan</th>
+                <th className="px-3 py-2 font-semibold">Đang quản lý</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {bindingRows.map(({ binding, node }) => {
+                const impact = bindingRuntimeImpact[binding.source]
+                return (
+                  <tr key={`${binding.source}:${binding.value}`}>
+                    <td className="px-3 py-2">
+                      <p className="font-semibold text-slate-800">{binding.label}</p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">{node.title} · {bindingSourceLabels[binding.source]}</p>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={clsx(
+                        "rounded-md px-2 py-1 font-semibold",
+                        impact?.status === "active" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"
+                      )}>
+                        {impact?.status === "active" ? "Đang dùng thật" : "Tham chiếu canvas"}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-[11px] text-slate-600">{impact?.screens.join(", ") || "Chưa map"}</td>
+                    <td className="px-3 py-2 text-slate-600">{impact?.manages || "Chưa xác định tác động nghiệp vụ."}</td>
+                  </tr>
+                )
+              })}
+              {bindingRows.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-3 py-6 text-center text-slate-500">Canvas chưa có binding dữ liệu.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">App kinh doanh đang quản lý</p>
+          <div className="mt-3 space-y-2">
+            {businessAppModules.map((module) => (
+              <div key={module.title} className="rounded-md border border-slate-200 bg-white p-2">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-bold text-slate-900">{module.title}</p>
+                  <span className="shrink-0 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{module.screens}</span>
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-600">{module.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function SmallMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+      <p className="text-lg font-bold text-slate-950">{value}</p>
+      <p className="text-[11px] uppercase tracking-[0.12em] text-slate-400">{label}</p>
+    </div>
+  )
+}
+
+function ImpactCard({ tone, title, value, detail }: { tone: "green" | "amber" | "slate"; title: string; value: string; detail: string }) {
+  const toneClass = {
+    green: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    amber: "border-amber-200 bg-amber-50 text-amber-900",
+    slate: "border-slate-200 bg-slate-50 text-slate-700",
+  }[tone]
+
+  return (
+    <div className={clsx("rounded-lg border p-3", toneClass)}>
+      <p className="text-xs font-semibold uppercase tracking-[0.14em] opacity-80">{title}</p>
+      <p className="mt-1 text-lg font-bold">{value}</p>
+      <p className="mt-1 text-xs leading-5">{detail}</p>
     </div>
   )
 }
