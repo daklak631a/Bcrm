@@ -1,0 +1,30 @@
+@use "sass:color";
+@use '../styles/variables';
+
+$fill: variables.$lines; //#8a939a;
+$outline: $fill; //#4b5056;
+
+.Port {
+  fill: $fill;
+  stroke: $outline;
+  cursor: pointer;
+  stroke-width: 3;
+}
+
+.PortHighlight {
+  composes: Port;
+  fill: #c4ff00;
+  stroke-width: 3;
+}
+
+.PortUnselected {
+  composes: Port;
+  fill:  color.mix($fill, variables.$background, 30%); //#dfe5e8;
+  stroke: color.mix($outline, variables.$background, 30%); //#c8c8c8;
+}
+
+.PortHitBox {
+  fill: #ffffff00;
+  cursor: pointer;
+  stroke-width: 0;
+}

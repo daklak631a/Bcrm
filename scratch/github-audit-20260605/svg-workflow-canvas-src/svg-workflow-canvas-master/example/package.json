@@ -1,0 +1,26 @@
+{
+  "name": "svg-workflow-canvas-example",
+  "homepage": "https://astanciu.github.io/svg-workflow-canvas",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "svg-workflow-canvas": "link:..",
+    "vite": "^6.2.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "sass": "^1.69.5",
+    "typescript": "^5.0.2"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  }
+}

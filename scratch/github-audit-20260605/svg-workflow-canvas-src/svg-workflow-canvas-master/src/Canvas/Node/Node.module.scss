@@ -1,0 +1,98 @@
+@use "sass:color";
+@use '../styles/variables';
+
+$node-selected-bg: color.adjust(variables.$node-bg, $lightness: -10%);  //95999e
+$node-unselected-bg: color.mix(variables.$node-bg, variables.$background, 25%);  //95999e
+
+.normal {
+  fill: variables.$node-bg;
+  cursor: pointer;
+  stroke: none;
+  transition: fill 0.05s linear;
+}
+
+.normalOutline {
+  fill: none;
+  stroke: #95999e;
+  stroke-width: 1px;
+}
+
+.normalIcon {
+  fill: variables.$node-icon;
+  stroke: none;
+  cursor: pointer;
+}
+
+/* Selected */
+.selected {
+  composes: normal;
+  fill: $node-selected-bg; //#24272b;
+  stroke: none;
+}
+
+.selectedOutline {
+  composes: normalOutline;
+  stroke: #95999e;
+  stroke-width: 2px;
+}
+
+.selectedIcon {
+  composes: normalIcon;
+  fill: #d1d7e4;
+}
+
+.selectedHighlight {
+  fill: #c4ebff;
+  opacity: 0.0514605978;
+}
+
+/* UnSelected */
+.unselected {
+  composes: normal;
+  fill: $node-unselected-bg; //#b5b5b5;
+  stroke: none;
+}
+
+.unselectedOutline {
+  composes: normalOutline;
+  stroke: #b5b5b5;
+}
+
+.unselectedIcon {
+  composes: normalIcon;
+  fill: #dedede;
+}
+
+.nocursor {
+  cursor: none;
+}
+
+.dragging {
+  cursor: grabbing !important;
+}
+
+/* Specials */
+.start {
+  composes: normal;
+  fill: variables.$magenta;
+}
+.end {
+  composes: normal;
+  fill: variables.$green;
+}
+
+.specialIcon {
+  composes: normalIcon;
+  fill: #eceff4
+}
+
+.unselectedStart {
+  composes: normal;
+  fill: color.mix(variables.$magenta, variables.$background, 25%);
+}
+
+.unselectedEnd {
+  composes: normal;
+  fill: color.mix(variables.$green, variables.$background, 25%);
+}
+
