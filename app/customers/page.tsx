@@ -7,7 +7,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import * as XLSX from "xlsx"
 import clsx from "clsx"
-import { fetchCustomers, createCustomer, updateCustomer, getCustomerFullName, fetchProfiles, createLoan, createDeposit } from "@/lib/supabase/api"
+import { createCustomer, updateCustomer, getCustomerFullName, createLoan, createDeposit, fetchCustomersPage, fetchProfilesPage } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, FormTextarea, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 
@@ -29,7 +29,7 @@ function slugify(text: string) {
     .replace(/[^a-z0-9]/g, '') // remove non-alphanumeric
 }
 
-const ITEMS_PER_PAGE = 10
+const ITEMS_PER_PAGE = 25
 
 function parseBooleanCell(value: any) {
   const normalized = String(value ?? '').trim().toLowerCase()
@@ -49,6 +49,7 @@ export default function CustomersPage() {
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [customers, setCustomers] = useState<any[]>([])
+  const [totalCustomers, setTotalCustomers] = useState(0)
   const [profiles, setProfiles] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
@@ -66,61 +67,64 @@ export default function CustomersPage() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [customersData, profilesData] = await Promise.all([
-        fetchCustomers(),
-        fetchProfiles()
+      const [customersPage, profilesPage] = await Promise.all([
+        fetchCustomersPage({
+          page: currentPage,
+          pageSize: ITEMS_PER_PAGE,
+          search: searchQuery,
+          user,
+        }),
+        fetchProfilesPage({
+          page: 1,
+          pageSize: 100,
+          user,
+        })
       ])
-      setCustomers(customersData)
-      setProfiles(profilesData)
+      setCustomers(customersPage.data)
+      setTotalCustomers(customersPage.total)
+      setProfiles(profilesPage.data)
     } catch (err: any) {
       console.error('Error loading customers:', err)
       toast.error('Lỗi tải dữ liệu: ' + err.message)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [currentPage, searchQuery, user])
 
   useEffect(() => {
     setMounted(true)
-    loadData()
-  }, [loadData])
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+    const timeout = setTimeout(() => {
+      loadData()
+    }, searchQuery.trim() ? 250 : 0)
+
+    return () => clearTimeout(timeout)
+  }, [loadData, mounted, searchQuery])
 
   const visibleProfiles = useMemo(() => {
-    if (user?.role === 'ADMIN_LEVEL_1' || user?.role === 'ADVISOR') return profiles
-    if (user?.role === 'ADMIN_LEVEL_2' || user?.role === 'ADMIN_LEVEL_3') return profiles.filter((profile: any) => profile.department_id === user.department_id)
-    return profiles.filter((profile: any) => profile.id === user?.id)
-  }, [profiles, user?.department_id, user?.id, user?.role])
-
-  const visibleProfileIds = useMemo(() => new Set(visibleProfiles.map((profile: any) => profile.id)), [visibleProfiles])
-  const visibleCustomers = useMemo(() => {
-    return customers.filter((customer: any) => visibleProfileIds.has(customer.assigned_manager_id))
-  }, [customers, visibleProfileIds])
-
-  const filteredCustomers = useMemo(() => {
-    if (!searchQuery.trim()) return visibleCustomers
-    const q = searchQuery.toLowerCase().trim()
-    return visibleCustomers.filter((c: any) => {
-      const fullName = getCustomerFullName(c).toLowerCase()
-      return fullName.includes(q) ||
-        (c.phone || '').toLowerCase().includes(q) ||
-        (c.email || '').toLowerCase().includes(q) ||
-        c.id.toLowerCase().includes(q)
-    })
-  }, [visibleCustomers, searchQuery])
+    return profiles
+  }, [profiles])
 
   useEffect(() => { setCurrentPage(1); setSelectedIds([]) }, [searchQuery])
   useEffect(() => { setSelectedIds([]) }, [currentPage])
 
-  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE))
-  const paginatedCustomers = filteredCustomers.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  )
+  const totalPages = Math.max(1, Math.ceil(totalCustomers / ITEMS_PER_PAGE))
+  const paginatedCustomers = customers
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE + 1
-  const endIndex = Math.min(currentPage * ITEMS_PER_PAGE, filteredCustomers.length)
+  const endIndex = Math.min((currentPage - 1) * ITEMS_PER_PAGE + customers.length, totalCustomers)
 
   const pageCustomerIds = useMemo(() => paginatedCustomers.map((c: any) => c.id), [paginatedCustomers])
   const isAllPageSelected = useMemo(() => pageCustomerIds.length > 0 && pageCustomerIds.every(id => selectedIds.includes(id)), [pageCustomerIds, selectedIds])
+  const pageNumbers = useMemo(() => {
+    const maxButtons = 5
+    const half = Math.floor(maxButtons / 2)
+    const start = Math.max(1, Math.min(currentPage - half, totalPages - maxButtons + 1))
+    const end = Math.min(totalPages, start + maxButtons - 1)
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index)
+  }, [currentPage, totalPages])
 
   const handleToggleSelectAllPage = () => {
     if (isAllPageSelected) {
@@ -235,7 +239,7 @@ export default function CustomersPage() {
   }
 
   const handleExportData = () => {
-    const exportData = filteredCustomers.map((c: any) => ({
+    const exportData = customers.map((c: any) => ({
       "Mã KH": c.id,
       "Mã CIF": c.cif_code || '',
       "Loại KH": c.customer_type === 'ENTERPRISE' ? 'Doanh nghiệp' : 'Cá nhân',
@@ -350,14 +354,14 @@ export default function CustomersPage() {
 
             let existingCustomer = null
             if (cif) {
-              existingCustomer = visibleCustomers.find(c => c.cif_code?.toLowerCase() === cif.toLowerCase())
+              existingCustomer = customers.find(c => c.cif_code?.toLowerCase() === cif.toLowerCase())
             }
             if (!existingCustomer && tax && type === 'ENTERPRISE') {
-              existingCustomer = visibleCustomers.find(c => c.tax_code === tax)
+              existingCustomer = customers.find(c => c.tax_code === tax)
             }
             if (!existingCustomer && item["Số điện thoại"] || item.phone) {
               const p = String(item["Số điện thoại"] || item.phone || "").trim()
-              if (p) existingCustomer = visibleCustomers.find(c => c.phone === p)
+              if (p) existingCustomer = customers.find(c => c.phone === p)
             }
 
             const customerPayload = {
@@ -462,8 +466,8 @@ export default function CustomersPage() {
                   <button disabled={importing} onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed" title="Upload dữ liệu">
                     {importing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Nhập
                   </button>
-                  <button onClick={handleExportData} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors text-sm font-medium" title="Xuất Excel">
-                    <Download className="w-4 h-4" /> Xuất
+                  <button onClick={handleExportData} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors text-sm font-medium" title="Xuất Excel trang hiện tại">
+                    <Download className="w-4 h-4" /> Xuất trang
                   </button>
                   <button onClick={handleDownloadSample} className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 transition-colors text-sm font-medium text-emerald-600" title="File mẫu">
                     <FileSpreadsheet className="w-4 h-4" /> Mẫu
@@ -481,7 +485,7 @@ export default function CustomersPage() {
 
         {searchQuery && (
           <p className="text-sm text-slate-500">
-            Tìm thấy <span className="font-semibold text-slate-700">{filteredCustomers.length}</span> kết quả
+            Tìm thấy <span className="font-semibold text-slate-700">{totalCustomers}</span> kết quả
           </p>
         )}
 
@@ -611,7 +615,7 @@ export default function CustomersPage() {
                       </td>
                       </tr>
                     ))}
-                    {filteredCustomers.length === 0 && (
+                    {customers.length === 0 && (
                       <tr>
                         <td colSpan={isAdmin ? 5 : 4} className="py-12 text-center text-slate-500">
                           {searchQuery ? `Không tìm thấy khách hàng với "${searchQuery}"` : "Chưa có khách hàng nào. Bấm \"Thêm KH\" để bắt đầu."}
@@ -623,8 +627,8 @@ export default function CustomersPage() {
               </div>
               <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-sm text-slate-500">
                 <span>
-                  {filteredCustomers.length > 0
-                    ? `Hiển thị ${startIndex} - ${endIndex} / ${filteredCustomers.length}`
+                  {totalCustomers > 0
+                    ? `Hiển thị ${startIndex} - ${endIndex} / ${totalCustomers}`
                     : "Không có khách hàng"}
                 </span>
                 {totalPages > 1 && (
@@ -632,7 +636,7 @@ export default function CustomersPage() {
                     <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 border rounded bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors">
                       <ChevronLeft className="w-4 h-4" />
                     </button>
-                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(page => (
+                    {pageNumbers.map(page => (
                       <button key={page} onClick={() => setCurrentPage(page)} className={clsx("px-3 py-1 border rounded text-sm font-medium transition-colors", page === currentPage ? "bg-emerald-600 text-white border-emerald-600" : "bg-white hover:bg-slate-50")}>
                         {page}
                       </button>

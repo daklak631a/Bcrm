@@ -15,6 +15,46 @@ type CacheEntry<T> = {
   promise?: Promise<T>
 }
 
+export type PageResult<T> = {
+  data: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export type CurrentUserScope = {
+  id?: string | null
+  role?: string | null
+  department_id?: string | null
+  branchId?: string | null
+}
+
+export type CustomerPageInput = {
+  page?: number
+  pageSize?: number
+  search?: string
+  user?: CurrentUserScope | null
+}
+
+export type ProfilePageInput = {
+  page?: number
+  pageSize?: number
+  search?: string
+  role?: string
+  departmentId?: string | null
+  includeInactive?: boolean
+  user?: CurrentUserScope | null
+}
+
+export type AllowedEmailPageInput = {
+  page?: number
+  pageSize?: number
+  search?: string
+  departmentId?: string | null
+  includeInactive?: boolean
+  user?: CurrentUserScope | null
+}
+
 const apiCache = new Map<string, CacheEntry<any>>()
 
 function cached<T>(key: string, loader: () => Promise<T>, ttlMs = DEFAULT_CACHE_TTL_MS): Promise<T> {
@@ -43,12 +83,48 @@ function cached<T>(key: string, loader: () => Promise<T>, ttlMs = DEFAULT_CACHE_
   return promise
 }
 
-function invalidateCache(...prefixes: string[]) {
+export function invalidateApiCache(...prefixes: string[]) {
   for (const key of Array.from(apiCache.keys())) {
     if (prefixes.some((prefix) => key.startsWith(prefix))) {
       apiCache.delete(key)
     }
   }
+}
+
+const invalidateCache = invalidateApiCache
+
+function normalizePage(page?: number) {
+  return Math.max(1, Number(page) || 1)
+}
+
+function normalizePageSize(pageSize?: number, maxPageSize = 100) {
+  return Math.min(maxPageSize, Math.max(1, Number(pageSize) || 20))
+}
+
+function pageRange(page?: number, pageSize?: number, maxPageSize = 100) {
+  const normalizedPage = normalizePage(page)
+  const normalizedPageSize = normalizePageSize(pageSize, maxPageSize)
+  const from = (normalizedPage - 1) * normalizedPageSize
+  const to = from + normalizedPageSize - 1
+
+  return { page: normalizedPage, pageSize: normalizedPageSize, from, to }
+}
+
+function escapePostgrestLike(value: string) {
+  return value.replace(/[%_]/g, (match) => `\\${match}`)
+}
+
+function normalizeSearchTerm(search?: string) {
+  const trimmed = (search || '').trim()
+  return trimmed.length >= 2 ? escapePostgrestLike(trimmed) : ''
+}
+
+function isGlobalRole(role?: string | null) {
+  return role === 'ADMIN_LEVEL_0' || role === 'ADMIN_LEVEL_1' || role === 'ADVISOR'
+}
+
+function isDepartmentRole(role?: string | null) {
+  return role === 'ADMIN_LEVEL_2' || role === 'ADMIN_LEVEL_3'
 }
 
 export function formatCurrency(value: number): string {
@@ -289,6 +365,102 @@ export async function fetchProfiles(): Promise<any> {
   }, LONG_CACHE_TTL_MS)
 }
 
+export async function fetchProfilesPage(input: ProfilePageInput = {}): Promise<PageResult<any>> {
+  const { page, pageSize, from, to } = pageRange(input.page, input.pageSize, 100)
+  const search = normalizeSearchTerm(input.search)
+  const cacheKey = [
+    'profiles:page',
+    page,
+    pageSize,
+    search,
+    input.role || 'all',
+    input.departmentId || 'all',
+    input.includeInactive ? 'all-status' : 'active',
+    input.user?.role || 'anonymous',
+    input.user?.department_id || input.user?.branchId || 'all',
+  ].join(':')
+
+  return cached(cacheKey, async () => {
+    const supabase = getSupabase()
+    let query = supabase
+      .from('profiles')
+      .select('id,email,full_name,role,department_id,is_active,full_name_slug,short_name,created_at,updated_at', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (!input.includeInactive) {
+      query = query.eq('is_active', true)
+    }
+
+    if (input.role) {
+      query = query.eq('role', input.role)
+    }
+
+    const scopedDepartment = input.departmentId || (
+      isDepartmentRole(input.user?.role) ? input.user?.department_id || input.user?.branchId || null : null
+    )
+    if (scopedDepartment) {
+      query = query.eq('department_id', scopedDepartment)
+    }
+
+    if (!isGlobalRole(input.user?.role) && !isDepartmentRole(input.user?.role) && input.user?.id) {
+      query = query.eq('id', input.user.id)
+    }
+
+    if (search) {
+      query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,department_id.ilike.%${search}%`)
+    }
+
+    const { data, error, count } = await query
+    if (error) throw error
+
+    return { data: data || [], total: count || 0, page, pageSize }
+  }, DEFAULT_CACHE_TTL_MS)
+}
+
+export async function fetchAllowedEmailsPage(input: AllowedEmailPageInput = {}): Promise<PageResult<any>> {
+  const { page, pageSize, from, to } = pageRange(input.page, input.pageSize, 100)
+  const search = normalizeSearchTerm(input.search)
+  const scopedDepartment = input.departmentId || (
+    isDepartmentRole(input.user?.role) ? input.user?.department_id || input.user?.branchId || null : null
+  )
+  const cacheKey = [
+    'allowed_emails:page',
+    page,
+    pageSize,
+    search,
+    scopedDepartment || 'all',
+    input.includeInactive ? 'all-status' : 'active',
+    input.user?.role || 'anonymous',
+  ].join(':')
+
+  return cached(cacheKey, async () => {
+    const supabase = getSupabase()
+    let query = supabase
+      .from('allowed_emails')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (!input.includeInactive) {
+      query = query.eq('is_active', true)
+    }
+
+    if (scopedDepartment) {
+      query = query.eq('department_id', scopedDepartment)
+    }
+
+    if (search) {
+      query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,department_id.ilike.%${search}%`)
+    }
+
+    const { data, error, count } = await query
+    if (error) throw error
+
+    return { data: data || [], total: count || 0, page, pageSize }
+  }, DEFAULT_CACHE_TTL_MS)
+}
+
 export async function fetchProfileById(id: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
@@ -439,6 +611,78 @@ export async function fetchCustomers(): Promise<any> {
     if (error) throw error
     return data || []
   })
+}
+
+async function getScopedManagerIds(user?: CurrentUserScope | null) {
+  if (!user?.id) return []
+  if (!isDepartmentRole(user.role)) return []
+
+  const departmentId = user.department_id || user.branchId
+  if (!departmentId) return [user.id]
+
+  return cached(`profiles:ids:${departmentId}`, async () => {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('department_id', departmentId)
+      .eq('is_active', true)
+
+    if (error) throw error
+    return (data || []).map((profile: any) => profile.id).filter(Boolean)
+  }, LONG_CACHE_TTL_MS)
+}
+
+export async function fetchCustomersPage(input: CustomerPageInput = {}): Promise<PageResult<any>> {
+  const { page, pageSize, from, to } = pageRange(input.page, input.pageSize, 100)
+  const search = normalizeSearchTerm(input.search)
+  const user = input.user || null
+  const scopedManagerIds = await getScopedManagerIds(user)
+  const cacheKey = [
+    'customers:page',
+    page,
+    pageSize,
+    search,
+    user?.role || 'anonymous',
+    user?.id || 'no-user',
+    user?.department_id || user?.branchId || 'no-department',
+    scopedManagerIds.length,
+  ].join(':')
+
+  return cached(cacheKey, async () => {
+    const supabase = getSupabase()
+    let query = supabase
+      .from('customers')
+      .select('*, profiles:assigned_manager_id(id, full_name)', { count: 'exact' })
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (isDepartmentRole(user?.role)) {
+      if (scopedManagerIds.length === 0) {
+        return { data: [], total: 0, page, pageSize }
+      }
+      query = query.in('assigned_manager_id', scopedManagerIds)
+    } else if (!isGlobalRole(user?.role) && user?.id) {
+      query = query.eq('assigned_manager_id', user.id)
+    }
+
+    if (search) {
+      query = query.or([
+        `full_name.ilike.%${search}%`,
+        `business_name.ilike.%${search}%`,
+        `phone.ilike.%${search}%`,
+        `email.ilike.%${search}%`,
+        `cif_code.ilike.%${search}%`,
+        `tax_code.ilike.%${search}%`,
+      ].join(','))
+    }
+
+    const { data, error, count } = await query
+    if (error) throw error
+
+    return { data: data || [], total: count || 0, page, pageSize }
+  }, DEFAULT_CACHE_TTL_MS)
 }
 
 export async function fetchCustomerById(id: string): Promise<any> {

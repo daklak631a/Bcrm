@@ -3,12 +3,15 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getSupabase } from "@/lib/supabase/client"
+import { fetchAllowedEmailsPage, fetchProfilesPage, invalidateApiCache } from "@/lib/supabase/api"
 import { Profile, UserRole } from "@/types/models"
 import { useState, useEffect, useCallback } from "react"
 import { Users, UserPlus, Search, Pencil, Trash2, X, Check, Shield, ShieldCheck, UserCircle, Loader2, UserCheck, UserX } from "lucide-react"
 import { TableSkeleton } from "@/components/skeletons"
 
 type DialogMode = 'add' | 'edit' | null
+
+const ITEMS_PER_PAGE = 50
 
 interface AllowedEmail {
   id: string
@@ -64,26 +67,49 @@ export default function TeamPage() {
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'active' | 'pending'>('active')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalActive, setTotalActive] = useState(0)
+  const [totalPending, setTotalPending] = useState(0)
 
   useEffect(() => { setMounted(true) }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const supabase = getSupabase()
-
-    const [profilesRes, allowedRes] = await Promise.all([
-      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-      supabase.from('allowed_emails').select('*').order('created_at', { ascending: false }),
+    const [profilesPage, allowedPage] = await Promise.all([
+      activeTab === 'active'
+        ? fetchProfilesPage({
+            page: currentPage,
+            pageSize: ITEMS_PER_PAGE,
+            search: searchQuery,
+            includeInactive: true,
+            user,
+          })
+        : fetchProfilesPage({ page: 1, pageSize: 1, includeInactive: true, user }),
+      activeTab === 'pending'
+        ? fetchAllowedEmailsPage({
+            page: currentPage,
+            pageSize: ITEMS_PER_PAGE,
+            search: searchQuery,
+            includeInactive: true,
+            user,
+          })
+        : fetchAllowedEmailsPage({ page: 1, pageSize: 1, includeInactive: true, user }),
     ])
 
-    if (profilesRes.data) setProfiles(profilesRes.data as Profile[])
-    if (allowedRes.data) setAllowedEmails(allowedRes.data as AllowedEmail[])
+    setProfiles(profilesPage.data as Profile[])
+    setAllowedEmails(allowedPage.data as AllowedEmail[])
+    setTotalActive(profilesPage.total)
+    setTotalPending(allowedPage.total)
     setLoading(false)
-  }, [])
+  }, [activeTab, currentPage, searchQuery, user])
 
   useEffect(() => {
     if (mounted) fetchData()
   }, [mounted, fetchData])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [activeTab, searchQuery])
 
   if (!mounted) return <TableSkeleton title="Quản Lý Nhân Sự" />
 
@@ -97,31 +123,21 @@ export default function TeamPage() {
     )
   }
 
-  // Admin L2 should only see users in their own department (branchId)
-  const isL2 = user?.role === 'ADMIN_LEVEL_2'
-
-  // Merge data: profiles = đã đăng nhập, allowed_emails chưa có profile = pending
-  const activeUsers = isL2 
-    ? profiles.filter(p => p.department_id === user?.branchId)
-    : profiles
-    
-  const pendingEmails = allowedEmails.filter(ae => {
-    if (profiles.some(p => p.email === ae.email)) return false
-    if (isL2 && ae.department_id !== user?.branchId) return false
-    return true
-  })
-
-  const filteredActive = activeUsers.filter(p => {
-    if (!searchQuery.trim()) return true
-    const q = searchQuery.toLowerCase()
-    return p.full_name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q) || (p.department_id || '').toLowerCase().includes(q)
-  })
-
-  const filteredPending = pendingEmails.filter(ae => {
-    if (!searchQuery.trim()) return true
-    const q = searchQuery.toLowerCase()
-    return ae.full_name.toLowerCase().includes(q) || ae.email.toLowerCase().includes(q)
-  })
+  const filteredActive = profiles
+  const filteredPending = allowedEmails
+  const activeTotalPages = Math.max(1, Math.ceil(totalActive / ITEMS_PER_PAGE))
+  const pendingTotalPages = Math.max(1, Math.ceil(totalPending / ITEMS_PER_PAGE))
+  const totalPages = activeTab === 'active' ? activeTotalPages : pendingTotalPages
+  const totalRows = activeTab === 'active' ? totalActive : totalPending
+  const pageStart = totalRows === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1
+  const pageEnd = Math.min(
+    (currentPage - 1) * ITEMS_PER_PAGE + (activeTab === 'active' ? filteredActive.length : filteredPending.length),
+    totalRows
+  )
+  const pageNumbers = Array.from({ length: Math.min(totalPages, 5) }, (_, index) => {
+    const start = Math.max(1, Math.min(currentPage - 2, totalPages - 4))
+    return start + index
+  }).filter(page => page <= totalPages)
 
   const openAdd = () => {
     setFormData(EMPTY_FORM)
@@ -253,6 +269,7 @@ export default function TeamPage() {
       }
     }
 
+    invalidateApiCache('profiles:', 'allowed_emails:')
     await fetchData()
     closeDialog()
     setSaving(false)
@@ -268,6 +285,7 @@ export default function TeamPage() {
     if (matchingProfile) {
       await supabase.from('profiles').update({ is_active: newStatus, updated_at: new Date().toISOString() }).eq('id', matchingProfile.id)
     }
+    invalidateApiCache('profiles:', 'allowed_emails:')
     await fetchData()
   }
 
@@ -280,6 +298,7 @@ export default function TeamPage() {
     if (matchingAllowed) {
       await supabase.from('allowed_emails').update({ is_active: newStatus }).eq('id', matchingAllowed.id)
     }
+    invalidateApiCache('profiles:', 'allowed_emails:')
     await fetchData()
   }
 
@@ -291,6 +310,7 @@ export default function TeamPage() {
     if (matchingProfile) {
       await supabase.from('profiles').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', matchingProfile.id)
     }
+    invalidateApiCache('profiles:', 'allowed_emails:')
     await fetchData()
     setDeleteConfirm(null)
   }
@@ -302,11 +322,11 @@ export default function TeamPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white p-4 md:p-5 rounded-2xl ring-1 ring-slate-900/5">
             <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Đã Đăng Nhập</p>
-            <h3 className="text-xl md:text-2xl font-bold text-slate-800">{profiles.length}</h3>
+            <h3 className="text-xl md:text-2xl font-bold text-slate-800">{totalActive}</h3>
           </div>
           <div className="bg-white p-4 md:p-5 rounded-2xl ring-1 ring-slate-900/5">
             <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Chờ Đăng Nhập</p>
-            <h3 className="text-xl md:text-2xl font-bold text-amber-600">{pendingEmails.length}</h3>
+            <h3 className="text-xl md:text-2xl font-bold text-amber-600">{totalPending}</h3>
           </div>
           <div className="bg-white p-4 md:p-5 rounded-2xl ring-1 ring-slate-900/5">
             <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Admin Cấp 2</p>
@@ -345,14 +365,14 @@ export default function TeamPage() {
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'active' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <UserCheck className="w-4 h-4 inline mr-1.5" />
-            Đã Kích Hoạt ({filteredActive.length})
+            Đã Kích Hoạt ({totalActive})
           </button>
           <button
             onClick={() => setActiveTab('pending')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'pending' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
           >
             <UserX className="w-4 h-4 inline mr-1.5" />
-            Chờ Đăng Nhập ({filteredPending.length})
+            Chờ Đăng Nhập ({totalPending})
           </button>
         </div>
 
@@ -486,6 +506,40 @@ export default function TeamPage() {
                     )}
                   </tbody>
                 </table>
+              )}
+            </div>
+          )}
+          {!loading && (
+            <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                {totalRows > 0 ? `Hiển thị ${pageStart} - ${pageEnd} / ${totalRows}` : 'Không có dữ liệu'}
+              </span>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+                    disabled={currentPage === 1}
+                    className="rounded border bg-white px-2 py-1 font-medium transition-colors hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    Trước
+                  </button>
+                  {pageNumbers.map(page => (
+                    <button
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      className={`rounded border px-3 py-1 font-medium transition-colors ${page === currentPage ? 'border-emerald-600 bg-emerald-600 text-white' : 'bg-white hover:bg-slate-50'}`}
+                    >
+                      {page}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+                    disabled={currentPage === totalPages}
+                    className="rounded border bg-white px-2 py-1 font-medium transition-colors hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    Sau
+                  </button>
+                </div>
               )}
             </div>
           )}
