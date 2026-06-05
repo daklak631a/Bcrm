@@ -1509,20 +1509,22 @@ export async function updateTransferRequestStatus(
 // ==========================================
 
 export async function fetchSystemSettings(): Promise<any[]> {
-  const supabase = getSupabase()
-  try {
-    const { data, error } = await supabase
-      .from('system_settings')
-      .select('*')
-    if (error) {
-      console.warn("Table system_settings may not exist yet:", error)
+  return cached('system_settings:all', async () => {
+    const supabase = getSupabase()
+    try {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('*')
+      if (error) {
+        console.warn("Table system_settings may not exist yet:", error)
+        return []
+      }
+      return data || []
+    } catch (err) {
+      console.warn("Failed to fetch system settings:", err)
       return []
     }
-    return data || []
-  } catch (err) {
-    console.warn("Failed to fetch system settings:", err)
-    return []
-  }
+  }, LONG_CACHE_TTL_MS)
 }
 
 export async function updateSystemSetting(key: string, value: string): Promise<any> {
@@ -1533,6 +1535,7 @@ export async function updateSystemSetting(key: string, value: string): Promise<a
     .select()
     .single()
   if (error) throw error
+  invalidateCache('system_settings:')
   return data
 }
 
@@ -1541,33 +1544,37 @@ export async function updateSystemSetting(key: string, value: string): Promise<a
 // ==========================================
 
 export async function fetchWeeklyPlans(userId: string): Promise<any> {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('weekly_plans')
-    .select('*')
-    .eq('user_id', userId)
-    .order('start_date', { ascending: false })
-  if (error) {
-    console.warn("Table weekly_plans may not exist yet:", error)
-    return []
-  }
-  return data || []
+  return cached(`weekly_plans:${userId}`, async () => {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('weekly_plans')
+      .select('*')
+      .eq('user_id', userId)
+      .order('start_date', { ascending: false })
+    if (error) {
+      console.warn("Table weekly_plans may not exist yet:", error)
+      return []
+    }
+    return data || []
+  })
 }
 
 export async function fetchDailyPlans(userId: string, startDate: string, endDate: string): Promise<any> {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('daily_plans')
-    .select('*')
-    .eq('user_id', userId)
-    .gte('target_date', startDate)
-    .lte('target_date', endDate)
-    .order('target_date', { ascending: true })
-  if (error) {
-    console.warn("Table daily_plans may not exist yet:", error)
-    return []
-  }
-  return data || []
+  return cached(`daily_plans:${userId}:${startDate}:${endDate}`, async () => {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('daily_plans')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('target_date', startDate)
+      .lte('target_date', endDate)
+      .order('target_date', { ascending: true })
+    if (error) {
+      console.warn("Table daily_plans may not exist yet:", error)
+      return []
+    }
+    return data || []
+  })
 }
 
 export async function upsertWeeklyPlan(plan: any): Promise<any> {
@@ -1592,8 +1599,10 @@ export async function upsertWeeklyPlan(plan: any): Promise<any> {
       .select()
       .single()
     if (compatibleError) throw compatibleError
+    invalidateCache('weekly_plans:', 'daily_plans:', 'dashboard:')
     return compatibleData
   }
+  invalidateCache('weekly_plans:', 'daily_plans:', 'dashboard:')
   return data
 }
 
@@ -1617,7 +1626,9 @@ export async function upsertDailyPlans(plans: any[]): Promise<any> {
       .upsert(compatiblePayloads, { onConflict: 'user_id,target_date' })
       .select()
     if (compatibleError) throw compatibleError
+    invalidateCache('daily_plans:', 'weekly_plans:', 'dashboard:')
     return compatibleData
   }
+  invalidateCache('daily_plans:', 'weekly_plans:', 'dashboard:')
   return data
 }
