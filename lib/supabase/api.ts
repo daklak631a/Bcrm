@@ -6,6 +6,51 @@ import { Customer, ManagerTransferRequest, Plan, PlanAssignment, ProductMetricTy
 // UTILITY HELPERS
 // ==========================================
 
+const DEFAULT_CACHE_TTL_MS = 45_000
+const LONG_CACHE_TTL_MS = 5 * 60_000
+
+type CacheEntry<T> = {
+  expiresAt: number
+  value?: T
+  promise?: Promise<T>
+}
+
+const apiCache = new Map<string, CacheEntry<any>>()
+
+function cached<T>(key: string, loader: () => Promise<T>, ttlMs = DEFAULT_CACHE_TTL_MS): Promise<T> {
+  const now = Date.now()
+  const existing = apiCache.get(key) as CacheEntry<T> | undefined
+
+  if (existing?.value !== undefined && existing.expiresAt > now) {
+    return Promise.resolve(existing.value)
+  }
+
+  if (existing?.promise && existing.expiresAt > now) {
+    return existing.promise
+  }
+
+  const promise = loader()
+    .then((value) => {
+      apiCache.set(key, { value, expiresAt: Date.now() + ttlMs })
+      return value
+    })
+    .catch((error) => {
+      apiCache.delete(key)
+      throw error
+    })
+
+  apiCache.set(key, { promise, expiresAt: now + ttlMs })
+  return promise
+}
+
+function invalidateCache(...prefixes: string[]) {
+  for (const key of Array.from(apiCache.keys())) {
+    if (prefixes.some((prefix) => key.startsWith(prefix))) {
+      apiCache.delete(key)
+    }
+  }
+}
+
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
 }
@@ -232,14 +277,16 @@ export async function fetchAuditLogs(limit = 100): Promise<any> {
 // ==========================================
 
 export async function fetchProfiles(): Promise<any> {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('is_active', true)
-    .order('full_name')
-  if (error) throw error
-  return data || []
+  return cached('profiles:active', async () => {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id,email,full_name,role,department_id,is_active,full_name_slug,short_name,created_at,updated_at')
+      .eq('is_active', true)
+      .order('full_name')
+    if (error) throw error
+    return data || []
+  }, LONG_CACHE_TTL_MS)
 }
 
 export async function fetchProfileById(id: string): Promise<any> {
@@ -254,14 +301,16 @@ export async function fetchProfileById(id: string): Promise<any> {
 }
 
 export async function fetchPlans(): Promise<any> {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('plans')
-    .select('*')
-    .order('target_date', { ascending: false })
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return (data || []) as Plan[]
+  return cached('plans:all', async () => {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('plans')
+      .select('*')
+      .order('target_date', { ascending: false })
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data || []) as Plan[]
+  })
 }
 
 export async function createPlan(plan: {
@@ -289,23 +338,26 @@ export async function createPlan(plan: {
     afterValue: payload,
   })
 
+  invalidateCache('plans:', 'plan_assignments:', 'dashboard:')
   return data as Plan
 }
 
 export async function fetchPlanAssignments(planId?: string): Promise<any> {
-  const supabase = getSupabase()
-  let query = supabase
-    .from('plan_assignments')
-    .select('*, profiles:user_id(*), plans:plan_id(*)')
-    .order('updated_at', { ascending: false })
+  return cached(`plan_assignments:${planId || 'all'}`, async () => {
+    const supabase = getSupabase()
+    let query = supabase
+      .from('plan_assignments')
+      .select('*, profiles:user_id(id, full_name, email, role, department_id), plans:plan_id(id, title, target_date)')
+      .order('updated_at', { ascending: false })
 
-  if (planId) {
-    query = query.eq('plan_id', planId)
-  }
+    if (planId) {
+      query = query.eq('plan_id', planId)
+    }
 
-  const { data, error } = await query
-  if (error) throw error
-  return (data || []) as PlanAssignment[]
+    const { data, error } = await query
+    if (error) throw error
+    return (data || []) as PlanAssignment[]
+  })
 }
 
 export async function upsertPlanAssignment(assignment: {
@@ -357,6 +409,7 @@ export async function upsertPlanAssignment(assignment: {
       afterValue: compatiblePayload,
     })
 
+    invalidateCache('plan_assignments:', 'plans:', 'dashboard:')
     return compatibleData as PlanAssignment
   }
 
@@ -367,6 +420,7 @@ export async function upsertPlanAssignment(assignment: {
     afterValue: payload,
   })
 
+  invalidateCache('plan_assignments:', 'plans:', 'dashboard:')
   return data as PlanAssignment
 }
 
@@ -375,14 +429,16 @@ export async function upsertPlanAssignment(assignment: {
 // ==========================================
 
 export async function fetchCustomers(): Promise<any> {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('customers')
-    .select('*, profiles:assigned_manager_id(id, full_name)')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data || []
+  return cached('customers:active', async () => {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*, profiles:assigned_manager_id(id, full_name)')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  })
 }
 
 export async function fetchCustomerById(id: string): Promise<any> {
@@ -465,6 +521,7 @@ export async function createCustomer(customer: {
     afterValue: customerToInsert
   })
 
+  invalidateCache('customers:', 'sales_records:', 'dashboard:')
   return data
 }
 
@@ -530,6 +587,7 @@ export async function updateCustomer(id: string, updates: Partial<{
     afterValue: customerToUpdate
   })
 
+  invalidateCache('customers:', 'sales_records:', 'loans:', 'deposits:', 'interactions:', 'product_sales:', 'dashboard:')
   return data
 }
 
@@ -538,13 +596,15 @@ export async function updateCustomer(id: string, updates: Partial<{
 // ==========================================
 
 export async function fetchLoans(): Promise<any> {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('loans')
-    .select('*, customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id)')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data || []
+  return cached('loans:all', async () => {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('loans')
+      .select('*, customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id)')
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  })
 }
 
 export async function fetchLoansByCustomer(customerId: string): Promise<any> {
@@ -594,6 +654,7 @@ export async function createLoan(loan: {
     afterValue: payload
   })
 
+  invalidateCache('loans:', 'sales_records:', 'dashboard:')
   return data
 }
 
@@ -614,6 +675,7 @@ export async function updateLoan(id: string, updates: Record<string, any>): Prom
     afterValue: updates
   })
 
+  invalidateCache('loans:', 'sales_records:', 'dashboard:')
   return data
 }
 
@@ -622,13 +684,15 @@ export async function updateLoan(id: string, updates: Record<string, any>): Prom
 // ==========================================
 
 export async function fetchDeposits(): Promise<any> {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('deposits')
-    .select('*, customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id)')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return data || []
+  return cached('deposits:all', async () => {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('deposits')
+      .select('*, customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id)')
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  })
 }
 
 export async function fetchDepositsByCustomer(customerId: string): Promise<any> {
@@ -671,6 +735,7 @@ export async function createDeposit(deposit: {
     afterValue: payload
   })
 
+  invalidateCache('deposits:', 'sales_records:', 'dashboard:')
   return data
 }
 
@@ -691,6 +756,7 @@ export async function updateDeposit(id: string, updates: Record<string, any>): P
     afterValue: updates
   })
 
+  invalidateCache('deposits:', 'sales_records:', 'dashboard:')
   return data
 }
 
@@ -699,13 +765,15 @@ export async function updateDeposit(id: string, updates: Record<string, any>): P
 // ==========================================
 
 export async function fetchInteractions(): Promise<any> {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('interactions')
-    .select('*, customers(id, full_name), profiles:manager_id(id, full_name)')
-    .order('interaction_date', { ascending: false })
-  if (error) throw error
-  return data || []
+  return cached('interactions:all', async () => {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('interactions')
+      .select('*, customers(id, full_name), profiles:manager_id(id, full_name)')
+      .order('interaction_date', { ascending: false })
+    if (error) throw error
+    return data || []
+  })
 }
 
 export async function fetchInteractionsByCustomer(customerId: string): Promise<any> {
@@ -750,6 +818,7 @@ export async function createInteraction(interaction: {
     afterValue: payload
   })
 
+  invalidateCache('interactions:', 'dashboard:')
   return data
 }
 
@@ -770,6 +839,7 @@ export async function updateInteraction(id: string, updates: Record<string, any>
     afterValue: updates
   })
 
+  invalidateCache('interactions:', 'dashboard:')
   return data
 }
 
@@ -830,13 +900,15 @@ export async function markAllNotificationsRead(userId: string) {
 // ==========================================
 
 export async function fetchProducts(): Promise<any> {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('cross_sell_products')
-    .select('*')
-    .order('name')
-  if (error) throw error
-  return data || []
+  return cached('products:all', async () => {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('cross_sell_products')
+      .select('*')
+      .order('name')
+    if (error) throw error
+    return data || []
+  }, LONG_CACHE_TTL_MS)
 }
 
 export async function createProduct(product: {
@@ -854,6 +926,7 @@ export async function createProduct(product: {
     .select()
     .single()
   if (error) throw error
+  invalidateCache('products:', 'product_sales:', 'sales_records:', 'dashboard:')
   return data
 }
 
@@ -864,6 +937,7 @@ export async function deleteProduct(id: string): Promise<any> {
     .delete()
     .eq('id', id)
   if (error) throw error
+  invalidateCache('products:', 'product_sales:', 'sales_records:', 'dashboard:')
 }
 
 // ==========================================
@@ -871,13 +945,15 @@ export async function deleteProduct(id: string): Promise<any> {
 // ==========================================
 
 export async function fetchProductSales(): Promise<any> {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('cross_sell_records')
-    .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
-    .order('sale_date', { ascending: false })
-  if (error) throw error
-  return data || []
+  return cached('product_sales:all', async () => {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('cross_sell_records')
+      .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), customers(id, full_name, customer_type, business_name, representative_name, assigned_manager_id), profiles:agent_id(id, full_name)')
+      .order('sale_date', { ascending: false })
+    if (error) throw error
+    return data || []
+  })
 }
 
 export async function fetchProductSalesByAgentId(agentId: string): Promise<any> {
@@ -915,19 +991,21 @@ export async function fetchProductSalesByCustomer(customerId: string): Promise<a
 }
 
 export async function fetchBatchSales(agentId?: string): Promise<any> {
-  const supabase = getSupabase()
-  let query = supabase
-    .from('cross_sell_records')
-    .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), profiles:agent_id(id, full_name)')
-    .eq('is_batch_entry', true)
-    .eq('is_allocated', false)
-    .order('sale_date', { ascending: false })
-  if (agentId) {
-    query = query.eq('agent_id', agentId)
-  }
-  const { data, error } = await query
-  if (error) throw error
-  return data || []
+  return cached(`batch_sales:${agentId || 'all'}`, async () => {
+    const supabase = getSupabase()
+    let query = supabase
+      .from('cross_sell_records')
+      .select('*, cross_sell_products(id, name, type, metric_type, unit_label, target), profiles:agent_id(id, full_name)')
+      .eq('is_batch_entry', true)
+      .eq('is_allocated', false)
+      .order('sale_date', { ascending: false })
+    if (agentId) {
+      query = query.eq('agent_id', agentId)
+    }
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
+  })
 }
 
 export async function createBatchSale(sale: {
@@ -956,6 +1034,7 @@ export async function createBatchSale(sale: {
     .select()
     .single()
   if (error) throw error
+  invalidateCache('product_sales:', 'sales_records:', 'dashboard:')
   return data
 }
 
@@ -972,6 +1051,7 @@ export async function allocateBatchSale(recordId: string, customerId: string) {
     .select()
     .single()
   if (error) throw error
+  invalidateCache('product_sales:', 'sales_records:', 'batch_sales:', 'dashboard:')
   return data
 }
 
@@ -1002,6 +1082,7 @@ export async function createProductSale(sale: {
     entityId: data.id,
     afterValue: payload,
   })
+  invalidateCache('product_sales:', 'sales_records:', 'dashboard:')
   return data
 }
 
@@ -1014,21 +1095,24 @@ export async function updateProductSale(id: string, updates: Record<string, any>
     .select()
     .single()
   if (error) throw error
+  invalidateCache('product_sales:', 'sales_records:', 'batch_sales:', 'dashboard:')
   return data
 }
 
 export async function fetchSalesRecords(): Promise<any> {
-  const [loans, deposits, productSales] = await Promise.all([
-    fetchLoans(),
-    fetchDeposits(),
-    fetchProductSales(),
-  ])
+  return cached('sales_records:all', async () => {
+    const [loans, deposits, productSales] = await Promise.all([
+      fetchLoans(),
+      fetchDeposits(),
+      fetchProductSales(),
+    ])
 
-  return sortSalesRecords([
-    ...loans.map(mapLoanToSalesRecord),
-    ...deposits.map(mapDepositToSalesRecord),
-    ...productSales.map(mapProductSaleToSalesRecord),
-  ])
+    return sortSalesRecords([
+      ...loans.map(mapLoanToSalesRecord),
+      ...deposits.map(mapDepositToSalesRecord),
+      ...productSales.map(mapProductSaleToSalesRecord),
+    ])
+  })
 }
 
 export async function fetchSalesRecordsByAgent(agentId: string): Promise<any> {

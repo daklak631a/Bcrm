@@ -109,6 +109,9 @@ export type EffectiveWorkflowPermissionInput = {
 }
 
 export const workflowConfigStorageKey = "bcrm-workflow-config:v1"
+const workflowConfigCacheTtlMs = 5 * 60_000
+let workflowConfigMemoryCache: WorkflowConfigLoadResult | null = null
+let workflowConfigMemoryCacheExpiresAt = 0
 
 export const defaultWorkflowConfig: WorkflowConfig = {
   categories: {
@@ -354,6 +357,11 @@ export function getWorkflowConfig(): WorkflowConfig {
 }
 
 export async function loadWorkflowConfig(): Promise<WorkflowConfigLoadResult> {
+  const now = Date.now()
+  if (workflowConfigMemoryCache && workflowConfigMemoryCacheExpiresAt > now) {
+    return workflowConfigMemoryCache
+  }
+
   const localConfig = getWorkflowConfig()
 
   try {
@@ -367,21 +375,32 @@ export async function loadWorkflowConfig(): Promise<WorkflowConfigLoadResult> {
     if (error) throw error
 
     if (!data?.payload || Object.keys(data.payload).length === 0) {
-      return { config: localConfig, mode: "local" }
+      const result: WorkflowConfigLoadResult = { config: localConfig, mode: "local" }
+      workflowConfigMemoryCache = result
+      workflowConfigMemoryCacheExpiresAt = Date.now() + workflowConfigCacheTtlMs
+      return result
     }
 
     const config = normalizeWorkflowConfig(data.payload as Partial<WorkflowConfig>)
     cacheWorkflowConfig(config)
-    return { config, mode: "supabase", savedAt: data.updated_at }
+    const result: WorkflowConfigLoadResult = { config, mode: "supabase", savedAt: data.updated_at }
+    workflowConfigMemoryCache = result
+    workflowConfigMemoryCacheExpiresAt = Date.now() + workflowConfigCacheTtlMs
+    return result
   } catch (error) {
     console.warn("Không đọc được workflow config từ Supabase, dùng localStorage.", error)
-    return { config: localConfig, mode: "local" }
+    const result: WorkflowConfigLoadResult = { config: localConfig, mode: "local" }
+    workflowConfigMemoryCache = result
+    workflowConfigMemoryCacheExpiresAt = Date.now() + 60_000
+    return result
   }
 }
 
 export async function saveWorkflowConfig(config: WorkflowConfig): Promise<WorkflowConfigStorageMode> {
   const normalizedConfig = normalizeWorkflowConfig(config)
   cacheWorkflowConfig(normalizedConfig)
+  workflowConfigMemoryCache = { config: normalizedConfig, mode: "local" }
+  workflowConfigMemoryCacheExpiresAt = Date.now() + workflowConfigCacheTtlMs
 
   try {
     const supabase = getSupabase()
@@ -400,6 +419,8 @@ export async function saveWorkflowConfig(config: WorkflowConfig): Promise<Workfl
       )
 
     if (error) throw error
+    workflowConfigMemoryCache = { config: normalizedConfig, mode: "supabase", savedAt: new Date().toISOString() }
+    workflowConfigMemoryCacheExpiresAt = Date.now() + workflowConfigCacheTtlMs
     return "supabase"
   } catch (error) {
     console.warn("Không lưu được workflow config lên Supabase, đã lưu localStorage.", error)

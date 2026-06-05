@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { getSupabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Profile } from '@/types/models';
@@ -11,6 +11,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const { setUser, setLoading, user, isLoading } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
+  const verifyInFlightRef = useRef<string | null>(null);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -23,7 +24,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         return;
       }
 
+      const verifyKey = `${userId}:${accessToken || ''}`;
+      if (verifyInFlightRef.current === verifyKey) return;
+
       try {
+        verifyInFlightRef.current = verifyKey;
         console.log(`[AuthProvider] Verifying user: ${userEmail}`);
         const res = await fetch('/api/auth/verify', {
           method: 'POST',
@@ -57,6 +62,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         });
         await supabase.auth.signOut();
         setUser(null);
+      } finally {
+        if (verifyInFlightRef.current === verifyKey) {
+          verifyInFlightRef.current = null;
+        }
       }
     };
 
