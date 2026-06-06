@@ -391,26 +391,26 @@ function statusTone(status: WorkflowStatus | StepStatus | PhaseStatus) {
 function ganttBarTone(status: PhaseStatus) {
   switch (status) {
     case "done":
-      return "bg-emerald-500 shadow-[0_6px_14px_rgba(16,185,129,0.22)]"
+      return "bg-[#006b68] shadow-[0_6px_14px_rgba(0,107,104,0.22)]"
     case "active":
-      return "bg-gradient-to-r from-[#006b68] via-emerald-500 to-teal-400 shadow-[0_6px_16px_rgba(0,107,104,0.28)]"
+      return "bg-emerald-500 shadow-[0_6px_16px_rgba(16,185,129,0.24)]"
     case "risk":
-      return "bg-gradient-to-r from-amber-400 to-orange-400 shadow-[0_6px_14px_rgba(245,158,11,0.24)]"
+      return "bg-rose-800 shadow-[0_6px_14px_rgba(159,18,57,0.24)]"
     case "planned":
-      return "bg-gradient-to-r from-cyan-100 via-sky-100 to-emerald-100 ring-1 ring-cyan-300"
+      return "bg-slate-300 ring-1 ring-slate-400"
   }
 }
 
 function ganttLegendTone(status: PhaseStatus) {
   switch (status) {
     case "done":
-      return "bg-emerald-500"
+      return "bg-[#006b68]"
     case "active":
-      return "bg-gradient-to-r from-[#006b68] to-teal-400"
+      return "bg-emerald-500"
     case "risk":
-      return "bg-gradient-to-r from-amber-400 to-orange-400"
+      return "bg-rose-800"
     case "planned":
-      return "bg-gradient-to-r from-cyan-100 to-emerald-100 ring-1 ring-cyan-300"
+      return "bg-slate-300 ring-1 ring-slate-400"
   }
 }
 
