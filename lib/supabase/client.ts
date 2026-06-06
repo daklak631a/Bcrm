@@ -1,9 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 // Lazy initialize supabase client
-let supabaseClient: any = null;
+let supabaseClient: SupabaseClient | null = null;
 
-export const getSupabase = (): any => {
+export const getSupabase = (): SupabaseClient => {
   if (!supabaseClient) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

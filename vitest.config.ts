@@ -15,7 +15,14 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json", "html"],
       reportsDirectory: "coverage",
-      include: ["lib/access-control.ts", "lib/errors.ts", "lib/logger.ts", "lib/workflow-config.ts"],
+      include: [
+        "lib/access-control.ts",
+        "lib/api-errors.ts",
+        "lib/errors.ts",
+        "lib/logger.ts",
+        "lib/middleware/rate-limit.ts",
+        "lib/workflow-config.ts",
+      ],
       thresholds: {
         statements: 40,
         branches: 40,

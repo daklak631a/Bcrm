@@ -13,6 +13,8 @@ import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/compone
 import { toast } from "sonner"
 import { ProductMetricType } from "@/types/models"
 import { filterAgentRecordsByAccess, filterCustomersByAccess } from "@/lib/access-control"
+import { getErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 
 function ProductsPageContent() {
   const { user } = useAuthStore()
@@ -112,11 +114,16 @@ function ProductsPageContent() {
           const assignmentsData = await fetchPlanAssignments(latestPlan.id)
           setPlanAssignments(assignmentsData)
         } catch (assignErr) {
-          console.error("Error loading KPI assignments for products view:", assignErr)
+          logger.warn("[Products] Failed to load KPI assignments", {
+            error: getErrorMessage(assignErr),
+          })
+          toast.warning("Không thể tải chỉ tiêu KPI mới nhất.")
         }
       }
-    } catch (err: any) {
-      toast.error('Lỗi tải dữ liệu: ' + err.message)
+    } catch (err: unknown) {
+      const message = getErrorMessage(err)
+      logger.error("[Products] Failed to load products data", { error: message })
+      toast.error('Lỗi tải dữ liệu: ' + message)
     } finally {
       setLoading(false)
     }

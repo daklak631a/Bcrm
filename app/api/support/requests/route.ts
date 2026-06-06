@@ -1,5 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { internalServerError } from '@/lib/api-errors'
 import { checkRateLimit, getClientIp } from '@/lib/middleware/rate-limit'
 
 const VALID_SUPPORT_STATUSES = new Set(['PENDING', 'ACCEPTED', 'COMPLETED', 'REJECTED'])
@@ -12,7 +13,20 @@ function createRequestClient(authHeader: string | null) {
   })
 }
 
-async function getCurrentProfile(supabase: any, userId: string) {
+type CurrentProfile = {
+  id: string
+  role: string
+  department_id: string | null
+}
+
+type SupportRequestWithProfiles = {
+  requester_id: string
+  support_admin_id: string
+  requester?: { department_id: string | null } | null
+  support_admin?: { department_id: string | null } | null
+}
+
+async function getCurrentProfile(supabase: SupabaseClient, userId: string) {
   const { data, error } = await supabase
     .from('profiles')
     .select('id, role, department_id')
@@ -20,10 +34,10 @@ async function getCurrentProfile(supabase: any, userId: string) {
     .single()
 
   if (error || !data) return null
-  return data as { id: string; role: string; department_id: string | null }
+  return data as CurrentProfile
 }
 
-function canSeeSupportRequest(request: any, profile: { id: string; role: string; department_id: string | null }) {
+function canSeeSupportRequest(request: SupportRequestWithProfiles, profile: CurrentProfile) {
   if (profile.role === 'ADMIN_LEVEL_1') return true
   if (request.requester_id === profile.id || request.support_admin_id === profile.id) return true
   if (profile.role === 'ADMIN_LEVEL_2') {
@@ -69,15 +83,19 @@ export async function GET(request: Request) {
 
     if (error) throw error
 
-    return NextResponse.json({ data: (data || []).filter((request) => canSeeSupportRequest(request, currentProfile)) })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({
+      data: (data || []).filter((supportRequest) =>
+        canSeeSupportRequest(supportRequest as SupportRequestWithProfiles, currentProfile)
+      )
+    })
+  } catch (error: unknown) {
+    return internalServerError(error, '[Support API] Failed to list support requests')
   }
 }
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  const rateLimit = checkRateLimit(ip, '/api/support/requests', 'default');
+  const rateLimit = checkRateLimit(ip, '/api/support/requests:write', 'write');
   if (!rateLimit.allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
 
   try {
@@ -121,12 +139,18 @@ export async function POST(request: Request) {
     if (error) throw error
 
     return NextResponse.json({ data })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error: unknown) {
+    return internalServerError(error, '[Support API] Failed to create support request')
   }
 }
 
 export async function PATCH(request: Request) {
+  const ip = getClientIp(request)
+  const rateLimit = checkRateLimit(ip, '/api/support/requests:write', 'write')
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+  }
+
   try {
     const body = await request.json()
     const { id, status } = body
@@ -167,7 +191,7 @@ export async function PATCH(request: Request) {
 
     if (error) throw error
     return NextResponse.json({ data })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error: unknown) {
+    return internalServerError(error, '[Support API] Failed to update support request')
   }
 }

@@ -10,6 +10,8 @@ import clsx from "clsx"
 import { createCustomer, updateCustomer, getCustomerFullName, createLoan, createDeposit, fetchCustomersPage, fetchProfilesPage } from "@/lib/supabase/api"
 import { Modal, FormField, FormInput, FormSelect, FormTextarea, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
+import { getErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 
 const PRODUCT_MAP = [
   { key: 'cif_moi', label: 'CIF Mới', short: 'CIF' },
@@ -83,9 +85,10 @@ export default function CustomersPage() {
       setCustomers(customersPage.data)
       setTotalCustomers(customersPage.total)
       setProfiles(profilesPage.data)
-    } catch (err: any) {
-      console.error('Error loading customers:', err)
-      toast.error('Lỗi tải dữ liệu: ' + err.message)
+    } catch (err: unknown) {
+      const message = getErrorMessage(err)
+      logger.error("[Customers] Failed to load customers", { error: message })
+      toast.error('Lỗi tải dữ liệu: ' + message)
     } finally {
       setLoading(false)
     }
@@ -419,14 +422,14 @@ export default function CustomersPage() {
             }
 
             successCount++
-          } catch (err: any) {
-            failedRows.push(`Dòng ${rowNumber}: ${err.message || 'Không rõ lỗi'}`)
-            console.error('Import error for row:', item, err)
+          } catch (err: unknown) {
+            const message = getErrorMessage(err, 'Không rõ lỗi')
+            failedRows.push(`Dòng ${rowNumber}: ${message}`)
+            logger.warn("[Customers] Failed to import row", { rowNumber, item, error: message })
           }
         }
         if (failedRows.length > 0) {
-          toast.error(`Đã nhập ${successCount}/${data.length}. ${failedRows.length} dòng lỗi. Xem console để biết chi tiết.`)
-          console.table(failedRows)
+          toast.error(`Đã nhập ${successCount}/${data.length}. ${failedRows.length} dòng lỗi.`)
         } else {
           toast.success(`Đã nhập ${successCount}/${data.length} khách hàng!`)
         }

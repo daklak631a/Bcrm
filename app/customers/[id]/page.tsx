@@ -9,6 +9,8 @@ import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/l
 import { toast } from "sonner"
 import { useAuthStore } from "@/store/useAuthStore"
 import { canAccessOwner } from "@/lib/access-control"
+import { getErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 import CustomerTimeline from "@/components/customer/CustomerTimeline"
 import clsx from "clsx"
 
@@ -61,7 +63,8 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       setInteractions(ints)
       setProducts(allProducts)
     } catch (err) {
-      console.error('Error loading customer details:', err)
+      logger.error("[Customer Detail] Failed to load customer data", { error: getErrorMessage(err) })
+      toast.error("Không thể tải thông tin khách hàng. Vui lòng thử lại.")
     } finally {
       setLoading(false)
     }
@@ -93,7 +96,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       await loadData()
       setIsEditing(false)
     } catch (err) {
-      console.error('Error updating customer:', err)
+      logger.error("[Customer Detail] Failed to update customer", { error: getErrorMessage(err) })
       toast.error('Có lỗi xảy ra khi cập nhật thông tin!')
     } finally {
       setSaving(false)
@@ -109,7 +112,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
       toast.success("Đã cập nhật ghi chú khách hàng thành công!")
       setCustomer((prev: any) => prev ? { ...prev, note: notesDraft } : null)
     } catch (err) {
-      console.error('Error saving customer notes:', err)
+      logger.error("[Customer Detail] Failed to save notes", { error: getErrorMessage(err) })
       toast.error('Có lỗi xảy ra khi cập nhật ghi chú!')
     } finally {
       setSavingNotes(false)

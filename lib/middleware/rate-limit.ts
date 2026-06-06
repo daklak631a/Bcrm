@@ -16,6 +16,10 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>();
 
+export function resetRateLimitStore() {
+  store.clear();
+}
+
 function getKey(ip: string, route: string): string {
   return `${ip}:${route}`;
 }

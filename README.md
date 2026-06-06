@@ -1,20 +1,66 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# BCRM 2.0
 
-# Run and deploy your AI Studio app
+Ứng dụng CRM ngân hàng xây dựng bằng Next.js, React, TypeScript và Supabase.
 
-This contains everything you need to run your app locally.
+## Yêu cầu
 
-View your app in AI Studio: https://ai.studio/apps/262c19f9-9482-4dda-9be9-62b3f615fc3f
+- Node.js 20+
+- npm
+- Một dự án Supabase đã áp dụng các migration của BCRM
 
-## Run Locally
+## Chạy local
 
-**Prerequisites:**  Node.js
+1. Cài dependency:
 
+   ```bash
+   npm ci
+   ```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+2. Tạo `.env.local` từ `.env.example` và điền thông tin Supabase.
+
+3. Khởi động ứng dụng:
+
+   ```bash
+   npm run dev
+   ```
+
+Ứng dụng mặc định chạy tại `http://localhost:3000`.
+
+## Biến môi trường
+
+Các biến bắt buộc:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`: chỉ dùng phía server, không được đặt tiền tố `NEXT_PUBLIC_`
+
+Các biến tùy chọn:
+
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
+- `NEXT_PUBLIC_PILOT_SUPABASE_URL`
+- `NEXT_PUBLIC_PILOT_SUPABASE_ANON_KEY`
+
+Nếu không cấu hình Upstash, proxy sẽ bỏ qua rate limit phân tán. Một số API vẫn có limiter in-memory cục bộ.
+
+## Kiểm tra chất lượng
+
+```bash
+npm run check:mojibake
+npm test
+npm run test:coverage
+npm run lint
+npm run build
+```
+
+GitHub Actions chạy coverage, lint và production build cho mỗi push và pull request.
+
+## Triển khai
+
+1. Cấu hình toàn bộ biến môi trường trên nền tảng triển khai.
+2. Chạy migration Supabase theo đúng thứ tự của môi trường.
+3. Xác minh RLS và quyền truy cập chéo phòng ban bằng tài khoản thử nghiệm.
+4. Chạy `npm run build` trước khi phát hành.
+5. Không commit `.env.local`, service role key hoặc token Upstash.
+
+Module pilot B2B phải dùng dự án Supabase riêng. Không cấu hình URL pilot trùng với Supabase production.

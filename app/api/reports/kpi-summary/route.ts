@@ -2,8 +2,9 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import dayjs from 'dayjs'
 import { checkRateLimit, getClientIp } from '@/lib/middleware/rate-limit'
+import { internalServerError } from '@/lib/api-errors'
 import { getProductMetricValue } from '@/lib/product-metrics'
-import { getErrorMessage, toPublicErrorMessage } from '@/lib/errors'
+import { getErrorMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 
 const OTHER_PRODUCTS_ID = 'other_spdv'
@@ -90,7 +91,10 @@ export async function GET(request: Request) {
       .single()
 
     if (profileError || !currentProfile) {
-      return NextResponse.json({ error: profileError?.message || 'Profile not found' }, { status: 403 })
+      if (profileError) {
+        logger.warn('[KPI API] Failed to load current profile', { error: getErrorMessage(profileError) })
+      }
+      return NextResponse.json({ error: 'Không tìm thấy hồ sơ người dùng.' }, { status: 403 })
     }
 
     const endDate = dayjs().format('YYYY-MM-DD')
@@ -132,12 +136,7 @@ export async function GET(request: Request) {
     if (rpcError) {
       const missingRpc = /function .*get_kpi_summary|Could not find the function/i.test(rpcError.message || '')
       if (!missingRpc) {
-        logger.error(
-          '[KPI API] RPC summary failed',
-          { error: getErrorMessage(rpcError) },
-          { production: true }
-        )
-        return NextResponse.json({ error: toPublicErrorMessage(rpcError) }, { status: 500 })
+        return internalServerError(rpcError, '[KPI API] RPC summary failed')
       }
       logger.warn(
         '[KPI API] Summary RPC unavailable; using manual aggregation',
@@ -153,7 +152,7 @@ export async function GET(request: Request) {
       .order('name', { ascending: true })
 
     if (activeProductsError) {
-      return NextResponse.json({ error: activeProductsError.message }, { status: 500 })
+      return internalServerError(activeProductsError, '[KPI API] Failed to load active products')
     }
 
     const activeProducts = activeProductsData || []
@@ -219,7 +218,7 @@ export async function GET(request: Request) {
     const { data: visibleProfilesData, error: visibleProfilesError } = await visibleProfilesQuery
 
     if (visibleProfilesError) {
-      return NextResponse.json({ error: visibleProfilesError.message }, { status: 500 })
+      return internalServerError(visibleProfilesError, '[KPI API] Failed to load visible profiles')
     }
 
     if (currentProfile.role !== 'USER') {
@@ -249,7 +248,7 @@ export async function GET(request: Request) {
       .lte('start_date', endDate)
 
     if (loanActualsError) {
-      return NextResponse.json({ error: loanActualsError.message }, { status: 500 })
+      return internalServerError(loanActualsError, '[KPI API] Failed to load loan actuals')
     }
 
     ;(loanActualsData || []).forEach((loan: any) => {
@@ -268,7 +267,7 @@ export async function GET(request: Request) {
       .lte('start_date', endDate)
 
     if (depositActualsError) {
-      return NextResponse.json({ error: depositActualsError.message }, { status: 500 })
+      return internalServerError(depositActualsError, '[KPI API] Failed to load deposit actuals')
     }
 
     ;(depositActualsData || []).forEach((deposit: any) => {
@@ -287,7 +286,7 @@ export async function GET(request: Request) {
       .lte('interaction_date', endDate)
 
     if (callActualsError) {
-      return NextResponse.json({ error: callActualsError.message }, { status: 500 })
+      return internalServerError(callActualsError, '[KPI API] Failed to load call actuals')
     }
 
     ;(callActualsData || []).forEach((interaction: any) => {
@@ -304,7 +303,7 @@ export async function GET(request: Request) {
       .or(`and(sale_date.gte.${startDate},sale_date.lte.${endDate}),and(sale_date.is.null,created_at.gte.${startDate},created_at.lt.${dayjs(endDate).add(1, 'day').format('YYYY-MM-DD')})`)
 
     if (productSalesError) {
-      return NextResponse.json({ error: productSalesError.message }, { status: 500 })
+      return internalServerError(productSalesError, '[KPI API] Failed to load product sales')
     }
 
     const extraActualsByUser = new Map<string, Record<string, number>>()
@@ -385,14 +384,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ data: mergedData, products: productsForSummary, startDate, endDate })
   } catch (error: unknown) {
-    logger.error(
+    return internalServerError(
+      error,
       '[KPI API] Unhandled report error',
-      { error: getErrorMessage(error) },
-      { production: true }
-    )
-    return NextResponse.json(
-      { error: toPublicErrorMessage(error, 'Không thể tạo báo cáo KPI.') },
-      { status: 500 }
+      'Không thể tạo báo cáo KPI.'
     )
   }
 }

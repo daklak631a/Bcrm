@@ -11,6 +11,8 @@ import { fetchLoans, createLoan, fetchCustomers, fetchProfiles, formatCurrency, 
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 import { filterCustomerRecordsByAccess, filterCustomersByAccess } from "@/lib/access-control"
+import { getErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 
 const ITEMS_PER_PAGE = 10
 
@@ -82,9 +84,10 @@ function LoansPageContent() {
       setLoans(loansData)
       setCustomers(customersData)
       setProfiles(profilesData)
-    } catch (err: any) {
-      console.error('Error loading loans:', err)
-      toast.error('Lỗi tải dữ liệu: ' + err.message)
+    } catch (err: unknown) {
+      const message = getErrorMessage(err)
+      logger.error("[Loans] Failed to load loans", { error: message })
+      toast.error('Lỗi tải dữ liệu: ' + message)
     } finally {
       setLoading(false)
     }
