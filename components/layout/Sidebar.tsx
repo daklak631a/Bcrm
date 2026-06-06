@@ -18,6 +18,8 @@ import {
   X,
 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
+import { getErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 
 interface SidebarProps {
   onClose?: () => void
@@ -45,7 +47,7 @@ export function Sidebar({ onClose }: SidebarProps) {
         if (logo) setLogoUrl(logo)
         if (name) setAppName(name)
       } catch (err) {
-        console.warn("Failed to load logo in Sidebar:", err)
+        logger.warn("[Sidebar] Failed to load logo", { error: getErrorMessage(err) })
       }
     }
     loadSettings()

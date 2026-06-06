@@ -1,6 +1,8 @@
 import { getSupabase } from './client'
 import { getProductMetricDefinition, getProductMetricValue } from '@/lib/product-metrics'
 import { Customer, ManagerTransferRequest, Plan, PlanAssignment, ProductMetricType, SalesRecord } from '@/types/models'
+import { getErrorMessage } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 
 // ==========================================
 // UTILITY HELPERS
@@ -291,7 +293,11 @@ export async function logAudit(payload: AuditLogPayload) {
       })
       
     if (error) {
-      console.error('Failed to write audit log:', error)
+      logger.error(
+        '[Supabase API] Failed to write audit log',
+        { error: getErrorMessage(error) },
+        { production: true }
+      )
     } else {
       // Create notification for Admins
       // Determine message
@@ -333,7 +339,11 @@ export async function logAudit(payload: AuditLogPayload) {
       }
     }
   } catch (error) {
-    console.error('Audit log exception:', error)
+    logger.error(
+      '[Supabase API] Audit log exception',
+      { error: getErrorMessage(error) },
+      { production: true }
+    )
   }
 }
 
@@ -1552,7 +1562,11 @@ export async function fetchSupportRequests(): Promise<any> {
   })
   const payload = await response.json()
   if (!response.ok) {
-    console.error('Error fetching support requests:', payload.error)
+    logger.error(
+      '[Supabase API] Failed to fetch support requests',
+      { error: getErrorMessage(payload.error) },
+      { production: true }
+    )
     return []
   }
   return payload.data || []
@@ -1760,12 +1774,20 @@ export async function fetchSystemSettings(): Promise<any[]> {
         .from('system_settings')
         .select('*')
       if (error) {
-        console.warn("Table system_settings may not exist yet:", error)
+        logger.warn(
+          "[Supabase API] system_settings table may not exist",
+          { error: getErrorMessage(error) },
+          { production: true }
+        )
         return []
       }
       return data || []
     } catch (err) {
-      console.warn("Failed to fetch system settings:", err)
+      logger.warn(
+        "[Supabase API] Failed to fetch system settings",
+        { error: getErrorMessage(err) },
+        { production: true }
+      )
       return []
     }
   }, LONG_CACHE_TTL_MS)
@@ -1796,7 +1818,11 @@ export async function fetchWeeklyPlans(userId: string): Promise<any> {
       .eq('user_id', userId)
       .order('start_date', { ascending: false })
     if (error) {
-      console.warn("Table weekly_plans may not exist yet:", error)
+      logger.warn(
+        "[Supabase API] weekly_plans table may not exist",
+        { error: getErrorMessage(error) },
+        { production: true }
+      )
       return []
     }
     return data || []
@@ -1814,7 +1840,11 @@ export async function fetchDailyPlans(userId: string, startDate: string, endDate
       .lte('target_date', endDate)
       .order('target_date', { ascending: true })
     if (error) {
-      console.warn("Table daily_plans may not exist yet:", error)
+      logger.warn(
+        "[Supabase API] daily_plans table may not exist",
+        { error: getErrorMessage(error) },
+        { production: true }
+      )
       return []
     }
     return data || []

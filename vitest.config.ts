@@ -9,7 +9,19 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["**/*.test.ts"],
+    include: ["**/*.test.ts", "**/*.test.tsx"],
     exclude: ["node_modules", ".next", "scratch", "gas-frontend"],
+    coverage: {
+      provider: "v8",
+      reporter: ["text", "json", "html"],
+      reportsDirectory: "coverage",
+      include: ["lib/access-control.ts", "lib/errors.ts", "lib/logger.ts", "lib/workflow-config.ts"],
+      thresholds: {
+        statements: 40,
+        branches: 40,
+        functions: 60,
+        lines: 40,
+      },
+    },
   },
 })

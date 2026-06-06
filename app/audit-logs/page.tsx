@@ -6,6 +6,9 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState } from "react"
 import { fetchAuditLogs } from "@/lib/supabase/api"
 import { useRouter } from "next/navigation"
+import { getErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
+import { toast } from "sonner"
 
 export default function AuditLogsPage() {
   const { user } = useAuthStore()
@@ -28,7 +31,8 @@ export default function AuditLogsPage() {
         const data = await fetchAuditLogs(pageSize)
         setLogs(data)
       } catch (err) {
-        console.error('Failed to fetch audit logs', err)
+        logger.error("[AuditLogs] Failed to fetch audit logs", { error: getErrorMessage(err) })
+        toast.error("Không thể tải nhật ký hệ thống.")
       } finally {
         setLoading(false)
       }

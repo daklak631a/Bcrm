@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { logger } from '@/lib/logger'
 
 let pilotClient: ReturnType<typeof createClient> | null = null
 
@@ -17,7 +18,11 @@ export function getPilotSupabase() {
 
   if (!pilotUrl || !pilotAnonKey) return null
   if (pilotUrl === productionUrl) {
-    console.warn("Pilot Supabase bị bỏ qua vì URL đang trùng Supabase production.")
+    logger.warn(
+      "[PilotSupabase] Pilot URL matches production URL; pilot client disabled",
+      undefined,
+      { production: true }
+    )
     return null
   }
 

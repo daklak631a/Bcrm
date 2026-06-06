@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react"
 import { fetchSystemSettings } from "@/lib/supabase/api"
 import { usePathname } from "next/navigation"
+import { getErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
  
 export function FaviconInjector() {
   const pathname = usePathname()
@@ -54,7 +56,7 @@ export function FaviconInjector() {
         link.href = cachedFavicon
       }
     } catch (e) {
-      console.warn("Storage access failed:", e)
+      logger.warn("[Favicon] Storage access failed", { error: getErrorMessage(e) })
     }
 
     // 3. Fetch fresh settings from DB to update cache and title
@@ -85,7 +87,7 @@ export function FaviconInjector() {
           document.title = appName
         }
       } catch (err) {
-        console.warn("Failed to inject favicon/title:", err)
+        logger.warn("[Favicon] Failed to inject favicon or title", { error: getErrorMessage(err) })
       }
     }
     

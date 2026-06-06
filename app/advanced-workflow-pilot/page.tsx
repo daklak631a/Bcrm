@@ -23,6 +23,8 @@ import {
 } from "@/lib/advanced-workflow-pilot/template-admin-store"
 import { createNotification, fetchProfiles } from "@/lib/supabase/api"
 import { useAuthStore } from "@/store/useAuthStore"
+import { getErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
 
 type WorkflowDirection = "bottom_up" | "top_down" | "hybrid"
 type WorkflowStatus = "reviewing" | "executing" | "blocked" | "completed"
@@ -879,7 +881,11 @@ export default function AdvancedWorkflowPilotPage() {
         type: payload.type || "project_workflow",
         link_url: payload.link_url || "/advanced-workflow-pilot",
       }).catch((error) => {
-        console.error("Không tạo được notification:", error)
+        logger.error(
+          "[AdvancedWorkflow] Failed to create notification",
+          { error: getErrorMessage(error) },
+          { production: true }
+        )
       })
     })
   }

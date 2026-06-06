@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server'
 import dayjs from 'dayjs'
 import { checkRateLimit, getClientIp } from '@/lib/middleware/rate-limit'
 import { getProductMetricValue } from '@/lib/product-metrics'
+import { getErrorMessage, toPublicErrorMessage } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 
 const OTHER_PRODUCTS_ID = 'other_spdv'
 
@@ -130,10 +132,18 @@ export async function GET(request: Request) {
     if (rpcError) {
       const missingRpc = /function .*get_kpi_summary|Could not find the function/i.test(rpcError.message || '')
       if (!missingRpc) {
-        console.error('Error fetching KPI summary:', rpcError)
-        return NextResponse.json({ error: rpcError.message }, { status: 500 })
+        logger.error(
+          '[KPI API] RPC summary failed',
+          { error: getErrorMessage(rpcError) },
+          { production: true }
+        )
+        return NextResponse.json({ error: toPublicErrorMessage(rpcError) }, { status: 500 })
       }
-      console.warn('RPC get_kpi_summary is unavailable, using manual KPI aggregation fallback.')
+      logger.warn(
+        '[KPI API] Summary RPC unavailable; using manual aggregation',
+        undefined,
+        { production: true }
+      )
     }
     const data = rpcData || []
 
@@ -374,8 +384,15 @@ export async function GET(request: Request) {
     ]
 
     return NextResponse.json({ data: mergedData, products: productsForSummary, startDate, endDate })
-  } catch (error: any) {
-    console.error('API Error:', error)
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 })
+  } catch (error: unknown) {
+    logger.error(
+      '[KPI API] Unhandled report error',
+      { error: getErrorMessage(error) },
+      { production: true }
+    )
+    return NextResponse.json(
+      { error: toPublicErrorMessage(error, 'Không thể tạo báo cáo KPI.') },
+      { status: 500 }
+    )
   }
 }

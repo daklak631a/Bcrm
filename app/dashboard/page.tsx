@@ -9,6 +9,9 @@ import { useEffect, useState, useCallback } from "react"
 import { KPISummaryTable } from "@/components/ui/kpi-summary-table"
 import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
 import { fetchCustomers, fetchInteractions, fetchProfiles, fetchSalesRecords, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
+import { getErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
+import { toast } from "sonner"
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
@@ -30,7 +33,8 @@ export default function DashboardPage() {
       setInteractions(i)
       setProfiles(p)
     } catch (err) {
-      console.error('Dashboard load error:', err)
+      logger.error("[Dashboard] Failed to load dashboard data", { error: getErrorMessage(err) })
+      toast.error("Không thể tải dữ liệu tổng quan. Vui lòng thử lại.")
     } finally {
       setLoading(false)
     }

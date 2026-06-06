@@ -9,6 +9,9 @@ import Link from 'next/link'
 import { Download, RefreshCw } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { formatShortName } from '@/lib/utils'
+import { getErrorMessage } from '@/lib/errors'
+import { logger } from '@/lib/logger'
+import { toast } from 'sonner'
 
 interface KPISummary {
   manager_id: string
@@ -87,7 +90,8 @@ export function KPISummaryTable() {
       }
       setHasLoaded(true)
     } catch (error) {
-      console.error(error)
+      logger.error('[KPISummary] Failed to load KPI report', { error: getErrorMessage(error) })
+      toast.error('Không thể lấy báo cáo KPI. Vui lòng thử lại.')
     } finally {
       setLoading(false)
     }
@@ -102,12 +106,13 @@ export function KPISummaryTable() {
 
   const handleDownload = async () => {
     if (!tableRef.current) return
+    const element = tableRef.current
+    const originalWidth = element.style.width
+    const originalOverflows: Array<{ el: HTMLElement; overflow: string; overflowX: string }> = []
+
     try {
       setIsCapturing(true)
-      
-      const element = tableRef.current
-      const originalWidth = element.style.width
-      
+
       // Force container width to match the inner table's full scrollWidth
       const tableInner = element.querySelector('table')
       // Padding adjustment
@@ -117,13 +122,13 @@ export function KPISummaryTable() {
       
       // Temporarily remove overflow constraints so html2canvas doesn't crop
       const scrollContainers = element.querySelectorAll('.overflow-x-auto, .overflow-hidden')
-      const originalOverflows = Array.from(scrollContainers).map((el: any) => ({
-        el,
-        overflow: el.style.overflow,
-        overflowX: el.style.overflowX
-      }))
-      
-      scrollContainers.forEach((el: any) => {
+      scrollContainers.forEach((node) => {
+        const el = node as HTMLElement
+        originalOverflows.push({
+          el,
+          overflow: el.style.overflow,
+          overflowX: el.style.overflowX,
+        })
         el.style.overflow = 'visible'
         el.style.overflowX = 'visible'
       })
@@ -138,21 +143,20 @@ export function KPISummaryTable() {
         windowWidth: fullWidth
       })
       
-      // Restore styles
-      element.style.width = originalWidth
-      originalOverflows.forEach(({ el, overflow, overflowX }) => {
-        el.style.overflow = overflow
-        el.style.overflowX = overflowX
-      })
-
       const url = canvas.toDataURL('image/png')
       const link = document.createElement('a')
       link.download = `kpi-summary-${period}-${new Date().toISOString().slice(0, 10)}.png`
       link.href = url
       link.click()
     } catch (err) {
-      console.error('Lỗi khi chụp màn hình', err)
+      logger.error('[KPISummary] Failed to capture KPI report', { error: getErrorMessage(err) })
+      toast.error('Không thể tải ảnh báo cáo KPI.')
     } finally {
+      element.style.width = originalWidth
+      originalOverflows.forEach(({ el, overflow, overflowX }) => {
+        el.style.overflow = overflow
+        el.style.overflowX = overflowX
+      })
       setIsCapturing(false)
     }
   }

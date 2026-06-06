@@ -1,4 +1,5 @@
 import { getPilotSupabase, isPilotSupabaseConfigured } from "@/lib/supabase/pilot-client"
+import { logger } from "@/lib/logger"
 
 export type PilotStorageMode = "supabase-pilot" | "local"
 
@@ -31,7 +32,11 @@ export async function loadPilotSnapshot<T>(snapshotKey: string): Promise<PilotSt
     }
 
   if (error) {
-    console.warn("Không đọc được Supabase pilot, fallback localStorage.", error.message)
+    logger.warn(
+      "[PilotStore] Supabase load failed, falling back to localStorage",
+      { error: error.message },
+      { production: true }
+    )
     return { mode: "local", payload: null }
   }
 
@@ -62,7 +67,11 @@ export async function savePilotSnapshot<T>(snapshotKey: string, payload: T): Pro
     )
 
   if (error) {
-    console.warn("Không lưu được Supabase pilot, fallback localStorage.", error.message)
+    logger.warn(
+      "[PilotStore] Supabase save failed, falling back to localStorage",
+      { error: error.message },
+      { production: true }
+    )
     return "local"
   }
 
@@ -84,7 +93,11 @@ export async function resetPilotSnapshot(snapshotKey: string): Promise<PilotStor
     .eq("user_id", userId)
 
   if (error) {
-    console.warn("Không reset được Supabase pilot, fallback localStorage.", error.message)
+    logger.warn(
+      "[PilotStore] Supabase reset failed, falling back to localStorage",
+      { error: error.message },
+      { production: true }
+    )
     return "local"
   }
 

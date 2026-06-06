@@ -6,6 +6,9 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { fetchNotifications, markNotificationRead, markAllNotificationsRead } from "@/lib/supabase/api"
 import { getSupabase } from "@/lib/supabase/client"
+import { getErrorMessage } from "@/lib/errors"
+import { logger } from "@/lib/logger"
+import { toast } from "sonner"
 
 interface HeaderProps {
   title?: string;
@@ -48,7 +51,8 @@ export function Header({
       const data = await fetchNotifications(user.id)
       setNotifications(data)
     } catch (err) {
-      console.error('Failed to load notifications:', err)
+      logger.error("[Header] Failed to load notifications", { error: getErrorMessage(err) })
+      toast.error("Không thể tải thông báo. Vui lòng thử lại.")
     } finally {
       setNotifLoading(false)
     }
@@ -86,7 +90,8 @@ export function Header({
       await markNotificationRead(id)
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
     } catch (err) {
-      console.error('Failed to mark read:', err)
+      logger.error("[Header] Failed to mark notification as read", { error: getErrorMessage(err) })
+      toast.error("Không thể cập nhật thông báo.")
     }
   }
 
@@ -96,7 +101,8 @@ export function Header({
       await markAllNotificationsRead(user.id)
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
     } catch (err) {
-      console.error('Failed to mark all read:', err)
+      logger.error("[Header] Failed to mark all notifications as read", { error: getErrorMessage(err) })
+      toast.error("Không thể cập nhật các thông báo.")
     }
   }
 

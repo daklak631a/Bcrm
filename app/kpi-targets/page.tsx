@@ -12,6 +12,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import * as XLSX from 'xlsx'
 import { formatShortName } from '@/lib/utils'
+import { getErrorMessage } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 
 export type AssignmentDraft = Record<string, number>
 
@@ -347,7 +349,7 @@ export default function KpiTargetsPage() {
       setMonthlyActual(userSummary || null)
       setMonthlyActualLoaded(true)
     } catch (err) {
-      console.error("Failed to load monthly actuals:", err)
+      logger.error("[KPITargets] Failed to load monthly actuals", { error: getErrorMessage(err) })
       toast.error("Không thể tải kết quả KPI tháng")
     } finally {
       setMonthlyActualLoading(false)

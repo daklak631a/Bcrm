@@ -4,6 +4,7 @@ import AuthProvider from '@/providers/auth-provider'
 import QueryProvider from '@/providers/query-provider'
 import { Toaster } from 'sonner'
 import { FaviconInjector } from '@/components/layout/FaviconInjector'
+import { ErrorBoundary } from '@/components/error-boundary'
 import './globals.css'
 
 const inter = Inter({
@@ -30,11 +31,13 @@ export default function RootLayout({
     <html lang="vi" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="font-sans antialiased bg-slate-50 text-slate-900">
         <QueryProvider>
-          <AuthProvider>
-            <Toaster richColors position="top-right" />
-            <FaviconInjector />
-            {children}
-          </AuthProvider>
+          <ErrorBoundary>
+            <AuthProvider>
+              <Toaster richColors position="top-right" />
+              <FaviconInjector />
+              {children}
+            </AuthProvider>
+          </ErrorBoundary>
         </QueryProvider>
       </body>
     </html>

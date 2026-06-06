@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase/client'
 import { Building2, AlertCircle, Briefcase, TrendingUp, Shield, Users, BarChart3, PieChart, Landmark, Globe } from 'lucide-react'
 import { fetchSystemSettings } from '@/lib/supabase/api'
+import { getErrorMessage } from '@/lib/errors'
+import { logger } from '@/lib/logger'
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -21,7 +23,7 @@ export default function LoginPage() {
         if (logo) setLogoUrl(logo)
         if (name) setAppName(name)
       } catch (err) {
-        console.warn("Failed to load settings in Login page:", err)
+        logger.warn("[Login] Failed to load public settings", { error: getErrorMessage(err) })
       }
     }
     loadSettings()
