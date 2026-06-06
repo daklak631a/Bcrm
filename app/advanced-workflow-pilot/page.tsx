@@ -1798,7 +1798,10 @@ function GanttBoardV2({
                           style={{ left: `${left}%`, top: 12 + index * 40, width: `${width}%` }}
                         >
                           <span className="block truncate">{item.title}</span>
-                          <span className="pointer-events-none absolute bottom-9 left-1/2 z-20 hidden w-72 -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs font-normal text-slate-600 shadow-lg group-hover:block">
+                          <span className={clsx(
+                            "pointer-events-none absolute z-30 hidden w-72 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs font-normal text-slate-600 shadow-lg group-hover:block",
+                            index === 0 ? "left-0 top-9" : "bottom-9 left-1/2 -translate-x-1/2"
+                          )}>
                             <span className="block font-semibold text-slate-950">{item.title}</span>
                             <span className="mt-1 block">Phụ trách: {item.owner}</span>
                             <span className="block">Thời gian: {timelineDateMeta(item)}</span>
@@ -2045,7 +2048,7 @@ function GanttBoard({
                           )}>
                             {childItem.title}
                           </span>
-                          <span className="pointer-events-none absolute bottom-6 left-1/2 z-10 hidden w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs text-slate-600 shadow-lg group-hover:block">
+                          <span className="pointer-events-none absolute left-0 top-8 z-30 hidden w-64 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs text-slate-600 shadow-lg group-hover:block">
                             <span className="block font-semibold text-slate-950">{childItem.title}</span>
                             <span className="mt-1 block">Phụ trách: {childItem.owner}</span>
                             <span className="block">Thời gian: {timelineDateMeta(childItem)}</span>

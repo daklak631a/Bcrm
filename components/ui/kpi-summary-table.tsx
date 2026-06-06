@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { getSupabase } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAuthStore } from '@/store/useAuthStore'
 import Link from 'next/link'
-import { Download } from 'lucide-react'
+import { Download, RefreshCw } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { formatShortName } from '@/lib/utils'
 
@@ -58,42 +58,47 @@ export function KPISummaryTable() {
   const [period, setPeriod] = useState('week')
   const [data, setData] = useState<KPISummary[]>([])
   const [monthData, setMonthData] = useState<KPISummary[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [hasLoaded, setHasLoaded] = useState(false)
   const [isCapturing, setIsCapturing] = useState(false)
   const tableRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const fetchKPI = async () => {
-      setLoading(true)
-      try {
-        const supabase = getSupabase()
-        const { data: { session } } = await supabase.auth.getSession()
-        
-        const [response, monthResponse] = await Promise.all([
-          fetch(`/api/reports/kpi-summary?period=${period}`, { headers: { 'Authorization': session ? `Bearer ${session.access_token}` : '' } }),
-          period === 'month' ? Promise.resolve(null) : fetch(`/api/reports/kpi-summary?period=month`, { headers: { 'Authorization': session ? `Bearer ${session.access_token}` : '' } })
-        ])
-        
-        if (!response.ok) throw new Error('Lỗi khi tải dữ liệu KPI')
-        
-        const result = await response.json()
-        setData(result.data || [])
+  const fetchKPI = useCallback(async () => {
+    setLoading(true)
+    try {
+      const supabase = getSupabase()
+      const { data: { session } } = await supabase.auth.getSession()
 
-        if (period === 'month') {
-          setMonthData(result.data || [])
-        } else if (monthResponse && monthResponse.ok) {
-          const monthResult = await monthResponse.json()
-          setMonthData(monthResult.data || [])
-        }
-      } catch (error) {
-        console.error(error)
-      } finally {
-        setLoading(false)
+      const [response, monthResponse] = await Promise.all([
+        fetch(`/api/reports/kpi-summary?period=${period}`, { headers: { 'Authorization': session ? `Bearer ${session.access_token}` : '' } }),
+        period === 'month' ? Promise.resolve(null) : fetch(`/api/reports/kpi-summary?period=month`, { headers: { 'Authorization': session ? `Bearer ${session.access_token}` : '' } })
+      ])
+
+      if (!response.ok) throw new Error('Lỗi khi tải dữ liệu KPI')
+
+      const result = await response.json()
+      setData(result.data || [])
+
+      if (period === 'month') {
+        setMonthData(result.data || [])
+      } else if (monthResponse && monthResponse.ok) {
+        const monthResult = await monthResponse.json()
+        setMonthData(monthResult.data || [])
       }
+      setHasLoaded(true)
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setLoading(false)
     }
-
-    fetchKPI()
   }, [period])
+
+  const handlePeriodChange = (value: string) => {
+    setPeriod(value)
+    setData([])
+    setMonthData([])
+    setHasLoaded(false)
+  }
 
   const handleDownload = async () => {
     if (!tableRef.current) return
@@ -167,8 +172,18 @@ export function KPISummaryTable() {
           <div className="flex items-center gap-3">
             <button
               type="button"
+              onClick={fetchKPI}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#006b68] text-white hover:bg-[#005451] px-3 py-1.5 text-xs font-bold transition-all border border-[#006b68] disabled:opacity-50"
+              title="Lấy dữ liệu báo cáo KPI"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              {loading ? 'Đang lấy...' : 'Lấy báo cáo'}
+            </button>
+            <button
+              type="button"
               onClick={handleDownload}
-              disabled={isCapturing}
+              disabled={isCapturing || !hasLoaded}
               className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 px-3 py-1.5 text-xs font-bold transition-all border border-slate-200 disabled:opacity-50"
               title="Tải ảnh báo cáo (Webview)"
             >
@@ -182,7 +197,7 @@ export function KPISummaryTable() {
             >
               Phân bổ chỉ tiêu
             </Link>
-            <Select value={period} onValueChange={(val) => val && setPeriod(val)}>
+            <Select value={period} onValueChange={(val) => val && handlePeriodChange(val)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Chọn kỳ báo cáo" />
               </SelectTrigger>
@@ -198,7 +213,12 @@ export function KPISummaryTable() {
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
           <div className="min-w-[800px]">
-            {loading ? (
+            {!hasLoaded && !loading ? (
+              <div className="flex h-64 flex-col items-center justify-center gap-3 text-center text-sm text-slate-500">
+                <p className="font-semibold text-slate-700">Chưa lấy dữ liệu KPI</p>
+                <p>Chọn kỳ báo cáo rồi bấm Lấy báo cáo để tải dữ liệu.</p>
+              </div>
+            ) : loading ? (
               <div className="flex justify-center items-center h-64">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#006b68]"></div>
               </div>
