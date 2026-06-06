@@ -3,7 +3,7 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import Link from "next/link"
-import { Calendar, Download, Loader2, Users, Building2, User, Target, TrendingUp, CalendarDays, CheckCircle2 } from "lucide-react"
+import { Calendar, Download, Loader2, Users, Building2, User, Target, TrendingUp, CalendarDays, CheckCircle2, RefreshCw } from "lucide-react"
 import { getSupabase } from "@/lib/supabase/client"
 import { useAuthStore } from "@/store/useAuthStore"
 import * as XLSX from 'xlsx'
@@ -59,7 +59,8 @@ type ViewMode = 'all' | 'department' | 'user'
 export default function ReportsPage() {
   const { user } = useAuthStore()
   const [mounted, setMounted] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [hasLoaded, setHasLoaded] = useState(false)
   
   // Data States
   const [profiles, setProfiles] = useState<any[]>([])
@@ -186,6 +187,7 @@ export default function ReportsPage() {
       if (weeklyPlansData.data) setWeeklyPlans(weeklyPlansData.data)
       if (dailyPlansData.data) setDailyPlans(dailyPlansData.data)
       if (snapshotsData.data) setSnapshots(snapshotsData.data)
+      setHasLoaded(true)
     } catch (err: any) {
       toast.error("Lỗi tải dữ liệu báo cáo: " + err.message)
     } finally {
@@ -195,8 +197,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     setMounted(true)
-    loadData()
-  }, [loadData])
+  }, [])
 
   // Filtered Users List
   const visibleProfiles = useMemo(() => {
@@ -590,8 +591,16 @@ export default function ReportsPage() {
                 Phân bổ chỉ tiêu
               </Link>
               <button
-                onClick={handleExportExcel}
+                onClick={loadData}
                 disabled={loading}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#33b7ab] px-4 py-3 text-sm font-bold text-white shadow-md transition-transform hover:-translate-y-0.5 hover:bg-[#269d94] disabled:opacity-50"
+              >
+                <RefreshCw className={clsx("h-4 w-4", loading && "animate-spin")} />
+                {loading ? "Đang lấy..." : "Lấy báo cáo"}
+              </button>
+              <button
+                onClick={handleExportExcel}
+                disabled={loading || !hasLoaded}
                 className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-md transition-transform hover:-translate-y-0.5 disabled:opacity-50"
               >
                 <Download className="h-4 w-4 text-[#006b68]" />
@@ -746,6 +755,33 @@ export default function ReportsPage() {
           )}
         </section>
 
+        {!hasLoaded && !loading ? (
+          <section className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
+            <div className="mx-auto flex max-w-xl flex-col items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-[#006b68]">
+                <RefreshCw className="h-5 w-5" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900">Chưa lấy dữ liệu báo cáo</h3>
+              <p className="text-sm text-slate-500">Chọn ngày và bộ lọc, sau đó bấm Lấy báo cáo để truy vấn dữ liệu KPI.</p>
+              <button
+                type="button"
+                onClick={loadData}
+                className="mt-2 inline-flex items-center gap-2 rounded-xl bg-[#006b68] px-4 py-3 text-sm font-bold text-white shadow-sm hover:bg-[#005451]"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Lấy báo cáo
+              </button>
+            </div>
+          </section>
+        ) : loading ? (
+          <section className="rounded-xl border border-slate-200 bg-white p-10 shadow-sm">
+            <div className="flex items-center justify-center py-24">
+              <Loader2 className="h-8 w-8 animate-spin text-[#006b68]" />
+              <span className="ml-3 text-sm font-semibold text-slate-500">Đang truy vấn dữ liệu báo cáo...</span>
+            </div>
+          </section>
+        ) : (
+          <>
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-1">
             <h3 className="text-lg font-bold text-slate-900">Tổng hợp dữ liệu vận hành</h3>
@@ -838,7 +874,7 @@ export default function ReportsPage() {
               </span>
               <button
                 onClick={handleExportExcel}
-                disabled={loading}
+                disabled={loading || !hasLoaded}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-200/50 px-3 py-1.5 text-xs font-bold text-[#006b68] shadow-sm transition-all disabled:opacity-50"
               >
                 <Download className="h-3.5 w-3.5" />
@@ -1038,6 +1074,8 @@ export default function ReportsPage() {
           <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center text-slate-500 font-medium">
             Không tìm thấy dữ liệu cán bộ hoặc phòng ban tương ứng. Vui lòng kiểm tra lại bộ lọc.
           </div>
+        )}
+          </>
         )}
 
       </div>

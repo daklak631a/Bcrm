@@ -7,7 +7,7 @@ import { createPlan, fetchPlanAssignments, fetchPlans, fetchProfiles, upsertPlan
 import { getSupabase } from "@/lib/supabase/client"
 import { useAuthStore } from "@/store/useAuthStore"
 import { Plan, PlanAssignment, Profile } from "@/types/models"
-import { BarChart3, Building2, CalendarDays, CheckCircle2, Download, FileSpreadsheet, Layers3, Loader2, Plus, Save, Search, Sparkles, Target, Upload, Users2 } from "lucide-react"
+import { BarChart3, Building2, CalendarDays, CheckCircle2, Download, FileSpreadsheet, Layers3, Loader2, Plus, RefreshCw, Save, Search, Sparkles, Target, Upload, Users2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import * as XLSX from 'xlsx'
@@ -212,6 +212,8 @@ export default function KpiTargetsPage() {
   const [personalLoading, setPersonalLoading] = useState(false)
   const [savingPersonal, setSavingPersonal] = useState(false)
   const [monthlyActual, setMonthlyActual] = useState<any>(null)
+  const [monthlyActualLoading, setMonthlyActualLoading] = useState(false)
+  const [monthlyActualLoaded, setMonthlyActualLoaded] = useState(false)
   const [activeDayTab, setActiveDayTab] = useState("")
 
   useEffect(() => {
@@ -328,6 +330,7 @@ export default function KpiTargetsPage() {
   const loadMonthlyActuals = useCallback(async (plan: Plan, targetUserId: string) => {
     if (!targetUserId) return
     try {
+      setMonthlyActualLoading(true)
       const supabase = getSupabase() as any
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData?.session?.access_token
@@ -338,11 +341,16 @@ export default function KpiTargetsPage() {
         const payload = await response.json().catch(() => null)
         throw new Error(payload?.error || 'Không tải được kết quả KPI tháng')
       }
-      const data = await response.json()
-      const userSummary = data?.find((row: any) => row.manager_id === targetUserId)
+      const payload = await response.json()
+      const rows = Array.isArray(payload) ? payload : payload?.data || []
+      const userSummary = rows.find((row: any) => row.manager_id === targetUserId)
       setMonthlyActual(userSummary || null)
+      setMonthlyActualLoaded(true)
     } catch (err) {
       console.error("Failed to load monthly actuals:", err)
+      toast.error("Không thể tải kết quả KPI tháng")
+    } finally {
+      setMonthlyActualLoading(false)
     }
   }, [])
 
@@ -459,10 +467,9 @@ export default function KpiTargetsPage() {
   }, [selectedMonday, activeDayTab])
 
   useEffect(() => {
-    if (mounted && selectedPlan && !canManage && personalPlanUserId) {
-      loadMonthlyActuals(selectedPlan, personalPlanUserId)
-    }
-  }, [mounted, selectedPlan, canManage, personalPlanUserId, loadMonthlyActuals])
+    setMonthlyActual(null)
+    setMonthlyActualLoaded(false)
+  }, [selectedPlan?.id, personalPlanUserId])
 
   useEffect(() => {
     const nextDrafts: Record<string, AssignmentDraft> = {}
@@ -783,9 +790,25 @@ export default function KpiTargetsPage() {
 
         {/* 1. Monthly Targets (Read-only) */}
         <section className="rounded-[28px] border border-slate-200/80 bg-white/95 p-6 shadow-sm backdrop-blur-xl">
-          <h3 className="text-lg font-bold text-slate-800 border-b pb-3 mb-5 flex items-center gap-2">
-            <Target className="w-5 h-5 text-[#006b68]" /> Chỉ tiêu tháng được giao (Kỳ: {selectedPlan?.title || "Chưa chọn"})
-          </h3>
+          <div className="mb-5 flex flex-col gap-3 border-b pb-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="flex items-center gap-2 text-lg font-bold text-slate-800">
+                <Target className="w-5 h-5 text-[#006b68]" /> Chỉ tiêu tháng được giao (Kỳ: {selectedPlan?.title || "Chưa chọn"})
+              </h3>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                {monthlyActualLoaded ? "Đã lấy kết quả thực tế tháng." : "Kết quả thực tế tháng chỉ tải khi bấm nút."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => selectedPlan && loadMonthlyActuals(selectedPlan, personalPlanUserId)}
+              disabled={!selectedPlan || !personalPlanUserId || monthlyActualLoading}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#006b68] bg-[#006b68] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#005451] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <RefreshCw className={clsx("h-4 w-4", monthlyActualLoading && "animate-spin")} />
+              {monthlyActualLoading ? "Đang lấy..." : "Lấy kết quả tháng"}
+            </button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {ALL_ASSIGNMENT_FIELDS.map((field) => {
               const myDraft = myAssignment ? buildDraft(myAssignment, ALL_ASSIGNMENT_FIELDS) : null
