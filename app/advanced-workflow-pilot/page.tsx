@@ -84,6 +84,7 @@ interface WorkCard {
   id: string
   workflowId: string
   phaseId: string
+  timelineItemId?: string
   title: string
   status: CardStatus
   assignee: string
@@ -414,6 +415,41 @@ function ganttLegendTone(status: PhaseStatus) {
   }
 }
 
+function timelineItemTone(item: PhaseTimelineItem, itemCards: WorkCard[]) {
+  const derivedStatus = deriveTimelineStatus(item, itemCards)
+  if (derivedStatus !== "Hoàn thành") {
+    const endDate = parseLocalDate(item.endDate)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    if (endDate && endDate < today) return ganttBarTone("risk")
+  }
+
+  switch (derivedStatus) {
+    case "Hoàn thành":
+      return ganttBarTone("done")
+    case "Đang làm":
+      return ganttBarTone("active")
+    default:
+      return ganttBarTone("planned")
+  }
+}
+
+function deriveTimelineStatus(item: PhaseTimelineItem, itemCards: WorkCard[]): PhaseTimelineItem["status"] {
+  if (itemCards.length === 0) return item.status
+  if (itemCards.every((card) => card.status === "done")) return "Hoàn thành"
+  if (itemCards.some((card) => card.status === "doing" || card.status === "review" || card.status === "done")) return "Đang làm"
+  return "Chờ làm"
+}
+
+function linkedTimelineCards(cards: WorkCard[], phaseId: string, item: PhaseTimelineItem) {
+  const normalizedTitle = item.title.trim().toLowerCase()
+  return cards.filter((card) => {
+    if (card.phaseId !== phaseId) return false
+    if (card.timelineItemId) return card.timelineItemId === item.id
+    return card.title.trim().toLowerCase() === normalizedTitle
+  })
+}
+
 function nextCardStatus(status: CardStatus, direction: 1 | -1) {
   const order: CardStatus[] = ["todo", "doing", "review", "done"]
   const index = order.indexOf(status)
@@ -611,7 +647,7 @@ export default function AdvancedWorkflowPilotPage() {
     const generatedTimelines: Record<string, PhaseTimelineItem[]> = selectedTemplate
       ? Object.fromEntries(selectedTemplate.phases.map((phase, phaseIndex) => [
           `created-phase-${phaseIndex + 1}`,
-          phase.timeline.map((title, timelineIndex) => ({
+          (phase.timeline.length ? phase.timeline : [phase.title]).map((title, timelineIndex) => ({
             id: `created-phase-${phaseIndex + 1}-tl-${timelineIndex + 1}`,
             title,
             owner: phase.owner,
@@ -629,28 +665,33 @@ export default function AdvancedWorkflowPilotPage() {
           ],
         }
     const generatedCards: WorkCard[] = selectedTemplate
-      ? selectedTemplate.phases.map((phase, index) => ({
-          id: `created-card-${index + 1}`,
-          workflowId,
-          phaseId: `created-phase-${index + 1}`,
-          title: phase.timeline[0] || phase.title,
-          status: index === 0 ? "todo" : "todo",
-          assignee: phase.owner,
-          supervisors: [phase.receiver],
-          approvers: [phase.handoffTo],
-          participants: firstMembers.split(",").map((item) => item.trim()).filter(Boolean),
-          due: "Chưa đặt hạn",
-          priority: index === 0 ? "Cao" : "Trung bình",
-          checklist: phase.checklists.map((text) => ({ text, doneByExecutor: false, approvedBySupervisor: false })),
-          formChecks: createDefaultFormChecks({ forms: phase.forms, attachments: phase.attachments, stickNotes: phase.stickNotes }),
-          comments: [{ author: "Hệ thống", text: `Tạo từ template: ${selectedTemplate.name}. ${note}` }],
-          createdBy: startLevel,
-        }))
+      ? selectedTemplate.phases.flatMap((phase, phaseIndex) => {
+          const timelineTitles = phase.timeline.length ? phase.timeline : [phase.title]
+          return timelineTitles.map((title, timelineIndex) => ({
+            id: `created-card-${phaseIndex + 1}-${timelineIndex + 1}`,
+            workflowId,
+            phaseId: `created-phase-${phaseIndex + 1}`,
+            timelineItemId: `created-phase-${phaseIndex + 1}-tl-${timelineIndex + 1}`,
+            title,
+            status: "todo" as const,
+            assignee: phase.owner,
+            supervisors: [phase.receiver],
+            approvers: [phase.handoffTo],
+            participants: firstMembers.split(",").map((item) => item.trim()).filter(Boolean),
+            due: "Chưa đặt hạn",
+            priority: phaseIndex === 0 && timelineIndex === 0 ? "Cao" as const : "Trung bình" as const,
+            checklist: phase.checklists.map((text) => ({ text, doneByExecutor: false, approvedBySupervisor: false })),
+            formChecks: createDefaultFormChecks({ forms: phase.forms, attachments: phase.attachments, stickNotes: phase.stickNotes }),
+            comments: [{ author: "Hệ thống", text: `Tạo từ template: ${selectedTemplate.name}. ${note}` }],
+            createdBy: startLevel,
+          }))
+        })
       : [
           {
             id: "created-card-1",
             workflowId,
             phaseId: firstPhaseId,
+            timelineItemId: "created-tl-1",
             title: "Xác nhận phạm vi và thành viên giai đoạn đầu",
             status: "todo",
             assignee: firstMembers,
@@ -1126,6 +1167,7 @@ export default function AdvancedWorkflowPilotPage() {
       id: `card-${Date.now()}`,
       workflowId: selectedWorkflow.id,
       phaseId: selectedPhase.id,
+      timelineItemId: selectedTimelineItemId || phaseTimelines[selectedPhase.id]?.[0]?.id,
       title: newCardTitle.trim(),
       status: "todo",
       assignee: selectedPhase.owner,
@@ -1144,6 +1186,18 @@ export default function AdvancedWorkflowPilotPage() {
       createdBy: selectedWorkflow.initiator
     }
     setCards((current) => [card, ...current])
+    setPhasesByWorkflow((current) => {
+      const workflowPhases = current[selectedWorkflow.id] || []
+      const nextPhaseCards = [card, ...cards.filter((item) => item.workflowId === selectedWorkflow.id && item.phaseId === selectedPhase.id)]
+      const nextProgress = Math.round((nextPhaseCards.filter((item) => item.status === "done").length / Math.max(nextPhaseCards.length, 1)) * 100)
+      const nextStatus: PhaseStatus = nextPhaseCards.some((item) => item.status === "doing" || item.status === "review" || item.status === "done") ? "active" : "planned"
+      return {
+        ...current,
+        [selectedWorkflow.id]: workflowPhases.map((phase) => (
+          phase.id === selectedPhase.id ? { ...phase, progress: nextProgress, status: nextStatus } : phase
+        )),
+      }
+    })
     setSelectedCardId(card.id)
     setNewCardTitle("")
     notifyRecipients({ userIds: [card.assigneeUserId || "", ...(card.supervisorUserIds || []), ...(card.approverUserIds || [])], names: [card.assignee, ...card.supervisors, ...card.approvers] }, {
@@ -1170,7 +1224,50 @@ export default function AdvancedWorkflowPilotPage() {
       }
     }
 
-    setCards((current) => current.map((card) => (card.id === cardId ? newCard : card)))
+    if (!newCard.timelineItemId) {
+      const matchingTimelineItem = (phaseTimelines[newCard.phaseId] || []).find((item) => item.title.trim().toLowerCase() === newCard.title.trim().toLowerCase())
+      newCard.timelineItemId = matchingTimelineItem?.id || (selectedCardId === cardId ? selectedTimelineItemId : undefined)
+    }
+
+    const nextCards = cards.map((card) => (card.id === cardId ? newCard : card))
+    setCards(nextCards)
+
+    if (newCard.timelineItemId) {
+      setPhaseTimelines((current) => {
+        const items = current[newCard.phaseId] || []
+        const item = items.find((timelineItem) => timelineItem.id === newCard.timelineItemId)
+        if (!item) return current
+        const itemCards = linkedTimelineCards(nextCards, newCard.phaseId, item)
+        const nextStatus = deriveTimelineStatus(item, itemCards)
+        if (item.status === nextStatus) return current
+        return {
+          ...current,
+          [newCard.phaseId]: items.map((timelineItem) => (
+            timelineItem.id === newCard.timelineItemId ? { ...timelineItem, status: nextStatus } : timelineItem
+          )),
+        }
+      })
+    }
+
+    setPhasesByWorkflow((current) => {
+      const workflowPhases = current[newCard.workflowId] || []
+      const phaseCards = nextCards.filter((card) => card.workflowId === newCard.workflowId && card.phaseId === newCard.phaseId)
+      const nextProgress = phaseCards.length
+        ? Math.round((phaseCards.filter((card) => card.status === "done").length / phaseCards.length) * 100)
+        : 0
+      const nextStatus: PhaseStatus = phaseCards.length > 0 && phaseCards.every((card) => card.status === "done")
+        ? "done"
+        : phaseCards.some((card) => card.status === "doing" || card.status === "review" || card.status === "done")
+          ? "active"
+          : "planned"
+
+      return {
+        ...current,
+        [newCard.workflowId]: workflowPhases.map((phase) => (
+          phase.id === newCard.phaseId ? { ...phase, progress: nextProgress, status: nextStatus } : phase
+        )),
+      }
+    })
 
     const link_url = buildWorkflowLink({ workflowId: selectedWorkflow.id, phaseId: selectedPhase?.id, cardId })
     if (patch.assignee && patch.assignee !== currentCard.assignee) {
@@ -1305,14 +1402,19 @@ export default function AdvancedWorkflowPilotPage() {
               cards={cards.filter((card) => card.workflowId === selectedWorkflow.id)}
               phaseTimelines={phaseTimelines}
               onSelectPhase={(phaseId) => {
+                const firstTimelineItemId = phaseTimelines[phaseId]?.[0]?.id || ""
+                const firstTimelineItem = phaseTimelines[phaseId]?.[0]
+                const firstTimelineCards = firstTimelineItem ? linkedTimelineCards(cards, phaseId, firstTimelineItem).filter((card) => card.workflowId === selectedWorkflow.id) : []
                 setSelectedPhaseId(phaseId)
-                setSelectedTimelineItemId(phaseTimelines[phaseId]?.[0]?.id || "")
-                setSelectedCardId(cards.find((card) => card.workflowId === selectedWorkflow.id && card.phaseId === phaseId)?.id || "")
+                setSelectedTimelineItemId(firstTimelineItemId)
+                setSelectedCardId(firstTimelineCards[0]?.id || cards.find((card) => card.workflowId === selectedWorkflow.id && card.phaseId === phaseId)?.id || "")
               }}
               onSelectTimelineItem={(phaseId, timelineItemId) => {
+                const timelineItem = phaseTimelines[phaseId]?.find((item) => item.id === timelineItemId)
+                const timelineCards = timelineItem ? linkedTimelineCards(cards, phaseId, timelineItem).filter((card) => card.workflowId === selectedWorkflow.id) : []
                 setSelectedPhaseId(phaseId)
                 setSelectedTimelineItemId(timelineItemId)
-                setSelectedCardId(cards.find((card) => card.workflowId === selectedWorkflow.id && card.phaseId === phaseId)?.id || "")
+                setSelectedCardId(timelineCards[0]?.id || cards.find((card) => card.workflowId === selectedWorkflow.id && card.phaseId === phaseId)?.id || "")
               }}
               onEditPhase={(phaseId) => {
                 setSelectedPhaseId(phaseId)
@@ -1769,6 +1871,8 @@ function GanttBoardV2({
                     </div>
                     {todayOffset !== null && <div className="pointer-events-none absolute bottom-0 top-0 z-[1] w-px bg-rose-400" style={{ left: `${todayOffset}%` }} />}
                     {visibleItems.map((item, index) => {
+                      const itemCards = linkedTimelineCards(cards, phase.id, item)
+                      const displayStatus = deriveTimelineStatus(item, itemCards)
                       const segmentDays = Math.max(4, Math.floor((Math.max(1, phase.span) * 7) / Math.max(visibleItems.length, 1)))
                       const fallbackStart = addDays(timelineStart, Math.max(0, phase.start - 1) * 7 + index * segmentDays)
                       const fallbackEnd = addDays(fallbackStart, segmentDays - 1)
@@ -1793,7 +1897,7 @@ function GanttBoardV2({
                           }}
                           className={clsx(
                             "group absolute z-[2] h-8 rounded-md px-2 text-left text-[11px] font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:brightness-105",
-                            selected ? "bg-slate-950 ring-2 ring-slate-300" : ganttBarTone(phase.status)
+                            selected ? "bg-slate-950 ring-2 ring-slate-300" : timelineItemTone(item, itemCards)
                           )}
                           style={{ left: `${left}%`, top: 12 + index * 40, width: `${width}%` }}
                         >
@@ -1805,7 +1909,8 @@ function GanttBoardV2({
                             <span className="block font-semibold text-slate-950">{item.title}</span>
                             <span className="mt-1 block">Phụ trách: {item.owner}</span>
                             <span className="block">Thời gian: {timelineDateMeta(item)}</span>
-                            <span className="block">Trạng thái: {item.status}</span>
+                            <span className="block">Trạng thái: {displayStatus}</span>
+                            <span className="block">Kanban: {itemCards.filter((card) => card.status === "done").length}/{itemCards.length} công việc hoàn thành</span>
                             <span className="block">Tham gia: {item.participants.length ? item.participants.join(", ") : "Chưa chọn"}</span>
                             <span className="block">Hỗ trợ: {item.supporters.length ? item.supporters.join(", ") : "Chưa chọn"}</span>
                           </span>
@@ -2017,6 +2122,9 @@ function GanttBoard({
                   const fallbackChildItem = timelineIndex !== previousTimelineIndex ? timelineItems[timelineIndex] : undefined
                   const activeChildItem = datedChildItem || (hasDatedTimeline ? undefined : fallbackChildItem)
                   const childItem = datedChildItem && datedChildItem.id === previousDatedChildItem?.id ? undefined : activeChildItem
+                  const activeItemCards = activeChildItem ? linkedTimelineCards(cards, phase.id, activeChildItem) : []
+                  const childItemCards = childItem ? linkedTimelineCards(cards, phase.id, childItem) : []
+                  const childStatus = childItem ? deriveTimelineStatus(childItem, childItemCards) : undefined
                   return (
                     <button
                       key={week}
@@ -2036,7 +2144,7 @@ function GanttBoard({
                         <span
                           className={clsx(
                             "absolute left-0 right-0 top-1 h-6 rounded-sm transition-all group-hover:-translate-y-0.5 group-hover:brightness-105",
-                            ganttBarTone(phase.status)
+                            activeChildItem ? timelineItemTone(activeChildItem, activeItemCards) : ganttBarTone(phase.status)
                           )}
                         />
                       )}
@@ -2052,7 +2160,8 @@ function GanttBoard({
                             <span className="block font-semibold text-slate-950">{childItem.title}</span>
                             <span className="mt-1 block">Phụ trách: {childItem.owner}</span>
                             <span className="block">Thời gian: {timelineDateMeta(childItem)}</span>
-                            <span className="block">Trạng thái: {childItem.status}</span>
+                            <span className="block">Trạng thái: {childStatus}</span>
+                            <span className="block">Kanban: {childItemCards.filter((card) => card.status === "done").length}/{childItemCards.length} công việc hoàn thành</span>
                             <span className="block">Tham gia: {childItem.participants.length ? childItem.participants.join(", ") : "Chưa chọn"}</span>
                             <span className="block">Hỗ trợ: {childItem.supporters.length ? childItem.supporters.join(", ") : "Chưa chọn"}</span>
                           </span>
