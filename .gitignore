@@ -18,6 +18,10 @@ playwright-report/
 test-results/
 blob-report/
 
+# Desktop import tool
+desktop/customer-import/node_modules/
+desktop/customer-import/dist/
+
 # Python cache
 __pycache__/
 *.pyc

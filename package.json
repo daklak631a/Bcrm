@@ -12,6 +12,7 @@
     "test:coverage": "npm run check:mojibake && vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "build:import-desktop": "npm install --prefix desktop/customer-import && npm run dist --prefix desktop/customer-import",
     "check:mojibake": "node scripts/check-mojibake.mjs"
   },
   "dependencies": {

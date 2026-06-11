@@ -1,0 +1,5 @@
+{
+  "crmUrl": "https://your-bcrm-domain.com",
+  "supabaseUrl": "https://your-project.supabase.co",
+  "supabaseAnonKey": "your-anon-key"
+}

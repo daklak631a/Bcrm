@@ -1,0 +1,49 @@
+{
+  "name": "bcrm-customer-import",
+  "version": "1.0.0",
+  "description": "Công cụ nhập khách hàng hàng loạt cho BCRM (Windows)",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win portable",
+    "dist:installer": "electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.bcrm.customer-import",
+    "productName": "BCRM Nhập KH",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "config.example.json"
+    ],
+    "extraResources": [
+      {
+        "from": "config.example.json",
+        "to": "config.example.json"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "BCRM-Nhap-Khach-Hang-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "BCRM-Nhap-Khach-Hang-${version}.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^34.5.8",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.3"
+  }
+}

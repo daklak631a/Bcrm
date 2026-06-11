@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BCRM Nhập Khách Hàng</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo">B</div>
+        <div>
+          <h1>BCRM Nhập Khách Hàng</h1>
+          <p>Upload file Excel (.xlsx) lên hệ thống — dành cho Admin</p>
+        </div>
+      </div>
+      <div id="authBadge" class="badge badge-muted">Chưa đăng nhập</div>
+    </header>
+
+    <section class="card">
+      <h2>1. Cấu hình kết nối</h2>
+      <div class="grid">
+        <label>
+          URL hệ thống CRM
+          <input id="crmUrl" type="url" placeholder="https://bcrm.example.com" />
+        </label>
+        <label>
+          Supabase URL
+          <input id="supabaseUrl" type="url" placeholder="https://xxx.supabase.co" />
+        </label>
+        <label class="full">
+          Supabase Anon Key
+          <input id="supabaseAnonKey" type="password" placeholder="eyJ..." />
+        </label>
+      </div>
+      <button id="saveConfigBtn" class="btn btn-secondary">Lưu cấu hình</button>
+    </section>
+
+    <section class="card">
+      <h2>2. Đăng nhập</h2>
+      <p class="hint">Dùng tài khoản Google đã được Admin cấp quyền. Lần đầu cần thêm <code>http://127.0.0.1:38472/auth/callback</code> vào Supabase → Authentication → Redirect URLs.</p>
+      <div class="row">
+        <button id="loginBtn" class="btn btn-primary">Đăng nhập bằng Google</button>
+        <button id="logoutBtn" class="btn btn-secondary" hidden>Đăng xuất</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>3. Chọn file &amp; nhập</h2>
+      <div id="fileBox" class="file-box">
+        <p id="fileLabel">Chưa chọn file</p>
+        <button id="pickFileBtn" class="btn btn-secondary" disabled>Chọn file .xlsx</button>
+      </div>
+      <button id="uploadBtn" class="btn btn-primary btn-wide" disabled>Upload lên server</button>
+      <div id="progress" class="progress" hidden>
+        <div class="bar"></div>
+      </div>
+    </section>
+
+    <section id="resultCard" class="card result" hidden>
+      <h2>Kết quả</h2>
+      <pre id="resultText"></pre>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

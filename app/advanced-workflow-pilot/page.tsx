@@ -1803,7 +1803,7 @@ function GanttBoardV2({
             <div className="p-3 text-right text-xs font-semibold text-slate-500">Kanban</div>
           </div>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 pb-32">
             {phases.map((phase) => {
               const phaseCards = cards.filter((card) => card.phaseId === phase.id)
               const done = phaseCards.filter((card) => card.status === "done").length
@@ -1903,15 +1903,15 @@ function GanttBoardV2({
                           }}
                           className={clsx(
                             "group absolute h-8 rounded-md px-2 text-left text-[11px] font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:brightness-105",
-                            selected ? "z-50 bg-slate-950 ring-2 ring-slate-300" : ["z-[2] hover:z-40 focus:z-40", timelineItemTone(item, itemCards)]
+                            selected ? "z-50 bg-slate-950 ring-2 ring-slate-300 hover:z-[60]" : ["z-[2] hover:z-[60] focus:z-[60]", timelineItemTone(item, itemCards)]
                           )}
                           style={{ left: `${left}%`, top: 12 + index * 40, width: `${width}%` }}
                         >
                           <span className="block truncate">{item.title}</span>
                           <span className={clsx(
-                            "pointer-events-none absolute z-30 w-72 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs font-normal text-slate-600 shadow-lg",
+                            "pointer-events-none absolute z-[60] w-72 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs font-normal text-slate-600 shadow-lg",
                             selected ? "block" : "hidden group-hover:block group-focus:block",
-                            index === 0 ? "left-0 top-9" : "bottom-9 left-1/2 -translate-x-1/2"
+                            index === 0 ? "left-0 top-9" : "top-9 left-1/2 -translate-x-1/2"
                           )}>
                             <span className="block font-semibold text-slate-950">{item.title}</span>
                             <span className="mt-1 block">Phụ trách: {item.owner}</span>
@@ -2063,7 +2063,7 @@ function GanttBoard({
           ))}
           <div className="text-right">Kanban</div>
         </div>
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-100 pb-32">
           {phases.map((phase) => {
             const phaseCards = cards.filter((card) => card.phaseId === phase.id)
             const done = phaseCards.filter((card) => card.status === "done").length
@@ -2164,7 +2164,7 @@ function GanttBoard({
                             {childItem.title}
                           </span>
                           <span className={clsx(
-                            "pointer-events-none absolute left-0 top-8 z-30 w-64 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs text-slate-600 shadow-lg",
+                            "pointer-events-none absolute left-0 top-14 z-[60] w-64 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs text-slate-600 shadow-lg",
                             childItem.id === selectedTimelineItemId ? "block" : "hidden group-hover:block group-focus:block"
                           )}>
                             <span className="block font-semibold text-slate-950">{childItem.title}</span>
