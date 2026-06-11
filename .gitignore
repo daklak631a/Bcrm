@@ -13,6 +13,11 @@ read_excel_temp.js
 scratch/
 tsconfig.tsbuildinfo
 
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+
 # Python cache
 __pycache__/
 *.pyc

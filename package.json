@@ -7,8 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint app components hooks lib providers store types --ext .js,.jsx,.ts,.tsx",
+    "gen:types": "node scripts/gen-supabase-types.mjs",
     "test": "npm run check:mojibake && vitest run",
     "test:coverage": "npm run check:mojibake && vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "check:mojibake": "node scripts/check-mojibake.mjs"
   },
   "dependencies": {
@@ -58,6 +61,7 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
