@@ -126,11 +126,18 @@ export async function POST(request: Request) {
 
   try {
     const authHeader = request.headers.get('Authorization')
-    const supabase = createRequestClient(authHeader)
+    const accessToken = authHeader?.replace(/^Bearer\s+/i, '').trim()
+    if (!accessToken) {
+      return NextResponse.json({ error: 'Thiếu token xác thực.' }, { status: 401 })
+    }
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const supabase = createRequestClient(authHeader)
+    const { data: { user }, error: authError } = await supabase.auth.getUser(accessToken)
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Phiên đăng nhập hết hạn hoặc không hợp lệ. Đăng nhập lại bằng Google.' },
+        { status: 401 }
+      )
     }
 
     const { data: profile, error: profileError } = await supabase

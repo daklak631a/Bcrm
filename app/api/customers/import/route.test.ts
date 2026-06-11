@@ -14,11 +14,12 @@ vi.mock('@/lib/middleware/rate-limit', () => ({
   getClientIp: vi.fn(() => '127.0.0.1'),
 }))
 
-function makeFormRequest(file?: File) {
+function makeFormRequest(file?: File, token = 'test-access-token') {
   const formData = new FormData()
   if (file) formData.append('file', file)
   return new Request('http://localhost/api/customers/import', {
     method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
   })
 }
@@ -39,13 +40,18 @@ describe('POST /api/customers/import', () => {
   })
 
   it('requires authentication', async () => {
-    mockGetUser.mockResolvedValue({ data: { user: null } })
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: { message: 'invalid' } })
     const response = await POST(makeFormRequest(new File(['x'], 'test.xlsx')))
     expect(response.status).toBe(401)
   })
 
+  it('rejects missing bearer token', async () => {
+    const response = await POST(makeFormRequest(new File(['x'], 'test.xlsx'), ''))
+    expect(response.status).toBe(401)
+  })
+
   it('rejects non-admin users', async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
     mockFrom.mockImplementation((table: string) => {
       if (table === 'profiles') {
         return {
@@ -64,7 +70,7 @@ describe('POST /api/customers/import', () => {
   })
 
   it('requires file in form data', async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
     mockFrom.mockImplementation((table: string) => {
       if (table === 'profiles') {
         return {

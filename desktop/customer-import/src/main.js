@@ -68,6 +68,39 @@ function saveSession(session) {
   fs.writeFileSync(getSessionPath(), JSON.stringify(session, null, 2), 'utf8')
 }
 
+async function ensureValidSession(config) {
+  const session = loadSession()
+  if (!session?.access_token) {
+    throw new Error('Chưa đăng nhập. Bấm "Đăng nhập bằng Google" trước.')
+  }
+
+  const now = Math.floor(Date.now() / 1000)
+  const expiresAt = Number(session.expires_at || 0)
+  if (expiresAt > now + 60) return session
+
+  if (!session.refresh_token) {
+    throw new Error('Phiên đăng nhập hết hạn. Đăng xuất và đăng nhập lại bằng Google.')
+  }
+
+  const client = getAuthClient(config)
+  const { data, error } = await client.auth.refreshSession({ refresh_token: session.refresh_token })
+  if (error || !data.session) {
+    throw new Error('Phiên đăng nhập hết hạn. Đăng xuất và đăng nhập lại bằng Google.')
+  }
+
+  const updated = {
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+    expires_at: data.session.expires_at,
+    user: {
+      id: data.session.user.id,
+      email: data.session.user.email,
+    },
+  }
+  saveSession(updated)
+  return updated
+}
+
 function getAuthClient(config) {
   const cfg = config || savedConfig
   if (!cfg?.supabaseUrl || !cfg?.supabaseAnonKey) {
@@ -245,7 +278,15 @@ async function postImportFile(config, accessToken, buffer, fileName) {
   })
 
   const payload = await parseImportResponse(response)
-  if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`)
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error(payload.error || 'Phiên đăng nhập hết hạn. Đăng xuất và đăng nhập lại bằng Google.')
+    }
+    if (response.status === 403) {
+      throw new Error(payload.error || 'Tài khoản không có quyền nhập dữ liệu hàng loạt.')
+    }
+    throw new Error(payload.error || `HTTP ${response.status}`)
+  }
   return payload
 }
 
@@ -331,8 +372,7 @@ ipcMain.handle('auth:session', () => loadSession())
 
 ipcMain.handle('import:upload', async (_event, { filePath, fileName }) => {
   const config = savedConfig || loadConfig()
-  const session = loadSession()
-  if (!session?.access_token) throw new Error('Chưa đăng nhập.')
+  const session = await ensureValidSession(config)
   if (!filePath) throw new Error('Chưa chọn file.')
 
   const buffer = fs.readFileSync(filePath)

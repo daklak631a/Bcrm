@@ -1,6 +1,6 @@
 {
   "name": "bcrm-customer-import",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Công cụ nhập khách hàng hàng loạt cho BCRM (Windows)",
   "main": "src/main.js",
   "private": true,
