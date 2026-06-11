@@ -1,10 +1,10 @@
-const OAUTH_REDIRECT = 'http://127.0.0.1:38472/auth/callback'
-
 const els = {
   crmUrl: document.getElementById('crmUrl'),
   supabaseUrl: document.getElementById('supabaseUrl'),
   supabaseAnonKey: document.getElementById('supabaseAnonKey'),
+  configPath: document.getElementById('configPath'),
   saveConfigBtn: document.getElementById('saveConfigBtn'),
+  testConfigBtn: document.getElementById('testConfigBtn'),
   loginBtn: document.getElementById('loginBtn'),
   logoutBtn: document.getElementById('logoutBtn'),
   pickFileBtn: document.getElementById('pickFileBtn'),
@@ -12,40 +12,40 @@ const els = {
   fileLabel: document.getElementById('fileLabel'),
   authBadge: document.getElementById('authBadge'),
   progress: document.getElementById('progress'),
+  statusBanner: document.getElementById('statusBanner'),
   resultCard: document.getElementById('resultCard'),
   resultText: document.getElementById('resultText'),
 }
 
-let supabase = null
 let session = null
 let selectedFile = null
-let oauthUnsubscribe = null
-
-function normalizeCrmUrl(url) {
-  return String(url || '').trim().replace(/\/+$/, '')
-}
 
 function getConfigFromForm() {
   return {
-    crmUrl: normalizeCrmUrl(els.crmUrl.value),
-    supabaseUrl: els.supabaseUrl.value.trim(),
-    supabaseAnonKey: els.supabaseAnonKey.value.trim(),
+    crmUrl: els.crmUrl.value,
+    supabaseUrl: els.supabaseUrl.value,
+    supabaseAnonKey: els.supabaseAnonKey.value,
   }
 }
 
-function initSupabase(config) {
-  if (!config.supabaseUrl || !config.supabaseAnonKey) {
-    throw new Error('Thiếu Supabase URL hoặc Anon Key.')
-  }
-  supabase = window.createSupabaseClient(config.supabaseUrl, config.supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: false,
-      flowType: 'pkce',
-      storage: window.localStorage,
-    },
-  })
+function setBusy(button, busy, busyLabel, idleLabel) {
+  if (!button) return
+  button.disabled = busy
+  button.textContent = busy ? busyLabel : idleLabel
+}
+
+function showStatus(text, type = 'info') {
+  if (!els.statusBanner) return
+  els.statusBanner.hidden = false
+  els.statusBanner.className = `status-banner status-${type}`
+  els.statusBanner.textContent = text
+}
+
+function showResult(text, isError = false) {
+  els.resultCard.hidden = false
+  els.resultText.textContent = text
+  els.resultText.style.color = isError ? '#dc2626' : '#0f172a'
+  showStatus(isError ? `Lỗi: ${text.split('\n')[0]}` : text.split('\n')[0], isError ? 'error' : 'ok')
 }
 
 function setAuthUi(loggedIn, email = '') {
@@ -66,74 +66,69 @@ function setAuthUi(loggedIn, email = '') {
   }
 }
 
-function showResult(text, isError = false) {
-  els.resultCard.hidden = false
-  els.resultText.textContent = text
-  els.resultText.style.color = isError ? '#dc2626' : '#0f172a'
-}
-
-async function restoreSession() {
-  if (!supabase) return
-  const { data } = await supabase.auth.getSession()
-  session = data.session
-  setAuthUi(!!session, session?.user?.email || '')
+function applySavedToForm(saved) {
+  els.crmUrl.value = saved.crmUrl || ''
+  els.supabaseUrl.value = saved.supabaseUrl || ''
+  els.supabaseAnonKey.value = saved.supabaseAnonKey || ''
+  if (els.configPath) els.configPath.textContent = saved.configPath || ''
 }
 
 async function saveConfig() {
-  const config = getConfigFromForm()
-  if (!config.crmUrl) throw new Error('Nhập URL hệ thống CRM.')
-  await window.bcrmImport.saveConfig(config)
-  initSupabase(config)
-  await restoreSession()
-  showResult('Đã lưu cấu hình.')
+  setBusy(els.saveConfigBtn, true, 'Đang lưu...', 'Lưu cấu hình')
+  try {
+    const saved = await window.bcrmImport.saveConfig(getConfigFromForm())
+    applySavedToForm(saved)
+    let message = `Đã lưu cấu hình.\nFile: ${saved.configPath}`
+    if (saved.fixes?.length) message += `\n\n${saved.fixes.join('\n')}`
+    showResult(message, false)
+  } catch (err) {
+    const message = err?.message || 'Không lưu được cấu hình.'
+    showResult(message, true)
+  } finally {
+    setBusy(els.saveConfigBtn, false, 'Đang lưu...', 'Lưu cấu hình')
+  }
+}
+
+async function testConfig() {
+  setBusy(els.testConfigBtn, true, 'Đang kiểm tra...', 'Kiểm tra kết nối')
+  try {
+    const result = await window.bcrmImport.testConfig(getConfigFromForm())
+    applySavedToForm({
+      ...getConfigFromForm(),
+      crmUrl: result.supabaseUrl ? undefined : undefined,
+      supabaseUrl: result.supabaseUrl,
+      configPath: els.configPath?.textContent,
+    })
+    els.supabaseUrl.value = result.supabaseUrl
+    let message = 'Kết nối Supabase OK.'
+    if (result.fixes?.length) message += `\n${result.fixes.join('\n')}`
+    showResult(message, false)
+  } catch (err) {
+    showResult(err?.message || 'Kiểm tra thất bại.', true)
+  } finally {
+    setBusy(els.testConfigBtn, false, 'Đang kiểm tra...', 'Kiểm tra kết nối')
+  }
 }
 
 async function loginWithGoogle() {
-  const config = getConfigFromForm()
-  if (!config.crmUrl) throw new Error('Nhập URL hệ thống CRM trước khi đăng nhập.')
-  initSupabase(config)
-  await window.bcrmImport.saveConfig(config)
-
-  if (oauthUnsubscribe) oauthUnsubscribe()
-
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: OAUTH_REDIRECT,
-      skipBrowserRedirect: true,
-      queryParams: { prompt: 'select_account' },
-    },
-  })
-
-  if (error) throw error
-  if (!data?.url) throw new Error('Không lấy được URL đăng nhập Google.')
-
-  oauthUnsubscribe = window.bcrmImport.onOAuthResult(async ({ code, error: oauthError }) => {
-    if (oauthError) {
-      showResult(`Đăng nhập thất bại: ${oauthError}`, true)
-      return
-    }
-    if (!code) {
-      showResult('Không nhận được mã xác thực từ Google.', true)
-      return
-    }
-
-    const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-    if (exchangeError) {
-      showResult(`Không tạo được phiên: ${exchangeError.message}`, true)
-      return
-    }
-
-    session = sessionData.session
-    setAuthUi(true, session?.user?.email || '')
-    showResult(`Đăng nhập thành công: ${session?.user?.email || ''}`)
-  })
-
-  await window.bcrmImport.startOAuth(data.url)
+  setBusy(els.loginBtn, true, 'Đang mở Google...', 'Đăng nhập bằng Google')
+  try {
+    const result = await window.bcrmImport.login(getConfigFromForm())
+    session = await window.bcrmImport.getSession()
+    applySavedToForm(await window.bcrmImport.loadConfig())
+    setAuthUi(true, result.email || session?.user?.email || '')
+    let message = `Đăng nhập thành công: ${result.email || ''}`
+    if (result.fixes?.length) message += `\n${result.fixes.join('\n')}`
+    showResult(message, false)
+  } catch (err) {
+    showResult(err?.message || 'Đăng nhập thất bại.', true)
+  } finally {
+    setBusy(els.loginBtn, false, 'Đang mở Google...', 'Đăng nhập bằng Google')
+  }
 }
 
 async function logout() {
-  if (supabase) await supabase.auth.signOut()
+  await window.bcrmImport.logout()
   session = null
   selectedFile = null
   els.fileLabel.textContent = 'Chưa chọn file'
@@ -144,19 +139,19 @@ async function logout() {
 async function pickFile() {
   const file = await window.bcrmImport.openFile()
   if (!file) return
-
   if (file.size > 5 * 1024 * 1024) {
     showResult('File quá lớn (tối đa 5MB).', true)
     return
   }
-
   selectedFile = file
   els.fileLabel.textContent = `${file.fileName} (${(file.size / 1024).toFixed(1)} KB)`
-  els.uploadBtn.disabled = !session
+  els.uploadBtn.disabled = !session?.access_token
 }
 
 async function uploadFile() {
-  const config = getConfigFromForm()
+  const config = await window.bcrmImport.loadConfig()
+  session = await window.bcrmImport.getSession()
+
   if (!session?.access_token) throw new Error('Chưa đăng nhập.')
   if (!selectedFile) throw new Error('Chưa chọn file.')
   if (!config.crmUrl) throw new Error('Thiếu URL CRM.')
@@ -180,37 +175,31 @@ async function uploadFile() {
     })
 
     const payload = await response.json()
-    if (!response.ok) {
-      throw new Error(payload.error || `HTTP ${response.status}`)
-    }
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`)
 
     let text = `Tổng: ${payload.total}\nThành công: ${payload.success}\nLỗi: ${payload.failed}`
-    if (payload.errors?.length) {
-      text += `\n\nChi tiết lỗi (tối đa 50 dòng):\n${payload.errors.join('\n')}`
-    }
-    if (payload.has_more_errors) {
-      text += '\n\n... còn thêm lỗi khác'
-    }
+    if (payload.errors?.length) text += `\n\nChi tiết lỗi:\n${payload.errors.join('\n')}`
     showResult(text, payload.failed > 0)
   } finally {
     els.progress.hidden = true
-    els.uploadBtn.disabled = !session || !selectedFile
+    els.uploadBtn.disabled = !session?.access_token || !selectedFile
   }
 }
 
 async function boot() {
-  const config = await window.bcrmImport.loadConfig()
-  els.crmUrl.value = config.crmUrl || ''
-  els.supabaseUrl.value = config.supabaseUrl || ''
-  els.supabaseAnonKey.value = config.supabaseAnonKey || ''
-
-  if (config.supabaseUrl && config.supabaseAnonKey) {
-    initSupabase(config)
-    await restoreSession()
+  if (!window.bcrmImport) {
+    showResult('Lỗi khởi tạo ứng dụng (preload). Khởi động lại app.', true)
+    return
   }
 
-  els.saveConfigBtn.addEventListener('click', () => saveConfig().catch((e) => showResult(e.message, true)))
-  els.loginBtn.addEventListener('click', () => loginWithGoogle().catch((e) => showResult(e.message, true)))
+  const config = await window.bcrmImport.loadConfig()
+  applySavedToForm(config)
+  session = config.session || await window.bcrmImport.getSession()
+  setAuthUi(!!session?.access_token, session?.user?.email || '')
+
+  els.saveConfigBtn.addEventListener('click', () => saveConfig())
+  els.testConfigBtn?.addEventListener('click', () => testConfig())
+  els.loginBtn.addEventListener('click', () => loginWithGoogle())
   els.logoutBtn.addEventListener('click', () => logout().catch((e) => showResult(e.message, true)))
   els.pickFileBtn.addEventListener('click', () => pickFile().catch((e) => showResult(e.message, true)))
   els.uploadBtn.addEventListener('click', () => uploadFile().catch((e) => showResult(e.message, true)))

@@ -1,6 +1,6 @@
 {
   "name": "bcrm-customer-import",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Công cụ nhập khách hàng hàng loạt cho BCRM (Windows)",
   "main": "src/main.js",
   "private": true,
@@ -20,6 +20,9 @@
       "src/**/*",
       "config.example.json"
     ],
+    "asarUnpack": [
+      "node_modules/@supabase/**"
+    ],
     "extraResources": [
       {
         "from": "config.example.json",
@@ -27,6 +30,7 @@
       }
     ],
     "win": {
+      "signAndEditExecutable": false,
       "target": [
         {
           "target": "portable",

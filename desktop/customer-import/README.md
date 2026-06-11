@@ -10,13 +10,19 @@ Công cụ Windows `.exe` để Admin upload file Excel khách hàng lên API `P
 4. **Chọn file .xlsx** → **Upload lên server**
 5. Xem kết quả (tổng / thành công / lỗi)
 
-## Cấu hình Supabase (một lần)
+## Cấu hình Supabase (bắt buộc — nếu thiếu Google login sẽ không hoạt động)
 
-Thêm redirect URL trong Supabase Dashboard → **Authentication** → **URL Configuration**:
+Supabase Dashboard → **Authentication** → **URL Configuration** → **Redirect URLs** → thêm:
 
 ```
 http://127.0.0.1:38472/auth/callback
 ```
+
+**Lưu ý URL:**
+- CRM URL: `https://631crm.vercel.app` (không dấu `/` cuối)
+- Supabase URL: `https://bfcmsbvrnwobykchscgc.supabase.co` (đủ `.supabase.co`)
+
+Cấu hình được lưu tại `%APPDATA%/bcrm-customer-import/config.json` (Windows).
 
 ## Build file .exe (developer)
 

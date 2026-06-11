@@ -19,6 +19,8 @@
       <div id="authBadge" class="badge badge-muted">Chưa đăng nhập</div>
     </header>
 
+    <div id="statusBanner" class="status-banner status-info" hidden>Nhập cấu hình và bấm Lưu trước khi đăng nhập.</div>
+
     <section class="card">
       <h2>1. Cấu hình kết nối</h2>
       <div class="grid">
@@ -32,15 +34,19 @@
         </label>
         <label class="full">
           Supabase Anon Key
-          <input id="supabaseAnonKey" type="password" placeholder="eyJ..." />
+          <input id="supabaseAnonKey" type="password" placeholder="eyJ..." autocomplete="off" />
         </label>
       </div>
-      <button id="saveConfigBtn" class="btn btn-secondary">Lưu cấu hình</button>
+      <p class="hint config-path">Lưu tại: <span id="configPath"></span></p>
+      <div class="row">
+        <button id="saveConfigBtn" class="btn btn-secondary">Lưu cấu hình</button>
+        <button id="testConfigBtn" class="btn btn-secondary">Kiểm tra kết nối</button>
+      </div>
     </section>
 
     <section class="card">
       <h2>2. Đăng nhập</h2>
-      <p class="hint">Dùng tài khoản Google đã được Admin cấp quyền. Lần đầu cần thêm <code>http://127.0.0.1:38472/auth/callback</code> vào Supabase → Authentication → Redirect URLs.</p>
+      <p class="hint">Dùng tài khoản Google đã được Admin cấp quyền.<br><strong>Bắt buộc:</strong> Supabase → Authentication → URL Configuration → Redirect URLs thêm:<br><code>http://127.0.0.1:38472/auth/callback</code></p>
       <div class="row">
         <button id="loginBtn" class="btn btn-primary">Đăng nhập bằng Google</button>
         <button id="logoutBtn" class="btn btn-secondary" hidden>Đăng xuất</button>

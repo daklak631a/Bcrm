@@ -124,6 +124,38 @@ input:focus {
   margin: 0 0 12px;
 }
 
+.config-path {
+  margin-top: 10px;
+  word-break: break-all;
+}
+
+.status-banner {
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin-bottom: 14px;
+  white-space: pre-wrap;
+}
+
+.status-info {
+  background: #e0f2fe;
+  border: 1px solid #7dd3fc;
+  color: #0c4a6e;
+}
+
+.status-ok {
+  background: #d1fae5;
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+}
+
+.status-error {
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+}
+
 code {
   background: #f8fafc;
   padding: 2px 6px;

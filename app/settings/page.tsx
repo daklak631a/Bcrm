@@ -4,7 +4,16 @@ import { useCallback, useEffect, useState } from "react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { fetchSystemSettings, updateSystemSetting } from "@/lib/supabase/api"
 import { toast } from "sonner"
-import { Loader2, Save, Image as ImageIcon, Globe, LayoutGrid, CheckCircle } from "lucide-react"
+import { Loader2, Save, Image as ImageIcon, Globe, LayoutGrid, Trash2, AlertTriangle } from "lucide-react"
+import { getSupabase } from "@/lib/supabase/client"
+import {
+  CLEAR_ACTIVITY_CONFIRM_PHRASE,
+  CLEAR_ACTIVITY_KEPT,
+  CLEAR_ACTIVITY_TARGETS,
+  PILOT_LOCAL_STORAGE_KEYS,
+  clearPilotLocalStorage,
+} from "@/lib/admin/clear-activity-data"
+import { resetPilotSnapshot } from "@/lib/advanced-workflow-pilot/pilot-store"
 
 export default function SettingsPage() {
   const { user } = useAuthStore()
@@ -15,6 +24,8 @@ export default function SettingsPage() {
   const [appName, setAppName] = useState("Nexus Banking CRM")
   const [logoUrl, setLogoUrl] = useState("")
   const [faviconUrl, setFaviconUrl] = useState("")
+  const [clearPhrase, setClearPhrase] = useState("")
+  const [clearing, setClearing] = useState(false)
 
   const isAdmin = user?.role === 'ADMIN_LEVEL_0' || user?.role === 'ADMIN_LEVEL_1'
 
@@ -41,6 +52,47 @@ export default function SettingsPage() {
     setMounted(true)
     loadSettings()
   }, [loadSettings])
+
+  const handleClearActivity = async () => {
+    if (clearPhrase.trim().toUpperCase() !== CLEAR_ACTIVITY_CONFIRM_PHRASE) {
+      toast.error(`Nhập chính xác: ${CLEAR_ACTIVITY_CONFIRM_PHRASE}`)
+      return
+    }
+
+    const confirmed = window.confirm(
+      "Xóa toàn bộ lịch sử tương tác, bán hàng, kế hoạch, kanban và dự án pilot trên trình duyệt?\n\nKHÁCH HÀNG sẽ được giữ nguyên."
+    )
+    if (!confirmed) return
+
+    try {
+      setClearing(true)
+      const supabase = getSupabase()
+      const { data: { session } } = await supabase.auth.getSession()
+
+      const response = await fetch('/api/admin/clear-activity-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ confirmPhrase: CLEAR_ACTIVITY_CONFIRM_PHRASE }),
+      })
+
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error || 'Không thể xóa lịch sử.')
+      }
+
+      clearPilotLocalStorage()
+      await Promise.all(PILOT_LOCAL_STORAGE_KEYS.map((key) => resetPilotSnapshot(key)))
+      setClearPhrase("")
+      toast.success('Đã xóa lịch sử hoạt động. Danh sách khách hàng được giữ nguyên.')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Lỗi xóa lịch sử')
+    } finally {
+      setClearing(false)
+    }
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -182,6 +234,57 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        <section className="bg-rose-50 border border-rose-200 rounded-3xl p-6 shadow-sm">
+          <h3 className="text-base font-bold text-rose-900 border-b border-rose-200 pb-3 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5" /> Xóa lịch sử hoạt động (giữ khách hàng)
+          </h3>
+          <p className="text-sm text-rose-800 mt-4 leading-relaxed">
+            Dùng khi muốn làm sạch dữ liệu vận hành: tương tác, bán hàng, kanban hỗ trợ, kế hoạch tuần/ngày, thông báo, audit.
+            Module <strong>Dự án / Gantt / Kanban pilot</strong> trên trình duyệt cũng được reset (localStorage).
+          </p>
+
+          <div className="mt-4 grid md:grid-cols-2 gap-4 text-sm">
+            <div className="bg-white/70 rounded-xl p-4 border border-rose-100">
+              <p className="font-semibold text-rose-900 mb-2">Sẽ xóa</p>
+              <ul className="list-disc pl-5 space-y-1 text-rose-800">
+                {CLEAR_ACTIVITY_TARGETS.map((item) => (
+                  <li key={item.key}>{item.label}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="bg-white/70 rounded-xl p-4 border border-emerald-100">
+              <p className="font-semibold text-emerald-900 mb-2">Giữ nguyên</p>
+              <ul className="list-disc pl-5 space-y-1 text-emerald-800">
+                {CLEAR_ACTIVITY_KEPT.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-col sm:flex-row gap-3 sm:items-end">
+            <label className="flex-1 text-sm font-semibold text-rose-900">
+              Nhập <code className="bg-white px-2 py-0.5 rounded">{CLEAR_ACTIVITY_CONFIRM_PHRASE}</code> để xác nhận
+              <input
+                type="text"
+                value={clearPhrase}
+                onChange={(e) => setClearPhrase(e.target.value)}
+                placeholder={CLEAR_ACTIVITY_CONFIRM_PHRASE}
+                className="mt-2 w-full px-4 py-2.5 bg-white border border-rose-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-rose-300"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleClearActivity}
+              disabled={clearing}
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-40"
+            >
+              {clearing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Xóa lịch sử
+            </button>
+          </div>
+        </section>
       </div>
     </DashboardLayout>
   )
