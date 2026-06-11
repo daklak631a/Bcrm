@@ -16,6 +16,7 @@ export default defineConfig({
       reporter: ["text", "json", "html"],
       reportsDirectory: "coverage",
       include: [
+        "lib/auth/routes.ts",
         "lib/access-control.ts",
         "lib/api-errors.ts",
         "lib/api-validation.ts",

@@ -37,7 +37,8 @@ export default function AuthCallbackPage() {
         if (res.ok && data.profile) {
           logger.debug('[Callback] User verified')
           setUser(data.profile as Profile)
-          router.push('/dashboard')
+          const redirect = new URLSearchParams(window.location.search).get('redirect')
+          router.push(redirect && redirect.startsWith('/') ? redirect : '/dashboard')
           return
         }
 

@@ -1902,14 +1902,15 @@ function GanttBoardV2({
                             onSelectTimelineItem(phase.id, item.id)
                           }}
                           className={clsx(
-                            "group absolute z-[2] h-8 rounded-md px-2 text-left text-[11px] font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:brightness-105",
-                            selected ? "bg-slate-950 ring-2 ring-slate-300" : timelineItemTone(item, itemCards)
+                            "group absolute h-8 rounded-md px-2 text-left text-[11px] font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:brightness-105",
+                            selected ? "z-50 bg-slate-950 ring-2 ring-slate-300" : ["z-[2] hover:z-40 focus:z-40", timelineItemTone(item, itemCards)]
                           )}
                           style={{ left: `${left}%`, top: 12 + index * 40, width: `${width}%` }}
                         >
                           <span className="block truncate">{item.title}</span>
                           <span className={clsx(
-                            "pointer-events-none absolute z-30 hidden w-72 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs font-normal text-slate-600 shadow-lg group-hover:block",
+                            "pointer-events-none absolute z-30 w-72 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs font-normal text-slate-600 shadow-lg",
+                            selected ? "block" : "hidden group-hover:block group-focus:block",
                             index === 0 ? "left-0 top-9" : "bottom-9 left-1/2 -translate-x-1/2"
                           )}>
                             <span className="block font-semibold text-slate-950">{item.title}</span>
@@ -2162,7 +2163,10 @@ function GanttBoard({
                           )}>
                             {childItem.title}
                           </span>
-                          <span className="pointer-events-none absolute left-0 top-8 z-30 hidden w-64 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs text-slate-600 shadow-lg group-hover:block">
+                          <span className={clsx(
+                            "pointer-events-none absolute left-0 top-8 z-30 w-64 rounded-lg border border-slate-200 bg-white p-2 text-left text-xs text-slate-600 shadow-lg",
+                            childItem.id === selectedTimelineItemId ? "block" : "hidden group-hover:block group-focus:block"
+                          )}>
                             <span className="block font-semibold text-slate-950">{childItem.title}</span>
                             <span className="mt-1 block">Phụ trách: {childItem.owner}</span>
                             <span className="block">Thời gian: {timelineDateMeta(childItem)}</span>

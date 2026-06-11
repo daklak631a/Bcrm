@@ -38,9 +38,9 @@ describe('mapLoanToSalesRecord', () => {
     id: 'loan-1',
     customer_id: 'cust-1',
     loan_type: 'Vay ngắn hạn',
-    loan_amount: '500000000',
+    loan_amount: 500000000,
     start_date: '2026-06-01',
-    status: 'ACTIVE',
+    status: 'ACTIVE' as const,
     account_number: 'LN001',
     customers: { id: 'cust-1', full_name: 'Nguyen A', assigned_manager_id: 'mgr-1' },
   }
@@ -108,7 +108,7 @@ describe('mapProductSaleToSalesRecord', () => {
       is_batch_entry: true,
       is_allocated: false,
       result_value: 5,
-      cross_sell_products: { id: 'p1', name: 'CIF mới' },
+      cross_sell_products: { id: 'p1', name: 'CIF mới', type: 'TÀI KHOẢN' },
     })
     expect(record.customer_name).toBe('Nhập lô cuối ngày')
     expect(record.note).toBe('Chưa phân bổ theo KH')

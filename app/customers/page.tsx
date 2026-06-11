@@ -7,7 +7,8 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import * as XLSX from "xlsx"
 import clsx from "clsx"
-import { createCustomer, updateCustomer, getCustomerFullName, createLoan, createDeposit, fetchCustomersPage, fetchProfilesPage } from "@/lib/supabase/api"
+import { createCustomer, updateCustomer, getCustomerFullName, fetchCustomersPage, fetchProfilesPage } from "@/lib/supabase/api"
+import { getSupabase } from "@/lib/supabase/client"
 import { Modal, FormField, FormInput, FormSelect, FormTextarea, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/errors"
@@ -23,26 +24,7 @@ const PRODUCT_MAP = [
   { key: 'merchant_qr', label: 'Merchant QR', short: 'QR' },
 ]
 
-function slugify(text: string) {
-  return text.toString().toLowerCase()
-    .normalize('NFD') // separate accents from letters
-    .replace(/[\u0300-\u036f]/g, '') // remove all separated accents
-    .replace(/đ/g, 'd').replace(/Đ/g, 'D')
-    .replace(/[^a-z0-9]/g, '') // remove non-alphanumeric
-}
-
 const ITEMS_PER_PAGE = 25
-
-function parseBooleanCell(value: any) {
-  const normalized = String(value ?? '').trim().toLowerCase()
-  return ['1', 'true', 'yes', 'y', 'x', 'có', 'co'].includes(normalized)
-}
-
-function parseNumberCell(value: any) {
-  if (value === null || value === undefined || value === '') return 0
-  const normalized = String(value).replace(/[^\d.-]/g, '')
-  return Number(normalized) || 0
-}
 
 export default function CustomersPage() {
   const { user } = useAuthStore()
@@ -303,145 +285,42 @@ export default function CustomersPage() {
     const file = e.target.files?.[0]
     if (!file) return
     if (importing) return
-    const reader = new FileReader()
-    reader.onload = async (evt) => {
-      try {
-        setImporting(true)
-        const bstr = evt.target?.result
-        if (!bstr) return
-        const workbook = XLSX.read(bstr, { type: 'binary' })
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-        const data = XLSX.utils.sheet_to_json(worksheet) as any[]
-        
-        if (data.length === 0) {
-          toast.error('File không có dữ liệu để nhập')
-          return
-        }
 
-        let successCount = 0
-        const failedRows: string[] = []
-        const seenCifs = new Set<string>()
-        for (let index = 0; index < data.length; index++) {
-          const item = data[index]
-          const rowNumber = index + 2
-          try {
-            const type = String(item["Loại KH (INDIVIDUAL/ENTERPRISE)"] || "INDIVIDUAL").trim().toUpperCase()
-            const name = String(item["Tên KH / Doanh Nghiệp"] || item.full_name || item.business_name || "").trim()
-            const rep = String(item["Người Đại Diện (nếu là Doanh nghiệp)"] || item.representative_name || "").trim()
-            const tax = String(item["Mã Số Thuế"] || item.tax_code || "").trim()
-            const cif = String(item["Mã CIF (Tùy chọn)"] || item["Mã CIF"] || item.cif_code || "").trim()
-            
-            if (!['INDIVIDUAL', 'ENTERPRISE'].includes(type)) {
-              throw new Error('Loại KH không hợp lệ')
-            }
-            if (!name) {
-              throw new Error('Thiếu tên khách hàng/doanh nghiệp')
-            }
-            if (cif) {
-              const normalizedCif = cif.toLowerCase()
-              if (seenCifs.has(normalizedCif)) {
-                throw new Error('Trùng mã CIF trong file')
-              }
-              seenCifs.add(normalizedCif)
-            }
+    setImporting(true)
+    try {
+      const supabase = getSupabase()
+      const { data: { session } } = await supabase.auth.getSession()
 
-            let managerId = user!.id
-            const managerName = String(item["Chuyên viên"] || item["Chuyen vien"] || item.assigned_manager_id || "").trim()
-            if (managerName && isAdmin) {
-               const sluggedName = slugify(managerName)
-               const matchedProfile = visibleProfiles.find(p => slugify(p.full_name) === sluggedName || p.id === managerName)
-               if (matchedProfile) {
-                  managerId = matchedProfile.id
-               }
-            }
+      const formData = new FormData()
+      formData.append('file', file)
 
-            let existingCustomer = null
-            if (cif) {
-              existingCustomer = customers.find(c => c.cif_code?.toLowerCase() === cif.toLowerCase())
-            }
-            if (!existingCustomer && tax && type === 'ENTERPRISE') {
-              existingCustomer = customers.find(c => c.tax_code === tax)
-            }
-            if (!existingCustomer && item["Số điện thoại"] || item.phone) {
-              const p = String(item["Số điện thoại"] || item.phone || "").trim()
-              if (p) existingCustomer = customers.find(c => c.phone === p)
-            }
+      const response = await fetch('/api/customers/import', {
+        method: 'POST',
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        body: formData,
+      })
 
-            const customerPayload = {
-              customer_type: type,
-              full_name: name,
-              business_name: type === 'ENTERPRISE' ? name : '',
-              representative_name: type === 'ENTERPRISE' ? rep : '',
-              tax_code: type === 'ENTERPRISE' ? tax : '',
-              cif_code: cif || undefined,
-              phone: item["Số điện thoại"] || item.phone || undefined,
-              email: item["Email"] || item.email || undefined,
-              address: item["Địa chỉ"] || item.address || undefined,
-              assigned_manager_id: managerId,
-              cif_moi: parseBooleanCell(item["CIF Mới"]),
-              smart_banking: parseBooleanCell(item["Ngân Hàng Số"]),
-              bao_hiem_nhan_tho: parseBooleanCell(item["Bảo Hiểm Nhân Thọ"]),
-              bao_hiem_khoan_vay: parseBooleanCell(item["Bảo Hiểm Khoản Vay"]),
-              the_tin_dung: parseBooleanCell(item["Thẻ Tín Dụng"]),
-              chuyen_tien_ngoai: parseBooleanCell(item["Chuyển Tiền Ngoài"]),
-              merchant_qr: parseBooleanCell(item["Merchant QR"]),
-            }
-
-            let customerData: any = null
-            if (existingCustomer) {
-              customerData = await updateCustomer(existingCustomer.id, customerPayload)
-            } else {
-              customerData = await createCustomer(customerPayload)
-            }
-
-            const accNo = item["Số tài khoản"] ? String(item["Số tài khoản"]).trim() : ""
-            const duNo = parseNumberCell(item["Dư nợ"])
-            const huyDong = parseNumberCell(item["Huy động"])
-            
-            if (accNo && duNo > 0) {
-               await createLoan({
-                  customer_id: customerData.id,
-                  account_number: accNo,
-                  loan_amount: duNo,
-                  balance: duNo,
-                  start_date: new Date().toISOString(),
-                  due_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
-                  status: 'ACTIVE'
-               })
-            }
-            
-            if (accNo && huyDong > 0) {
-               await createDeposit({
-                  customer_id: customerData.id,
-                  account_number: accNo,
-                  amount: huyDong,
-                  start_date: new Date().toISOString(),
-                  maturity_date: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
-                  status: 'ACTIVE'
-               })
-            }
-
-            successCount++
-          } catch (err: unknown) {
-            const message = getErrorMessage(err, 'Không rõ lỗi')
-            failedRows.push(`Dòng ${rowNumber}: ${message}`)
-            logger.warn("[Customers] Failed to import row", { rowNumber, item, error: message })
-          }
-        }
-        if (failedRows.length > 0) {
-          toast.error(`Đã nhập ${successCount}/${data.length}. ${failedRows.length} dòng lỗi.`)
-        } else {
-          toast.success(`Đã nhập ${successCount}/${data.length} khách hàng!`)
-        }
-        loadData()
-      } catch (err: any) {
-        toast.error('Lỗi đọc file: ' + (err.message || 'Không rõ lỗi'))
-      } finally {
-        setImporting(false)
-        if (fileInputRef.current) fileInputRef.current.value = ''
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error || 'Không thể nhập dữ liệu.')
       }
+
+      if (payload.failed > 0) {
+        toast.error(`Đã nhập ${payload.success}/${payload.total}. ${payload.failed} dòng lỗi.`)
+        if (payload.errors?.length) {
+          logger.warn('[Customers] Import row errors', { errors: payload.errors })
+        }
+      } else {
+        toast.success(`Đã nhập ${payload.success}/${payload.total} khách hàng!`)
+      }
+
+      await loadData()
+    } catch (err: unknown) {
+      toast.error('Lỗi nhập file: ' + getErrorMessage(err))
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
-    reader.readAsBinaryString(file)
   }
 
   return (

@@ -1,4 +1,5 @@
 import { getSupabase } from './client'
+import type { Tables } from '@/types/database'
 import {
   CurrentUserScope,
   DEFAULT_CACHE_TTL_MS,
@@ -30,7 +31,7 @@ export type AllowedEmailPageInput = {
   user?: CurrentUserScope | null
 }
 
-export async function fetchProfiles(): Promise<any> {
+export async function fetchProfiles(): Promise<Tables<'profiles'>[]> {
   return cached('profiles:active', async () => {
     const supabase = getSupabase()
     const { data, error } = await supabase
@@ -139,7 +140,7 @@ export async function fetchAllowedEmailsPage(input: AllowedEmailPageInput = {}):
   }, DEFAULT_CACHE_TTL_MS)
 }
 
-export async function fetchProfileById(id: string): Promise<any> {
+export async function fetchProfileById(id: string): Promise<Tables<'profiles'>> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('profiles')

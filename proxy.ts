@@ -4,8 +4,9 @@ import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { isPublicApi, isPublicPage, isStaticAsset } from '@/lib/auth/routes';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 
-// Khởi tạo hệ thống giới hạn (Sẽ trả về null nếu chưa cấu hình Upstash)
 const ratelimit = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
   ? new Ratelimit({
       redis: Redis.fromEnv(),
@@ -14,44 +15,91 @@ const ratelimit = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDI
     })
   : null;
 
-export async function proxy(request: NextRequest) {
-  // Chỉ áp dụng Rate Limit cho các đường dẫn API
-  if (request.nextUrl.pathname.startsWith('/api')) {
-    const ip = request.headers.get('x-forwarded-for') ?? '127.0.0.1';
-    
-    try {
-      if (ratelimit) {
-        const { success, limit, reset, remaining } = await ratelimit.limit(ip);
-        
-        // Nếu vượt quá giới hạn
-        if (!success) {
-          return NextResponse.json(
-            { error: 'Quá nhiều yêu cầu. Vui lòng thử lại sau.' },
-            { 
-              status: 429,
-              headers: {
-                'X-RateLimit-Limit': limit.toString(),
-                'X-RateLimit-Remaining': remaining.toString(),
-                'X-RateLimit-Reset': reset.toString(),
-              }
+async function applyApiRateLimit(request: NextRequest) {
+  if (!request.nextUrl.pathname.startsWith('/api')) return null
+
+  const ip = request.headers.get('x-forwarded-for') ?? '127.0.0.1';
+
+  try {
+    if (ratelimit) {
+      const { success, limit, reset, remaining } = await ratelimit.limit(ip);
+
+      if (!success) {
+        return NextResponse.json(
+          { error: 'Quá nhiều yêu cầu. Vui lòng thử lại sau.' },
+          {
+            status: 429,
+            headers: {
+              'X-RateLimit-Limit': limit.toString(),
+              'X-RateLimit-Remaining': remaining.toString(),
+              'X-RateLimit-Reset': reset.toString(),
             }
-          );
-        }
+          }
+        );
       }
-    } catch (error) {
-      // Fail-open: Nếu Redis bị sập tạm thời thì vẫn cho phép API chạy (không block user vô cớ)
-      logger.error(
-        '[RateLimit] Redis rate limiting failed open',
-        { error: getErrorMessage(error) },
-        { production: true }
-      );
     }
+  } catch (error) {
+    logger.error(
+      '[RateLimit] Redis rate limiting failed open',
+      { error: getErrorMessage(error) },
+      { production: true }
+    );
   }
 
-  return NextResponse.next();
+  return null
 }
 
-// Cấu hình để middleware chỉ chạy trên các đường dẫn phù hợp
+export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  if (isStaticAsset(pathname)) {
+    return NextResponse.next()
+  }
+
+  const rateLimitResponse = await applyApiRateLimit(request)
+  if (rateLimitResponse) return rateLimitResponse
+
+  const isApi = pathname.startsWith('/api')
+  const isPublic = isApi ? isPublicApi(pathname) : isPublicPage(pathname)
+
+  if (isPublic) {
+    return NextResponse.next()
+  }
+
+  let response = NextResponse.next({ request })
+
+  try {
+    const supabase = createSupabaseServerClient(request, response)
+    const { data: { user }, error } = await supabase.auth.getUser()
+
+    if (error) {
+      logger.warn('[Proxy] Session lookup failed', { error: getErrorMessage(error) })
+    }
+
+    if (!user) {
+      if (isApi) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      const loginUrl = request.nextUrl.clone()
+      loginUrl.pathname = '/login'
+      loginUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
+
+    return response
+  } catch (error) {
+    logger.error(
+      '[Proxy] Auth guard failed open for protected route',
+      { pathname, error: getErrorMessage(error) },
+      { production: true }
+    )
+    return response
+  }
+}
+
 export const config = {
-  matcher: '/api/:path*',
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };

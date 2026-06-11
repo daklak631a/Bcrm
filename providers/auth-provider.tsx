@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger'
 import { toPublicErrorMessage } from '@/lib/errors'
 import { useAuthStore } from '@/store/useAuthStore'
 import { Profile } from '@/types/models'
+import { PUBLIC_PAGE_PREFIXES } from '@/lib/auth/routes'
 
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const { setUser, setLoading, user, isLoading } = useAuthStore()
@@ -106,13 +107,16 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (!isLoading) {
-      const publicPaths = ['/login', '/auth/callback']
-      const isPublic = publicPaths.some(p => pathname.startsWith(p))
+      const isPublic = PUBLIC_PAGE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
 
       if (!user && !isPublic) {
-        router.replace('/login')
+        const loginUrl = `/login?redirect=${encodeURIComponent(pathname)}`
+        router.replace(loginUrl)
       } else if (user && (pathname === '/login' || pathname.startsWith('/auth/callback'))) {
-        router.replace('/dashboard')
+        const redirect = typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search).get('redirect')
+          : null
+        router.replace(redirect && redirect.startsWith('/') ? redirect : '/dashboard')
       }
     }
   }, [user, isLoading, pathname, router])

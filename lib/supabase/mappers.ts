@@ -1,11 +1,35 @@
 import { getProductMetricDefinition, getProductMetricValue } from '@/lib/product-metrics'
-import { SalesRecord } from '@/types/models'
+import { Customer, Loan, ProductSale, SalesRecord } from '@/types/models'
+
+type CustomerJoin = Partial<Pick<Customer, 'id' | 'full_name' | 'customer_type' | 'business_name' | 'assigned_manager_id'>>
+
+type LoanWithCustomer = Loan & { customers?: CustomerJoin | null }
+type DepositWithCustomer = {
+  id: string
+  customer_id?: string
+  deposit_type?: string | null
+  amount?: number
+  start_date?: string
+  maturity_date?: string
+  status?: string
+  account_number?: string | null
+  created_at?: string
+  updated_at?: string
+  customers?: CustomerJoin | null
+}
+type ProductSaleWithJoins = ProductSale & {
+  customers?: CustomerJoin | null
+  cross_sell_products?: ProductSale['cross_sell_products']
+  profiles?: { id: string; full_name?: string } | null
+  is_batch_entry?: boolean | null
+  is_allocated?: boolean | null
+}
 
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value)
 }
 
-export function getCustomerFullName(customer: any): string {
+export function getCustomerFullName(customer: Partial<CustomerJoin> | null | undefined): string {
   if (!customer) return '—'
   if (customer.customer_type === 'ENTERPRISE' && customer.business_name) {
     return customer.business_name
@@ -38,7 +62,7 @@ function getSalesSourceHref(_sourceType: SalesRecord['source_type'], customerId?
   return customerId ? `${basePath}?customerId=${customerId}` : basePath
 }
 
-export function mapLoanToSalesRecord(loan: any): SalesRecord {
+export function mapLoanToSalesRecord(loan: Partial<LoanWithCustomer> & { id: string }): SalesRecord {
   return {
     id: `loan:${loan.id}`,
     source_id: loan.id,
@@ -46,7 +70,7 @@ export function mapLoanToSalesRecord(loan: any): SalesRecord {
     customer_id: loan.customer_id ?? loan.customers?.id ?? null,
     customer_name: loan.customers ? getCustomerFullName(loan.customers) : '—',
     agent_id: loan.customers?.assigned_manager_id || null,
-    sale_date: loan.start_date,
+    sale_date: loan.start_date || '',
     status: loan.status || 'ACTIVE',
     title: loan.loan_type || 'Khoản vay',
     category: 'Khoản vay',
@@ -64,7 +88,7 @@ export function mapLoanToSalesRecord(loan: any): SalesRecord {
   }
 }
 
-export function mapDepositToSalesRecord(deposit: any): SalesRecord {
+export function mapDepositToSalesRecord(deposit: Partial<DepositWithCustomer> & { id: string }): SalesRecord {
   return {
     id: `deposit:${deposit.id}`,
     source_id: deposit.id,
@@ -72,7 +96,7 @@ export function mapDepositToSalesRecord(deposit: any): SalesRecord {
     customer_id: deposit.customer_id ?? deposit.customers?.id ?? null,
     customer_name: deposit.customers ? getCustomerFullName(deposit.customers) : '—',
     agent_id: deposit.customers?.assigned_manager_id || null,
-    sale_date: deposit.start_date,
+    sale_date: deposit.start_date || '',
     status: deposit.status || 'ACTIVE',
     title: deposit.deposit_type || 'Tiền gửi',
     category: 'Tiền gửi',
@@ -90,13 +114,14 @@ export function mapDepositToSalesRecord(deposit: any): SalesRecord {
   }
 }
 
-export function mapProductSaleToSalesRecord(sale: any): SalesRecord {
-  const metricDefinition = getProductMetricDefinition(sale.cross_sell_products || sale)
+export function mapProductSaleToSalesRecord(sale: Partial<ProductSaleWithJoins> & { id: string }): SalesRecord {
+  const productSource = (sale.cross_sell_products ?? sale) as Parameters<typeof getProductMetricDefinition>[0]
+  const metricDefinition = getProductMetricDefinition(productSource)
   const metricValue = getProductMetricValue({
     ...sale,
     metric_type: metricDefinition.metricType,
     unit_label: metricDefinition.unitLabel,
-  }, sale.cross_sell_products || sale)
+  }, productSource)
 
   const isUnallocatedBatch = sale.is_batch_entry === true && !sale.is_allocated
   const customerName = isUnallocatedBatch
@@ -110,7 +135,7 @@ export function mapProductSaleToSalesRecord(sale: any): SalesRecord {
     customer_id: sale.customer_id ?? sale.customers?.id ?? null,
     customer_name: customerName,
     agent_id: sale.agent_id || sale.profiles?.id || null,
-    sale_date: extractDateOnly(sale.sale_date) || sale.sale_date,
+    sale_date: extractDateOnly(sale.sale_date) || sale.sale_date || '',
     status: sale.status || 'PENDING',
     title: sale.cross_sell_products?.name || 'Sản phẩm khác',
     category: sale.cross_sell_products?.type || 'Sản phẩm',
