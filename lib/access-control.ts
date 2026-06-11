@@ -11,10 +11,13 @@ type UserLike = {
 
 export function getVisibleProfiles(profiles: ProfileLike[], user?: UserLike | null) {
   if (!user?.id) return []
-  if (user.role === "ADMIN_LEVEL_1") return profiles
+  if (user.role === "ADMIN_LEVEL_0" || user.role === "ADMIN_LEVEL_1") {
+    return profiles
+  }
   if (user.role === "ADMIN_LEVEL_2") {
     return profiles.filter((profile) => profile.department_id === user.department_id)
   }
+  // USER, ADMIN_LEVEL_3 và các role còn lại: chỉ thấy dữ liệu của chính mình
   return profiles.filter((profile) => profile.id === user.id)
 }
 

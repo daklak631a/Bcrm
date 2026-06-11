@@ -207,15 +207,17 @@ export async function GET(request: Request) {
       }
     }
 
+    const isFieldStaff = currentProfile.role === 'USER' || currentProfile.role === 'ADMIN_LEVEL_3'
+
     let visibleManagerIds: Set<string> | null = null
     let visibleProfilesQuery = supabase
       .from('profiles')
       .select('id, full_name, role, department_id')
-      .eq('role', 'USER')
+      .in('role', ['USER', 'ADMIN_LEVEL_3'])
       .eq('is_active', true)
       .order('full_name')
 
-    if (currentProfile.role === 'USER') {
+    if (isFieldStaff) {
       visibleManagerIds = new Set([currentProfile.id])
       visibleProfilesQuery = visibleProfilesQuery.eq('id', currentProfile.id)
     } else if (currentProfile.role === 'ADMIN_LEVEL_2') {
@@ -228,7 +230,7 @@ export async function GET(request: Request) {
       return internalServerError(visibleProfilesError, '[KPI API] Failed to load visible profiles')
     }
 
-    if (currentProfile.role !== 'USER') {
+    if (!isFieldStaff) {
       visibleManagerIds = new Set((visibleProfilesData || []).map((profile: any) => profile.id))
     }
 

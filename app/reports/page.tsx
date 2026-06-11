@@ -86,7 +86,7 @@ export default function ReportsPage() {
 
   const isAdminL1 = user?.role === 'ADMIN_LEVEL_1'
   const isAdminL2 = user?.role === 'ADMIN_LEVEL_2'
-  const isUser = user?.role === 'USER'
+  const isUser = user?.role === 'USER' || user?.role === 'ADMIN_LEVEL_3'
 
   // Helper date calculators
   const getMondayOfDate = useCallback((dateStr: string) => {
@@ -201,7 +201,7 @@ export default function ReportsPage() {
 
   // Filtered Users List
   const visibleProfiles = useMemo(() => {
-    const specialists = profiles.filter(p => p.role === 'USER')
+    const specialists = profiles.filter(p => p.role === 'USER' || p.role === 'ADMIN_LEVEL_3')
     if (isAdminL1) return specialists
     if (isAdminL2) return specialists.filter(p => p.department_id === user?.department_id)
     return specialists.filter(p => p.id === user?.id)
@@ -216,7 +216,7 @@ export default function ReportsPage() {
 
   // Scope user ids list based on filters
   const targetUserIds = useMemo(() => {
-    const specialists = profiles.filter(p => p.role === 'USER')
+    const specialists = profiles.filter(p => p.role === 'USER' || p.role === 'ADMIN_LEVEL_3')
     
     if (isUser) {
       return [user?.id || '']
@@ -703,7 +703,7 @@ export default function ReportsPage() {
                         aria-label="Chọn chuyên viên để lọc"
                       >
                         <option value="ALL">Tất cả cán bộ</option>
-                        {profiles.filter(p => p.role === 'USER' && (selectedDepartment === 'ALL' || p.department_id === selectedDepartment)).map(p => (
+                        {profiles.filter(p => (p.role === 'USER' || p.role === 'ADMIN_LEVEL_3') && (selectedDepartment === 'ALL' || p.department_id === selectedDepartment)).map(p => (
                           <option key={p.id} value={p.id}>{p.short_name || formatShortName(p.full_name || '')}</option>
                         ))}
                       </select>

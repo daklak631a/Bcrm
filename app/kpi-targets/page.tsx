@@ -225,7 +225,7 @@ export default function KpiTargetsPage() {
   const canManage = user?.role === "ADMIN_LEVEL_1" || user?.role === "ADMIN_LEVEL_2"
 
   const visibleUsers = useMemo(() => {
-    const specialists = profiles.filter((profile) => profile.role === "USER")
+    const specialists = profiles.filter((profile) => profile.role === "USER" || profile.role === "ADMIN_LEVEL_3")
     if (user?.role === "ADMIN_LEVEL_1") return specialists
     if (user?.role === "ADMIN_LEVEL_2") {
       return specialists.filter((profile) => profile.department_id === user.department_id)

@@ -38,6 +38,16 @@ describe("access control", () => {
     expect(getVisibleProfiles(profiles, { id: "advisor-b", role: "ADVISOR" })).toEqual([profiles[3]])
   })
 
+  it("limits admin level 3 to their own profile like field staff", () => {
+    expect(
+      getVisibleProfiles(profiles, {
+        id: "manager-a",
+        role: "ADMIN_LEVEL_3",
+        department_id: "branch-a",
+      })
+    ).toEqual([profiles[1]])
+  })
+
   it("creates a set containing only accessible profile ids", () => {
     const ids = getVisibleProfileIds(profiles, {
       id: "manager-a",

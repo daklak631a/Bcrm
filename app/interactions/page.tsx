@@ -48,7 +48,7 @@ function InteractionsPageContent() {
 
   const visibleProfiles = useMemo(() => {
     if (user?.role === "ADMIN_LEVEL_0" || user?.role === "ADMIN_LEVEL_1" || user?.role === "ADVISOR") return profiles
-    if (user?.role === "ADMIN_LEVEL_2" || user?.role === "ADMIN_LEVEL_3") return profiles.filter((profile: any) => profile.department_id === user.department_id)
+    if (user?.role === "ADMIN_LEVEL_2") return profiles.filter((profile: any) => profile.department_id === user.department_id)
     return profiles.filter((profile: any) => profile.id === user?.id)
   }, [profiles, user?.department_id, user?.id, user?.role])
 

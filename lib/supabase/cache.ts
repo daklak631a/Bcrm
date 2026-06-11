@@ -92,5 +92,5 @@ export function isGlobalRole(role?: string | null) {
 }
 
 export function isDepartmentRole(role?: string | null) {
-  return role === 'ADMIN_LEVEL_2' || role === 'ADMIN_LEVEL_3'
+  return role === 'ADMIN_LEVEL_2'
 }
