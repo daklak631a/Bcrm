@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/errors'
+import { checkRateLimit, getClientIp } from '@/lib/middleware/rate-limit'
+import { parseJsonBody, verifyAuthSchema } from '@/lib/api-validation'
 
 /**
  * POST /api/auth/verify
@@ -12,11 +14,24 @@ import { getErrorMessage } from '@/lib/errors'
  * Returns: { profile: Profile } or { error: string }
  */
 export async function POST(request: Request) {
+  const ip = getClientIp(request)
+  const rateLimit = checkRateLimit(ip, '/api/auth/verify', 'auth')
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Quá nhiều yêu cầu xác thực. Vui lòng thử lại sau.' },
+      { status: 429 }
+    )
+  }
+
   try {
-    const { userId, userEmail } = await request.json()
+    const parsed = await parseJsonBody(request, verifyAuthSchema)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 })
+    }
+    const { userId, userEmail } = parsed.data
     const authHeader = request.headers.get('Authorization')
 
-    if (!userId || !userEmail || !authHeader) {
+    if (!authHeader) {
       return NextResponse.json(
         { error: 'Thiếu thông tin xác thực.' },
         { status: 400 }

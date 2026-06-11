@@ -45,7 +45,7 @@ describe("access control", () => {
       department_id: "branch-a",
     })
 
-    expect([...ids]).toEqual(["manager-a", "advisor-a"])
+    expect(Array.from(ids)).toEqual(["manager-a", "advisor-a"])
   })
 
   it("checks ownership against the current access scope", () => {

@@ -2,8 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { internalServerError } from '@/lib/api-errors'
 import { checkRateLimit, getClientIp } from '@/lib/middleware/rate-limit'
-
-const VALID_SUPPORT_STATUSES = new Set(['PENDING', 'ACCEPTED', 'COMPLETED', 'REJECTED'])
+import { createSupportRequestSchema, parseJsonBody, updateSupportRequestSchema } from '@/lib/api-validation'
 
 function createRequestClient(authHeader: string | null) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
@@ -99,12 +98,11 @@ export async function POST(request: Request) {
   if (!rateLimit.allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 });
 
   try {
-    const body = await request.json()
-    const { item_id, item_type, support_admin_id, scheduled_date } = body
-
-    if (!item_id || !item_type || !support_admin_id || !scheduled_date) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    const parsed = await parseJsonBody(request, createSupportRequestSchema)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 })
     }
+    const { item_id, item_type, support_admin_id, scheduled_date } = parsed.data
 
     const authHeader = request.headers.get('Authorization')
     const supabase = createRequestClient(authHeader)
@@ -152,11 +150,11 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    const body = await request.json()
-    const { id, status } = body
-
-    if (!id || !status) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
-    if (!VALID_SUPPORT_STATUSES.has(status)) return NextResponse.json({ error: 'Trạng thái hỗ trợ không hợp lệ.' }, { status: 400 })
+    const parsed = await parseJsonBody(request, updateSupportRequestSchema)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 })
+    }
+    const { id, status } = parsed.data
 
     const authHeader = request.headers.get('Authorization')
     const supabase = createRequestClient(authHeader)

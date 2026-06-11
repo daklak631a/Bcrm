@@ -18,9 +18,11 @@ export default defineConfig({
       include: [
         "lib/access-control.ts",
         "lib/api-errors.ts",
+        "lib/api-validation.ts",
         "lib/errors.ts",
         "lib/logger.ts",
         "lib/middleware/rate-limit.ts",
+        "lib/supabase/mappers.ts",
         "lib/workflow-config.ts",
       ],
       thresholds: {

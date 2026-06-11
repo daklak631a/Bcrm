@@ -1637,7 +1637,7 @@ function WorkflowHeader({
       <div className="grid gap-3 xl:grid-cols-[1fr_180px] xl:items-center">
         <div>
           <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{workflow.code}</span>
-          <h1 className="mt-2 text-xl font-bold tracking-tight text-[#006b68]">Dự án: {workflow.customer} - {workflow.title}</h1>
+          <h2 className="mt-2 text-xl font-bold tracking-tight text-[#006b68]">Dự án: {workflow.customer} - {workflow.title}</h2>
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
           <p className="text-[10px] font-semibold text-slate-500">Tiến độ công việc</p>
@@ -1648,7 +1648,7 @@ function WorkflowHeader({
       <div className="grid gap-3 xl:grid-cols-[1fr_180px] xl:items-center">
         <div>
           <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{workflow.code}</span>
-          <h1 className="mt-2 text-xl font-bold tracking-tight text-[#006b68]">Dự án: {workflow.customer}</h1>
+          <h2 className="mt-2 text-xl font-bold tracking-tight text-[#006b68]">Dự án: {workflow.customer}</h2>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <SmallFact label="Đơn vị phụ trách" value={workflow.ownerUnit} />

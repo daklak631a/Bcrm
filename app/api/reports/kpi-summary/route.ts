@@ -6,6 +6,7 @@ import { internalServerError } from '@/lib/api-errors'
 import { getProductMetricValue } from '@/lib/product-metrics'
 import { getErrorMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
+import { kpiSummaryQuerySchema } from '@/lib/api-validation'
 
 const OTHER_PRODUCTS_ID = 'other_spdv'
 
@@ -63,7 +64,13 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const period = searchParams.get('period') || 'week' // day, week, month, quarter, year
+    const periodResult = kpiSummaryQuerySchema.safeParse({
+      period: searchParams.get('period') ?? undefined,
+    })
+    if (!periodResult.success) {
+      return NextResponse.json({ error: 'Tham số period không hợp lệ.' }, { status: 400 })
+    }
+    const period = periodResult.data.period
     
     // Lấy Authorization header
     const authHeader = request.headers.get('Authorization')

@@ -10,6 +10,8 @@ coverage/
 check_db.js
 excel_content.txt
 read_excel_temp.js
+scratch/
+tsconfig.tsbuildinfo
 
 # Python cache
 __pycache__/

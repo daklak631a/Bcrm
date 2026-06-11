@@ -1,8 +1,0 @@
-{
-  "short_name": "svg-workflow-canvas",
-  "name": "svg-workflow-canvas",
-  "start_url": "./index.html",
-  "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
-}
