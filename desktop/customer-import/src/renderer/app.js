@@ -92,16 +92,19 @@ async function saveConfig() {
 async function testConfig() {
   setBusy(els.testConfigBtn, true, 'Đang kiểm tra...', 'Kiểm tra kết nối')
   try {
-    const result = await window.bcrmImport.testConfig(getConfigFromForm())
-    applySavedToForm({
-      ...getConfigFromForm(),
-      crmUrl: result.supabaseUrl ? undefined : undefined,
-      supabaseUrl: result.supabaseUrl,
-      configPath: els.configPath?.textContent,
-    })
+    const form = getConfigFromForm()
+    const result = await window.bcrmImport.testConfig(form)
     els.supabaseUrl.value = result.supabaseUrl
     let message = 'Kết nối Supabase OK.'
     if (result.fixes?.length) message += `\n${result.fixes.join('\n')}`
+
+    if (form.crmUrl?.trim()) {
+      const crm = await window.bcrmImport.testCrm(form)
+      message += `\n${crm.message}`
+    } else {
+      message += '\nChưa nhập URL CRM — bỏ qua kiểm tra API nhập.'
+    }
+
     showResult(message, false)
   } catch (err) {
     showResult(err?.message || 'Kiểm tra thất bại.', true)
@@ -139,8 +142,8 @@ async function logout() {
 async function pickFile() {
   const file = await window.bcrmImport.openFile()
   if (!file) return
-  if (file.size > 5 * 1024 * 1024) {
-    showResult('File quá lớn (tối đa 5MB).', true)
+  if (file.size > 4 * 1024 * 1024) {
+    showResult('File quá lớn (tối đa 4MB).', true)
     return
   }
   selectedFile = file
@@ -149,35 +152,22 @@ async function pickFile() {
 }
 
 async function uploadFile() {
-  const config = await window.bcrmImport.loadConfig()
   session = await window.bcrmImport.getSession()
 
   if (!session?.access_token) throw new Error('Chưa đăng nhập.')
-  if (!selectedFile) throw new Error('Chưa chọn file.')
-  if (!config.crmUrl) throw new Error('Thiếu URL CRM.')
+  if (!selectedFile?.filePath) throw new Error('Chưa chọn file.')
 
   els.progress.hidden = false
   els.uploadBtn.disabled = true
 
   try {
-    const bytes = Uint8Array.from(atob(selectedFile.base64), (c) => c.charCodeAt(0))
-    const blob = new Blob([bytes], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    const payload = await window.bcrmImport.uploadFile({
+      filePath: selectedFile.filePath,
+      fileName: selectedFile.fileName,
     })
-
-    const formData = new FormData()
-    formData.append('file', blob, selectedFile.fileName)
-
-    const response = await fetch(`${config.crmUrl}/api/customers/import`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${session.access_token}` },
-      body: formData,
-    })
-
-    const payload = await response.json()
-    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`)
 
     let text = `Tổng: ${payload.total}\nThành công: ${payload.success}\nLỗi: ${payload.failed}`
+    if (payload.chunks > 1) text += `\nĐã chia ${payload.chunks} lô (mỗi lô tối đa 10.000 dòng).`
     if (payload.errors?.length) text += `\n\nChi tiết lỗi:\n${payload.errors.join('\n')}`
     showResult(text, payload.failed > 0)
   } finally {

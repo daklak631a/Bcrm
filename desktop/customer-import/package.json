@@ -1,6 +1,6 @@
 {
   "name": "bcrm-customer-import",
-  "version": "1.0.2",
+  "version": "1.0.5",
   "description": "Công cụ nhập khách hàng hàng loạt cho BCRM (Windows)",
   "main": "src/main.js",
   "private": true,
@@ -21,7 +21,8 @@
       "config.example.json"
     ],
     "asarUnpack": [
-      "node_modules/@supabase/**"
+      "node_modules/@supabase/**",
+      "node_modules/ws/**"
     ],
     "extraResources": [
       {
@@ -48,6 +49,8 @@
     "electron-builder": "^25.1.8"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.3"
+    "@supabase/supabase-js": "^2.39.3",
+    "ws": "^8.18.3",
+    "xlsx": "^0.18.5"
   }
 }

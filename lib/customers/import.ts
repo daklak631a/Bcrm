@@ -1,8 +1,9 @@
 import * as XLSX from 'xlsx'
 
-export const MAX_IMPORT_ROWS = 2000
-export const INSERT_BATCH_SIZE = 50
-export const UPDATE_CONCURRENCY = 20
+/** Tối đa số dòng Excel mỗi lần upload (web + desktop). */
+export const MAX_IMPORT_ROWS = 10_000
+export const INSERT_BATCH_SIZE = 100
+export const UPDATE_CONCURRENCY = 25
 
 export type ProfileLike = { id: string; full_name: string; department_id?: string | null }
 

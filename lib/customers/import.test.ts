@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildImportRows, parseBooleanCell, parseNumberCell, slugify } from './import'
+import { MAX_IMPORT_ROWS, buildImportRows, parseBooleanCell, parseNumberCell, slugify } from './import'
 
 describe('customers/import helpers', () => {
+  it('allows up to 10_000 rows per upload', () => {
+    expect(MAX_IMPORT_ROWS).toBe(10_000)
+  })
+
   it('slugify removes accents and non-alphanumeric chars', () => {
     expect(slugify('Nguyễn Văn A')).toBe('nguyenvana')
   })

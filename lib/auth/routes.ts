@@ -5,6 +5,8 @@ export const PUBLIC_PAGE_PREFIXES = ['/login', '/auth/callback'] as const
 export const PUBLIC_API_PREFIXES = [
   '/api/auth/verify',
   '/api/inngest',
+  /** Desktop app gửi Bearer token, không dùng cookie session */
+  '/api/customers/import',
 ] as const
 
 export function isPublicPage(pathname: string): boolean {

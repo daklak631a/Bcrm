@@ -17,7 +17,10 @@ import {
   type ProfileLike,
 } from '@/lib/customers/import'
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024
+export const maxDuration = 300
+
+/** Vercel giới hạn body ~4.5MB — giữ dưới ngưỡng này. */
+const MAX_FILE_BYTES = 4 * 1024 * 1024
 const ADMIN_ROLES = new Set(['ADMIN_LEVEL_0', 'ADMIN_LEVEL_1', 'ADMIN_LEVEL_2', 'ADMIN_LEVEL_3'])
 
 function createRequestClient(authHeader: string | null) {
