@@ -13,6 +13,9 @@ import {
 } from './cache'
 import { logAudit } from './audit'
 
+/** Supabase/PostgREST trả tối đa 1000 dòng mỗi request — phải phân trang khi >1000 KH. */
+export const SUPABASE_PAGE_SIZE = 1000
+
 export type CustomerPageInput = {
   page?: number
   pageSize?: number
@@ -20,17 +23,92 @@ export type CustomerPageInput = {
   user?: CurrentUserScope | null
 }
 
-export async function fetchCustomers(): Promise<any> {
-  return cached('customers:active', async () => {
+function applyCustomerScope(
+  query: any,
+  user: CurrentUserScope | null | undefined,
+  scopedManagerIds: string[]
+): { query: any; empty: boolean } {
+  if (isDepartmentRole(user?.role)) {
+    const departmentId = user?.department_id || user?.branchId
+    if (scopedManagerIds.length === 0 && !departmentId) {
+      return { query, empty: true }
+    }
+    if (departmentId && scopedManagerIds.length > 0) {
+      const quotedDept = `"${String(departmentId).replace(/"/g, '""')}"`
+      query = query.or(`department_id.eq.${quotedDept},assigned_manager_id.in.(${scopedManagerIds.join(',')})`)
+    } else if (departmentId) {
+      query = query.eq('department_id', departmentId)
+    } else {
+      query = query.in('assigned_manager_id', scopedManagerIds)
+    }
+  } else if (!isGlobalRole(user?.role) && user?.id) {
+    query = query.eq('assigned_manager_id', user.id)
+  }
+  return { query, empty: false }
+}
+
+export async function fetchCustomers(user?: CurrentUserScope | null): Promise<any> {
+  const cacheKey = [
+    'customers:active',
+    user?.role || 'anonymous',
+    user?.id || 'no-user',
+    user?.department_id || user?.branchId || 'no-department',
+  ].join(':')
+
+  return cached(cacheKey, async () => {
     const supabase = getSupabase()
-    const { data, error } = await supabase
+    const scopedManagerIds = await getScopedManagerIds(user ?? null)
+    const allRows: any[] = []
+    let from = 0
+
+    while (true) {
+      let query = supabase
+        .from('customers')
+        .select('*, profiles:assigned_manager_id(id, full_name)')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(from, from + SUPABASE_PAGE_SIZE - 1)
+
+      const scoped = applyCustomerScope(query, user, scopedManagerIds)
+      if (scoped.empty) return []
+
+      const { data, error } = await scoped.query
+      if (error) throw error
+
+      const batch = data || []
+      allRows.push(...batch)
+      if (batch.length < SUPABASE_PAGE_SIZE) break
+      from += SUPABASE_PAGE_SIZE
+    }
+
+    return allRows
+  }, LONG_CACHE_TTL_MS)
+}
+
+export async function fetchCustomerCount(user?: CurrentUserScope | null): Promise<number> {
+  const scopedManagerIds = await getScopedManagerIds(user ?? null)
+  const cacheKey = [
+    'customers:count',
+    user?.role || 'anonymous',
+    user?.id || 'no-user',
+    user?.department_id || user?.branchId || 'no-department',
+    scopedManagerIds.length,
+  ].join(':')
+
+  return cached(cacheKey, async () => {
+    const supabase = getSupabase()
+    let query = supabase
       .from('customers')
-      .select('*, profiles:assigned_manager_id(id, full_name)')
+      .select('*', { count: 'exact', head: true })
       .is('deleted_at', null)
-      .order('created_at', { ascending: false })
+
+    const scoped = applyCustomerScope(query, user, scopedManagerIds)
+    if (scoped.empty) return 0
+
+    const { count, error } = await scoped.query
     if (error) throw error
-    return data || []
-  })
+    return count || 0
+  }, DEFAULT_CACHE_TTL_MS)
 }
 
 async function getScopedManagerIds(user?: CurrentUserScope | null) {
@@ -78,22 +156,11 @@ export async function fetchCustomersPage(input: CustomerPageInput = {}): Promise
       .order('created_at', { ascending: false })
       .range(from, to)
 
-    if (isDepartmentRole(user?.role)) {
-      const departmentId = user.department_id || user.branchId
-      if (scopedManagerIds.length === 0 && !departmentId) {
-        return { data: [], total: 0, page, pageSize }
-      }
-      if (departmentId && scopedManagerIds.length > 0) {
-        const quotedDept = `"${String(departmentId).replace(/"/g, '""')}"`
-        query = query.or(`department_id.eq.${quotedDept},assigned_manager_id.in.(${scopedManagerIds.join(',')})`)
-      } else if (departmentId) {
-        query = query.eq('department_id', departmentId)
-      } else {
-        query = query.in('assigned_manager_id', scopedManagerIds)
-      }
-    } else if (!isGlobalRole(user?.role) && user?.id) {
-      query = query.eq('assigned_manager_id', user.id)
+    const scoped = applyCustomerScope(query, user, scopedManagerIds)
+    if (scoped.empty) {
+      return { data: [], total: 0, page, pageSize }
     }
+    query = scoped.query
 
     if (search) {
       query = query.or([

@@ -8,7 +8,7 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useCallback } from "react"
 import { KPISummaryTable } from "@/components/ui/kpi-summary-table"
 import { formatMetricValue, getRecordMetricValue, getRecordUnitLabel } from "@/lib/product-metrics"
-import { fetchCustomers, fetchInteractions, fetchProfiles, fetchSalesRecords, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
+import { fetchCustomerCount, fetchCustomers, fetchInteractions, fetchProfiles, fetchSalesRecords, formatCurrency, getCustomerFullName } from "@/lib/supabase/api"
 import { getErrorMessage } from "@/lib/errors"
 import { logger } from "@/lib/logger"
 import { toast } from "sonner"
@@ -18,17 +18,30 @@ export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [customers, setCustomers] = useState<any[]>([])
+  const [customerTotal, setCustomerTotal] = useState(0)
   const [salesRecords, setSalesRecords] = useState<any[]>([])
   const [interactions, setInteractions] = useState<any[]>([])
   const [profiles, setProfiles] = useState<any[]>([])
 
   const loadData = useCallback(async () => {
+    if (!user) return
     try {
       setLoading(true)
-      const [c, sales, i, p] = await Promise.all([
-        fetchCustomers(), fetchSalesRecords(), fetchInteractions(), fetchProfiles()
+      const scope = {
+        id: user.id,
+        role: user.role,
+        department_id: user.department_id,
+        branchId: user.branchId,
+      }
+      const [c, total, sales, i, p] = await Promise.all([
+        fetchCustomers(scope),
+        fetchCustomerCount(scope),
+        fetchSalesRecords(),
+        fetchInteractions(),
+        fetchProfiles(),
       ])
       setCustomers(c)
+      setCustomerTotal(total)
       setSalesRecords(sales)
       setInteractions(i)
       setProfiles(p)
@@ -38,9 +51,10 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [user])
 
-  useEffect(() => { setMounted(true); loadData() }, [loadData])
+  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => { if (mounted && user) loadData() }, [mounted, user, loadData])
 
   const visibleProfiles = user?.role === 'ADMIN_LEVEL_1'
     ? profiles
@@ -88,7 +102,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8">
         <div className="bg-white p-4 md:p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
           <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Khách Hàng Đang QL</p>
-          <h3 className="text-2xl md:text-3xl font-bold font-mono tracking-tight text-slate-800">{visibleCustomers.length}</h3>
+          <h3 className="text-2xl md:text-3xl font-bold font-mono tracking-tight text-slate-800">{customerTotal}</h3>
         </div>
         <div className="bg-white p-4 md:p-6 rounded-2xl ring-1 ring-slate-900/5 shadow-sm">
           <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Dư Nợ Cho Vay</p>

@@ -12,6 +12,7 @@ import { canAccessOwner } from "@/lib/access-control"
 import { getErrorMessage } from "@/lib/errors"
 import { logger } from "@/lib/logger"
 import CustomerTimeline from "@/components/customer/CustomerTimeline"
+import { getUnexploitedProducts } from "@/lib/customers/cross-sell-suggestions"
 import clsx from "clsx"
 
 export default function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -158,41 +159,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const depositSalesCount = salesRecords.filter(record => record.source_type === 'DEPOSIT').length
   const productSalesCount = salesRecords.filter(record => record.source_type === 'PRODUCT').length
 
-  const unexploitedProducts = products.filter(p => {
-    const pName = p.name.toUpperCase()
-    const hasLoan = salesRecords.some(r => r.source_type === 'LOAN')
-    const hasDeposit = salesRecords.some(r => r.source_type === 'DEPOSIT')
-
-    // Nếu là các sản phẩm Dư nợ / HMTD
-    if (pName.includes('DƯ NỢ') || pName.includes('CẤP MỚI HMTD')) {
-      if (hasLoan) return false
-    }
-
-    // Nếu là các sản phẩm Huy động vốn
-    if (pName.includes('HUY ĐỘNG VỐN') || pName.includes('TIỀN GỬI')) {
-      if (hasDeposit) return false
-    }
-
-    // Kiểm tra xem đã bán trực tiếp sản phẩm này chưa
-    const isAlreadySold = salesRecords.some(r => {
-      const rTitle = (r.title || '').toUpperCase()
-      const rCategory = (r.category || '').toUpperCase()
-      
-      // Khớp tên chính xác
-      if (rTitle === pName || rCategory === pName) return true
-      
-      // Khớp một phần cho các sản phẩm đặc thù
-      if (pName.includes('DIRECT') && (rTitle.includes('DIRECT') || rCategory.includes('DIRECT'))) return true
-      if (pName.includes('NHÂN THỌ') && (rTitle.includes('NHÂN THỌ') || rCategory.includes('NHÂN THỌ'))) return true
-      if (pName.includes('KHOẢN VAY') && (rTitle.includes('KHOẢN VAY') || rCategory.includes('KHOẢN VAY'))) return true
-      
-      return false
-    })
-
-    if (isAlreadySold) return false
-
-    return true
-  })
+  const unexploitedProducts = customer
+    ? getUnexploitedProducts(customer, products, salesRecords)
+    : []
 
   return (
     <DashboardLayout title={loading ? "Đang tải..." : `Chi tiết: ${getCustomerFullName(customer)}`}>
@@ -556,10 +525,15 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
               {/* Unexploited Products Section */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                 <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4 bg-slate-50/50">
-                  <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-rose-500" />
-                    Gợi ý Bán chéo (Chưa khai thác)
-                  </h3>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-rose-500" />
+                      Gợi ý Bán chéo (Chưa khai thác)
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Chỉ hiện sản phẩm chưa có dữ liệu trên hồ sơ. CIF mới không áp dụng cho KH đã tồn tại — phát sinh thêm thì ghi nhận thủ công.
+                    </p>
+                  </div>
                 </div>
                 <div className="p-5">
                   {unexploitedProducts.length === 0 ? (

@@ -64,6 +64,7 @@ export {
 export {
   fetchCustomers,
   fetchCustomersPage,
+  fetchCustomerCount,
   fetchCustomerById,
   createCustomer,
   updateCustomer,
