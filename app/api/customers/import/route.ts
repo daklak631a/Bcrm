@@ -184,21 +184,28 @@ export async function POST(request: Request) {
       .map((r) => String(r['Mã Số Thuế'] || r.tax_code || '').trim())
       .filter((t, i, arr) => t && arr.indexOf(t) === i)
 
-    const [{ byCif, byPhone, byTax }, profilesResult] = await Promise.all([
+    const [{ byCif, byPhone, byTax }, profilesResult, departmentsResult] = await Promise.all([
       fetchExistingCustomers(supabase, cifs, phones, taxes),
       supabase
         .from('profiles')
         .select('id, full_name, department_id')
         .eq('is_active', true),
+      supabase
+        .from('departments')
+        .select('code, name')
+        .eq('is_active', true),
     ])
 
     const profiles = (profilesResult.data || []) as ProfileLike[]
+    const departments = (departmentsResult.data || []) as { code: string; name: string }[]
     const isAdmin = ADMIN_ROLES.has(profile.role)
 
     const parsedRows = buildImportRows(rawRows, {
       defaultManagerId: user.id,
+      defaultDepartmentId: profile.department_id || null,
       isAdmin,
       profiles,
+      departments,
       existingByCif: byCif,
       existingByPhone: byPhone,
       existingByTax: byTax,

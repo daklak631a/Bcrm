@@ -73,6 +73,7 @@ export interface Customer {
   address: string | null;
   note: string | null;
   assigned_manager_id: string;
+  department_id?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

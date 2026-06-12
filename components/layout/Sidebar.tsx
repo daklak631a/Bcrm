@@ -16,6 +16,7 @@ import {
   Target,
   Users,
   X,
+  Building2,
 } from "lucide-react"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getErrorMessage } from "@/lib/errors"
@@ -74,6 +75,7 @@ export function Sidebar({ onClose }: SidebarProps) {
         children: [
           { href: "/workflow-config", label: "Workflow Chung", icon: Network },
           { href: "/advanced-workflow-pilot/templates", label: "Template Dự Án", icon: ClipboardList },
+          { href: "/team/departments", label: "Danh Sách Phòng Ban", icon: Building2 },
           { href: "/audit-logs", label: "Lịch Sử Hệ Thống", icon: Package },
           { href: "/settings", label: "Thiết Lập Chung", icon: Settings },
         ],
@@ -88,6 +90,10 @@ export function Sidebar({ onClose }: SidebarProps) {
 
     if (user?.role === "ADMIN_LEVEL_1" || user?.role === "ADMIN_LEVEL_2") {
       configChildren.push({ href: "/advanced-workflow-pilot/templates", label: "Template Dự Án", icon: ClipboardList })
+    }
+
+    if (user?.role === "ADMIN_LEVEL_1") {
+      configChildren.push({ href: "/team/departments", label: "Danh Sách Phòng Ban", icon: Building2 })
     }
 
     if (["ADMIN_LEVEL_1", "ADVISOR"].includes(user?.role || "")) {

@@ -60,6 +60,7 @@ Chạy **theo thứ tự** trong từng nhóm. Bỏ qua file đã chạy trướ
 | 18 | `migration_workflow_configs.sql` | Cấu hình workflow |
 | 19 | `migration_system_settings.sql` | Cài đặt hệ thống |
 | 20 | `migration_roles_and_delegation.sql` | Ủy quyền vai trò |
+| 21 | `migration_departments.sql` | Danh sách phòng ban + department_id trên KH |
 
 ### 02-security
 

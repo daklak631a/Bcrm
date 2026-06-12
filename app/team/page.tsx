@@ -3,7 +3,7 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout"
 import { useAuthStore } from "@/store/useAuthStore"
 import { getSupabase } from "@/lib/supabase/client"
-import { fetchAllowedEmailsPage, fetchProfilesPage, invalidateApiCache } from "@/lib/supabase/api"
+import { fetchAllowedEmailsPage, fetchProfilesPage, fetchActiveDepartments, invalidateApiCache, type Department } from "@/lib/supabase/api"
 import { Profile, UserRole } from "@/types/models"
 import { useState, useEffect, useCallback } from "react"
 import { Users, UserPlus, Search, Pencil, Trash2, X, Check, Shield, ShieldCheck, UserCircle, Loader2, UserCheck, UserX } from "lucide-react"
@@ -71,8 +71,18 @@ export default function TeamPage() {
   const [totalActive, setTotalActive] = useState(0)
   const [totalPending, setTotalPending] = useState(0)
   const [roleStats, setRoleStats] = useState({ adminL2: 0, specialists: 0 })
+  const [departments, setDepartments] = useState<Department[]>([])
 
   useEffect(() => { setMounted(true) }, [])
+
+  const loadDepartments = useCallback(async () => {
+    try {
+      const data = await fetchActiveDepartments()
+      setDepartments(data)
+    } catch {
+      setDepartments([])
+    }
+  }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -121,8 +131,11 @@ export default function TeamPage() {
   }, [activeTab, currentPage, searchQuery, user])
 
   useEffect(() => {
-    if (mounted) fetchData()
-  }, [mounted, fetchData])
+    if (mounted) {
+      loadDepartments()
+      fetchData()
+    }
+  }, [mounted, fetchData, loadDepartments])
 
   useEffect(() => {
     setCurrentPage(1)
@@ -157,7 +170,10 @@ export default function TeamPage() {
   }).filter(page => page <= totalPages)
 
   const openAdd = () => {
-    setFormData(EMPTY_FORM)
+    setFormData({
+      ...EMPTY_FORM,
+      department_id: user?.department_id || '',
+    })
     setEditingEntry(null)
     setEditingProfile(null)
     setDialogMode('add')
@@ -254,14 +270,38 @@ export default function TeamPage() {
           return
         }
       } else {
-        const { error: insertAllowedError } = await supabase
+        const { data: existingAllowed } = await supabase
           .from('allowed_emails')
-          .insert(allowedPayload)
+          .select('id')
+          .eq('email', allowedPayload.email)
+          .maybeSingle()
 
-        if (insertAllowedError) {
-          setError(`Lỗi: ${insertAllowedError.message}`)
-          setSaving(false)
-          return
+        if (existingAllowed) {
+          const { error: updateAllowedError } = await supabase
+            .from('allowed_emails')
+            .update({
+              full_name: allowedPayload.full_name,
+              short_name: allowedPayload.short_name,
+              role: allowedPayload.role,
+              department_id: allowedPayload.department_id,
+            })
+            .eq('id', existingAllowed.id)
+
+          if (updateAllowedError) {
+            setError(`Lỗi: ${updateAllowedError.message}`)
+            setSaving(false)
+            return
+          }
+        } else if (!editingProfile) {
+          const { error: insertAllowedError } = await supabase
+            .from('allowed_emails')
+            .insert(allowedPayload)
+
+          if (insertAllowedError) {
+            setError(insertAllowedError.message.includes('duplicate') ? 'Email đã tồn tại trong hệ thống.' : `Lỗi: ${insertAllowedError.message}`)
+            setSaving(false)
+            return
+          }
         }
       }
 
@@ -438,7 +478,9 @@ export default function TeamPage() {
                               {ROLE_LABELS[profile.role]}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-sm text-slate-600">{profile.department_id || '—'}</td>
+                          <td className="py-3 px-4 text-sm text-slate-600">
+                            {departments.find(d => d.code === profile.department_id)?.name || profile.department_id || '—'}
+                          </td>
                           <td className="py-3 px-4">
                             <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>
                               {isActive ? 'Hoạt động' : 'Vô hiệu'}
@@ -497,7 +539,9 @@ export default function TeamPage() {
                               {ROLE_LABELS[entry.role]}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-sm text-slate-600">{entry.department_id || '—'}</td>
+                          <td className="py-3 px-4 text-sm text-slate-600">
+                            {departments.find(d => d.code === entry.department_id)?.name || entry.department_id || '—'}
+                          </td>
                           <td className="py-3 px-4 text-right">
                             <div className="flex items-center justify-end gap-1">
                               <button onClick={() => openEditAllowed(entry)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors" title="Sửa">
@@ -636,14 +680,32 @@ export default function TeamPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Mã Phòng Ban</label>
-                <input
-                  type="text"
-                  value={formData.department_id}
-                  onChange={e => setFormData(p => ({ ...p, department_id: e.target.value }))}
-                  placeholder="VD: chi-nhanh-1"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-1">Phòng Ban</label>
+                {departments.length > 0 ? (
+                  <select
+                    value={formData.department_id}
+                    onChange={e => setFormData(p => ({ ...p, department_id: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  >
+                    <option value="">— Chưa gán phòng —</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.code}>{dept.name} ({dept.code})</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.department_id}
+                    onChange={e => setFormData(p => ({ ...p, department_id: e.target.value }))}
+                    placeholder="Chưa có danh sách phòng — nhập tạm hoặc tạo tại Danh sách Phòng ban"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  />
+                )}
+                {(user?.role === 'ADMIN_LEVEL_0' || user?.role === 'ADMIN_LEVEL_1') && (
+                  <p className="mt-1 text-xs text-slate-400">
+                    Quản lý danh sách phòng tại <a href="/team/departments" className="text-emerald-600 hover:underline">Danh sách Phòng ban</a>.
+                  </p>
+                )}
               </div>
 
               {error && (

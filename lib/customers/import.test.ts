@@ -32,6 +32,7 @@ describe('buildImportRows', () => {
         defaultManagerId: 'mgr-1',
         isAdmin: false,
         profiles: [],
+        departments: [],
         existingByCif: new Map(),
         existingByPhone: new Map(),
         existingByTax: new Map(),
@@ -42,6 +43,23 @@ describe('buildImportRows', () => {
     expect(rows[1].error).toBe('Trùng mã CIF trong file')
   })
 
+  it('maps department from Phòng quản lý column', () => {
+    const rows = buildImportRows(
+      [{ 'Tên KH / Doanh Nghiệp': 'A', 'Phòng quản lý': 'Phòng KHDN1' }],
+      {
+        defaultManagerId: 'mgr-1',
+        isAdmin: false,
+        profiles: [],
+        departments: [{ code: 'Phòng KHDN1', name: 'Phòng KHDN1' }],
+        existingByCif: new Map(),
+        existingByPhone: new Map(),
+        existingByTax: new Map(),
+      }
+    )
+
+    expect(rows[0].customer.department_id).toBe('Phòng KHDN1')
+  })
+
   it('maps existing customer by phone for update', () => {
     const rows = buildImportRows(
       [{ 'Tên KH / Doanh Nghiệp': 'A', 'Số điện thoại': '0901234567' }],
@@ -49,6 +67,7 @@ describe('buildImportRows', () => {
         defaultManagerId: 'mgr-1',
         isAdmin: false,
         profiles: [],
+        departments: [],
         existingByCif: new Map(),
         existingByPhone: new Map([['0901234567', { id: 'cust-1', cif_code: null, phone: '0901234567', tax_code: null }]]),
         existingByTax: new Map(),

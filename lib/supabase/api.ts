@@ -41,6 +41,16 @@ export {
 } from './profiles'
 
 export {
+  fetchActiveDepartments,
+  fetchDepartmentsPage,
+  createDepartment,
+  updateDepartment,
+  resolveDepartmentCode,
+  type Department,
+  type DepartmentInput,
+} from './departments'
+
+export {
   fetchPlans,
   createPlan,
   fetchPlanAssignments,

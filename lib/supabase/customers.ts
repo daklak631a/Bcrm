@@ -79,10 +79,18 @@ export async function fetchCustomersPage(input: CustomerPageInput = {}): Promise
       .range(from, to)
 
     if (isDepartmentRole(user?.role)) {
-      if (scopedManagerIds.length === 0) {
+      const departmentId = user.department_id || user.branchId
+      if (scopedManagerIds.length === 0 && !departmentId) {
         return { data: [], total: 0, page, pageSize }
       }
-      query = query.in('assigned_manager_id', scopedManagerIds)
+      if (departmentId && scopedManagerIds.length > 0) {
+        const quotedDept = `"${String(departmentId).replace(/"/g, '""')}"`
+        query = query.or(`department_id.eq.${quotedDept},assigned_manager_id.in.(${scopedManagerIds.join(',')})`)
+      } else if (departmentId) {
+        query = query.eq('department_id', departmentId)
+      } else {
+        query = query.in('assigned_manager_id', scopedManagerIds)
+      }
     } else if (!isGlobalRole(user?.role) && user?.id) {
       query = query.eq('assigned_manager_id', user.id)
     }
@@ -127,6 +135,7 @@ export async function createCustomer(customer: {
   address?: string
   note?: string
   assigned_manager_id: string
+  department_id?: string | null
   cif_code?: string | null
   customer_segment?: string | null
 

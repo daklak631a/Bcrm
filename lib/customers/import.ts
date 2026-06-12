@@ -7,6 +7,8 @@ export const UPDATE_CONCURRENCY = 25
 
 export type ProfileLike = { id: string; full_name: string; department_id?: string | null }
 
+export type DepartmentLike = { code: string; name: string }
+
 export type ExistingCustomer = {
   id: string
   cif_code: string | null
@@ -71,8 +73,10 @@ export function buildImportRows(
   rawRows: Record<string, unknown>[],
   options: {
     defaultManagerId: string
+    defaultDepartmentId?: string | null
     isAdmin: boolean
     profiles: ProfileLike[]
+    departments: DepartmentLike[]
     existingByCif: Map<string, ExistingCustomer>
     existingByPhone: Map<string, ExistingCustomer>
     existingByTax: Map<string, ExistingCustomer>
@@ -107,6 +111,7 @@ export function buildImportRows(
       }
 
       let managerId = options.defaultManagerId
+      let departmentId: string | null = null
       const managerName = String(item['Chuyên viên'] || item['Chuyen vien'] || item.assigned_manager_id || '').trim()
       if (managerName && options.isAdmin) {
         const sluggedName = slugify(managerName)
@@ -115,7 +120,17 @@ export function buildImportRows(
         )
         if (matchedProfile) {
           managerId = matchedProfile.id
+          departmentId = matchedProfile.department_id || null
         }
+      }
+
+      const departmentRaw = String(
+        item['Phòng quản lý'] || item['Phòng ban'] || item['Phong quan ly'] || item.department_id || ''
+      ).trim()
+      if (departmentRaw) {
+        departmentId = resolveDepartmentFromList(departmentRaw, options.departments) || departmentRaw
+      } else if (!departmentId && options.defaultDepartmentId) {
+        departmentId = options.defaultDepartmentId
       }
 
       const phone = normalizePhone(item['Số điện thoại'] || item.phone)
@@ -142,6 +157,7 @@ export function buildImportRows(
         email: item['Email'] || item.email || null,
         address: item['Địa chỉ'] || item.address || null,
         assigned_manager_id: managerId,
+        department_id: departmentId,
         cif_moi: parseBooleanCell(item['CIF Mới']),
         smart_banking: parseBooleanCell(item['Ngân Hàng Số']),
         bao_hiem_nhan_tho: parseBooleanCell(item['Bảo Hiểm Nhân Thọ']),
@@ -195,6 +211,20 @@ export function buildImportRows(
   }
 
   return results
+}
+
+function resolveDepartmentFromList(rawValue: string, departments: DepartmentLike[]): string | null {
+  const normalized = rawValue.trim()
+  if (!normalized) return null
+
+  const slug = (value: string) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '')
+  const targetSlug = slug(normalized)
+
+  const exact = departments.find((dept) => dept.code === normalized || dept.name === normalized)
+  if (exact) return exact.code
+
+  const fuzzy = departments.find((dept) => slug(dept.code) === targetSlug || slug(dept.name) === targetSlug)
+  return fuzzy?.code || null
 }
 
 export function chunkArray<T>(items: T[], size: number): T[][] {
