@@ -49,9 +49,9 @@ BEGIN
           -- Cấu hình logic cộng thêm tự động từ hệ thống
           + 
           CASE 
-            -- CIF MỚI: Cộng thêm khách hàng tạo trên CRM
+            -- CIF MỚI: Cộng thêm khách hàng được đánh dấu CIF mới trên CRM
             WHEN UPPER(csp.name) LIKE '%CIF MỚI%' THEN 
-              (SELECT COUNT(*)::DECIMAL FROM customers c WHERE c.assigned_manager_id = p.id AND c.created_at::DATE BETWEEN start_date AND end_date AND c.deleted_at IS NULL)
+              (SELECT COUNT(*)::DECIMAL FROM customers c WHERE c.assigned_manager_id = p.id AND c.cif_moi IS TRUE AND c.created_at::DATE BETWEEN start_date AND end_date AND c.deleted_at IS NULL)
             
             -- HUY ĐỘNG: Cộng thêm chênh lệch Snapshot
             WHEN UPPER(csp.name) LIKE '%HUY ĐỘNG%' THEN 

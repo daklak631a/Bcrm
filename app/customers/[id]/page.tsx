@@ -128,32 +128,39 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const getStatusBadge = (status: string) => {
     switch(status?.toLowerCase()) {
       case 'active':
-        return <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">Đang hoạt động</span>
+        return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[11px] font-semibold">Đang hoạt động</span>
       case 'pending':
-        return <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">Chờ duyệt</span>
+        return <span className="px-2 py-0.5 bg-gold-100 text-gold-800 rounded-md text-[11px] font-semibold">Chờ duyệt</span>
       case 'closed':
-        return <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium">Đã đóng</span>
+        return <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[11px] font-semibold">Đã đóng</span>
       case 'matured':
-        return <span className="px-2 py-1 bg-teal-50 text-[#006b68] border border-teal-200/50 rounded-full text-xs font-medium">Đã tất toán</span>
+        return <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md text-[11px] font-semibold">Đã tất toán</span>
       case 'completed':
-        return <span className="px-2 py-1 bg-teal-100 text-teal-700 rounded-full text-xs font-medium">Thành công</span>
+        return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[11px] font-semibold">Thành công</span>
       case 'interested':
-        return <span className="px-2 py-1 bg-cyan-100 text-cyan-700 rounded-full text-xs font-medium">Quan tâm</span>
+        return <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[11px] font-semibold">Quan tâm</span>
       default:
-        return <span className="px-2 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium">{status || 'N/A'}</span>
+        return <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-[11px] font-semibold">{status || 'N/A'}</span>
     }
   }
 
   const getSaleMeta = (sourceType: string) => {
     switch (sourceType) {
       case 'LOAN':
-        return { label: 'Khoản vay', icon: Briefcase, badge: 'bg-teal-100 text-teal-700', iconWrap: 'bg-teal-50 text-teal-600' }
+        return { label: 'Khoản vay', icon: Briefcase, badge: 'bg-emerald-100 text-emerald-800', iconWrap: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' }
       case 'DEPOSIT':
-        return { label: 'Tiền gửi', icon: CreditCard, badge: 'bg-emerald-100 text-emerald-700', iconWrap: 'bg-emerald-50 text-emerald-600' }
+        return { label: 'Tiền gửi', icon: CreditCard, badge: 'bg-emerald-50 text-emerald-700', iconWrap: 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100' }
       default:
-        return { label: 'Sản phẩm', icon: ShoppingCart, badge: 'bg-amber-100 text-amber-700', iconWrap: 'bg-amber-50 text-amber-600' }
+        return { label: 'Sản phẩm', icon: ShoppingCart, badge: 'bg-gold-100 text-gold-800', iconWrap: 'bg-gold-50 text-gold-700 ring-1 ring-gold-100' }
     }
   }
+
+  const salesActions = [
+    { href: `/sales?create=1&type=LOAN&customerId=${customerId}`, label: 'Cấp vay', icon: Briefcase, tone: 'emerald' as const },
+    { href: `/sales?create=1&type=DEPOSIT&customerId=${customerId}`, label: 'Nhận tiền gửi', icon: CreditCard, tone: 'emerald' as const },
+    { href: `/sales?create=1&type=PRODUCT&customerId=${customerId}`, label: 'Bán hàng', icon: ShoppingCart, tone: 'gold' as const },
+    { href: `/sales?create=1&type=PROJECT&customerId=${customerId}`, label: 'Tạo dự án', icon: Network, tone: 'dark' as const },
+  ]
 
   const loanSalesCount = salesRecords.filter(record => record.source_type === 'LOAN').length
   const depositSalesCount = salesRecords.filter(record => record.source_type === 'DEPOSIT').length
@@ -165,26 +172,29 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <DashboardLayout title={loading ? "Đang tải..." : `Chi tiết: ${getCustomerFullName(customer)}`}>
-      <div className="flex flex-col gap-6 max-w-6xl mx-auto pb-10">
-        
-        {/* Navigation Header */}
-        <div className="flex items-center gap-4">
-          <Link href="/customers" className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-            <ArrowLeft className="w-5 h-5 text-slate-600" />
+      <div className="flex flex-col gap-5 max-w-6xl mx-auto pb-10">
+        <div className="flex items-start gap-3 sm:gap-4">
+          <Link
+            href="/customers"
+            className="p-2.5 bg-white border border-slate-200 rounded-lg hover:bg-emerald-50 hover:border-emerald-200 transition-colors shrink-0 shadow-sm"
+          >
+            <ArrowLeft className="w-5 h-5 text-emerald-700" />
           </Link>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-slate-800">Hồ sơ Khách hàng</h1>
-            <p className="text-sm text-slate-500">Mã KH: {customerId.substring(0, 8)}...</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">Hồ sơ Khách hàng</h1>
+            <p className="text-sm text-slate-500 mt-0.5 break-all">
+              {customer?.cif_code ? `CIF: ${customer.cif_code}` : `Mã KH: ${customerId}`}
+            </p>
           </div>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20 bg-white rounded-2xl border border-slate-200">
+          <div className="flex items-center justify-center py-20 bg-white rounded-xl border border-slate-200">
             <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
             <span className="ml-3 text-slate-600 font-medium">Đang tải dữ liệu...</span>
           </div>
         ) : !customer ? (
-          <div className="py-20 text-center bg-white rounded-2xl border border-slate-200">
+          <div className="py-20 text-center bg-white rounded-xl border border-slate-200">
             <h2 className="text-xl font-semibold text-slate-800">Không tìm thấy khách hàng</h2>
             <p className="text-slate-500 mt-2">Khách hàng này không tồn tại hoặc đã bị xóa.</p>
           </div>
@@ -194,48 +204,52 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             {/* Left Column: Customer Profile */}
             <div className="lg:col-span-1 flex flex-col gap-6">
               
-              {/* Profile Card */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-slate-100 flex flex-col items-center text-center">
-                  <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl font-bold mb-4 shadow-sm border border-emerald-200">
-                    {customer.customer_type === 'ENTERPRISE'
-                      ? (customer.business_name?.substring(0, 2).toUpperCase() || 'DN')
-                      : (customer.full_name?.split(' ').pop()?.substring(0, 2).toUpperCase() || 'KH')}
-                  </div>
-                  <h2 className="text-xl font-bold text-slate-800">{getCustomerFullName(customer)}</h2>
-                  <p className="text-sm text-slate-500 mt-1">Cán bộ QL: {customer.profiles?.full_name || 'Chưa phân bổ'}</p>
-                  
-                  <div className="flex gap-1.5 mt-2 justify-center">
-                    {customer.customer_type === 'ENTERPRISE' ? (
-                      <>
-                        <span className="px-2 py-0.5 text-xs font-semibold bg-[#ccedea] text-[#003e3b] border border-teal-200/50 rounded-lg">B2B</span>
-                        {customer.customer_segment && (
-                          <span className="px-2 py-0.5 text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-100 rounded-lg">
-                            {customer.customer_segment}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg">B2C</span>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="relative px-5 pt-5 pb-6 bg-gradient-to-br from-emerald-700 via-emerald-600 to-emerald-800 text-white">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(253,183,26,0.18),transparent_55%)]" />
+                  <div className="relative flex flex-col items-center text-center">
+                    <div className="w-[72px] h-[72px] bg-white/15 text-white rounded-full flex items-center justify-center text-2xl font-bold mb-3 ring-2 ring-white/25 backdrop-blur-sm">
+                      {customer.customer_type === 'ENTERPRISE'
+                        ? (customer.business_name?.substring(0, 2).toUpperCase() || 'DN')
+                        : (customer.full_name?.split(' ').pop()?.substring(0, 2).toUpperCase() || 'KH')}
+                    </div>
+                    <h2 className="text-base sm:text-lg font-bold leading-snug break-words max-w-full">
+                      {getCustomerFullName(customer)}
+                    </h2>
+                    <p className="text-sm text-emerald-100 mt-1.5 break-words">
+                      Cán bộ QL: {customer.profiles?.full_name || 'Chưa phân bổ'}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-2.5 justify-center">
+                      {customer.customer_type === 'ENTERPRISE' ? (
+                        <>
+                          <span className="px-2 py-0.5 text-[11px] font-semibold bg-white/15 text-white border border-white/20 rounded-md">B2B</span>
+                          {customer.customer_segment && (
+                            <span className="px-2 py-0.5 text-[11px] font-semibold bg-gold-500/90 text-emerald-950 rounded-md">
+                              {customer.customer_segment}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="px-2 py-0.5 text-[11px] font-semibold bg-white/15 text-white border border-white/20 rounded-md">B2C</span>
+                      )}
+                    </div>
+                    {!isEditing && (
+                      <div className="mt-4 flex flex-col sm:flex-row gap-2 w-full">
+                        <button
+                          onClick={() => setIsEditing(true)}
+                          className="flex items-center gap-2 px-4 py-2.5 border border-white/25 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors text-sm font-medium w-full justify-center"
+                        >
+                          <Edit className="w-4 h-4" /> Chỉnh sửa
+                        </button>
+                        <button
+                          onClick={() => setInteractionModalOpen(true)}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-gold-500 text-emerald-950 rounded-lg hover:bg-gold-400 transition-colors text-sm font-bold w-full justify-center shadow-sm"
+                        >
+                          <Phone className="w-4 h-4" /> Ghi nhận tương tác
+                        </button>
+                      </div>
                     )}
                   </div>
-                  
-                  {!isEditing && (
-                    <div className="mt-4 flex flex-col gap-2 w-full">
-                      <button 
-                        onClick={() => setIsEditing(true)}
-                        className="flex items-center gap-2 px-4 py-2 border border-slate-200 bg-white text-slate-700 rounded-xl hover:bg-slate-50 transition-colors text-sm font-medium w-full justify-center shadow-sm"
-                      >
-                        <Edit className="w-4 h-4 text-slate-500" /> Chỉnh sửa thông tin
-                      </button>
-                      <button 
-                        onClick={() => setInteractionModalOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-sky-600 text-white rounded-xl hover:bg-sky-700 transition-colors text-sm font-semibold w-full justify-center shadow-md active:scale-98"
-                      >
-                        <Phone className="w-4 h-4" /> Ghi nhận tương tác
-                      </button>
-                    </div>
-                  )}
                 </div>
                 
                 <div className="p-6 flex flex-col gap-4">
@@ -342,9 +356,9 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 hover:bg-slate-100/75 transition-colors">
-                        <div className="flex items-start gap-3">
-                          <Phone className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
+                      <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-emerald-50/40 hover:bg-emerald-50 transition-colors ring-1 ring-emerald-100/60">
+                        <div className="flex items-start gap-3 min-w-0">
+                          <Phone className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
                           <div>
                             <p className="text-xs font-medium text-slate-500">Số điện thoại</p>
                             <p className="text-sm font-semibold text-slate-800">{customer.phone || 'Chưa cập nhật'}</p>
@@ -360,18 +374,18 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                           </a>
                         )}
                       </div>
-                      <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50">
-                        <Mail className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
+                      <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 ring-1 ring-slate-100">
+                        <Mail className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
                         <div>
                           <p className="text-xs font-medium text-slate-500">Email</p>
                           <p className="text-sm font-semibold text-slate-800 break-all">{customer.email || 'Chưa cập nhật'}</p>
                         </div>
                       </div>
-                      <div className="flex items-start gap-3 p-3 rounded-xl bg-slate-50">
-                        <MapPin className="w-5 h-5 text-slate-400 mt-0.5 shrink-0" />
-                        <div>
+                      <div className="flex items-start gap-3 p-3 rounded-lg bg-slate-50 ring-1 ring-slate-100">
+                        <MapPin className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
                           <p className="text-xs font-medium text-slate-500">Địa chỉ</p>
-                          <p className="text-sm font-semibold text-slate-800">{customer.address || 'Chưa cập nhật'}</p>
+                          <p className="text-sm font-semibold text-slate-800 break-words">{customer.address || 'Chưa cập nhật'}</p>
                         </div>
                       </div>
                     </>
@@ -379,8 +393,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 </div>
               </div>
 
-              {/* Dedicated Notes Card */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-emerald-600" />
@@ -407,29 +420,23 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 />
               </div>
 
-              {/* Summary Stats */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-lg bg-teal-50 text-[#006b68] border border-teal-100 flex items-center justify-center mb-2">
-                    <Briefcase className="w-4 h-4" />
-                  </div>
-                  <p className="text-xl font-bold text-slate-800">{loanSalesCount}</p>
-                  <p className="text-xs font-medium text-slate-500">Khoản vay</p>
-                </div>
-                <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center mb-2">
-                    <CreditCard className="w-4 h-4" />
-                  </div>
-                  <p className="text-xl font-bold text-slate-800">{depositSalesCount}</p>
-                  <p className="text-xs font-medium text-slate-500">Tiền gửi</p>
-                </div>
-                <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col items-center">
-                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center mb-2">
-                    <ShoppingCart className="w-4 h-4" />
-                  </div>
-                  <p className="text-xl font-bold text-slate-800">{productSalesCount}</p>
-                  <p className="text-xs font-medium text-slate-500">SP Dịch vụ</p>
-                </div>
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                {[
+                  { count: loanSalesCount, label: 'Khoản vay', icon: Briefcase, tone: 'text-emerald-700 bg-emerald-50 ring-emerald-100' },
+                  { count: depositSalesCount, label: 'Tiền gửi', icon: CreditCard, tone: 'text-emerald-600 bg-emerald-50 ring-emerald-100' },
+                  { count: productSalesCount, label: 'SP Dịch vụ', icon: ShoppingCart, tone: 'text-gold-700 bg-gold-50 ring-gold-100' },
+                ].map((stat) => {
+                  const StatIcon = stat.icon
+                  return (
+                    <div key={stat.label} className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm flex flex-col items-center text-center">
+                      <div className={clsx("w-8 h-8 rounded-lg flex items-center justify-center mb-2 ring-1", stat.tone)}>
+                        <StatIcon className="w-4 h-4" />
+                      </div>
+                      <p className="text-lg sm:text-xl font-bold text-slate-900 tabular-nums">{stat.count}</p>
+                      <p className="text-[11px] sm:text-xs font-medium text-slate-500 leading-tight">{stat.label}</p>
+                    </div>
+                  )
+                })}
               </div>
 
             </div>
@@ -437,80 +444,86 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
             {/* Right Column: Related Data */}
             <div className="lg:col-span-2 flex flex-col gap-6">
               
-              {/* Sales Section */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
-                  <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                    <ShoppingCart className="w-5 h-5 text-amber-500" />
-                    Bán Hàng
-                  </h3>
-                  <div className="flex items-center gap-2 flex-wrap sm:justify-end">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <div className="px-4 sm:px-5 py-4 border-b border-emerald-100 bg-gradient-to-r from-emerald-50/80 to-white">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gold-100 text-gold-700 ring-1 ring-gold-200">
+                        <ShoppingCart className="w-4 h-4" />
+                      </span>
+                      Bán hàng
+                    </h3>
                     <Link
-                      href={`/sales?create=1&type=LOAN&customerId=${customerId}`}
-                      className="inline-flex items-center gap-1 px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors text-xs font-bold shadow-sm"
+                      href={`/sales?customerId=${customerId}`}
+                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1 self-start sm:self-auto"
                     >
-                      <Plus className="w-3 h-3" /> Cấp vay
-                    </Link>
-                    <Link
-                      href={`/sales?create=1&type=DEPOSIT&customerId=${customerId}`}
-                      className="inline-flex items-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-xs font-bold shadow-sm"
-                    >
-                      <Plus className="w-3 h-3" /> Nhận tiền gửi
-                    </Link>
-                    <Link
-                      href={`/sales?create=1&type=PRODUCT&customerId=${customerId}`}
-                      className="inline-flex items-center gap-1 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors text-xs font-bold shadow-sm"
-                    >
-                      <Plus className="w-3 h-3" /> Bán hàng
-                    </Link>
-                    <Link
-                      href={`/sales?create=1&type=PROJECT&customerId=${customerId}`}
-                      className="inline-flex items-center gap-1 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg transition-colors text-xs font-bold shadow-sm"
-                    >
-                      <Network className="w-3 h-3" /> Tạo dự án
-                    </Link>
-                    <div className="hidden sm:block h-5 w-px bg-slate-200 mx-1" />
-                    <Link href={`/sales?customerId=${customerId}`} className="text-xs font-bold text-slate-500 hover:text-slate-700 flex items-center gap-1 border border-slate-200 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors">
                       Xem tất cả <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
+                  </div>
+                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none snap-x snap-mandatory">
+                    {salesActions.map((action) => {
+                      const ActionIcon = action.icon
+                      return (
+                        <Link
+                          key={action.href}
+                          href={action.href}
+                          className={clsx(
+                            "inline-flex shrink-0 snap-start items-center gap-1.5 px-3.5 py-2.5 rounded-lg transition-colors text-xs font-bold shadow-sm min-h-[40px]",
+                            action.tone === 'gold' && "bg-gold-500 hover:bg-gold-400 text-emerald-950",
+                            action.tone === 'emerald' && "bg-emerald-600 hover:bg-emerald-700 text-white",
+                            action.tone === 'dark' && "bg-emerald-900 hover:bg-emerald-800 text-white"
+                          )}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <ActionIcon className="w-3.5 h-3.5" />
+                          {action.label}
+                        </Link>
+                      )
+                    })}
                   </div>
                 </div>
                 <div className="p-0">
                   {salesRecords.length === 0 ? (
-                    <div className="py-8 text-center text-slate-500 text-sm">Chưa có giao dịch bán hàng nào.</div>
+                    <div className="py-10 px-4 text-center">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
+                        <ShoppingCart className="w-5 h-5" />
+                      </div>
+                      <p className="text-sm font-medium text-slate-700">Chưa có giao dịch bán hàng</p>
+                      <p className="text-xs text-slate-500 mt-1">Dùng các nút phía trên để ghi nhận vay, tiền gửi hoặc sản phẩm.</p>
+                    </div>
                   ) : (
                     <div className="divide-y divide-slate-100">
                       {salesRecords.slice(0, 8).map(sale => {
                         const saleMeta = getSaleMeta(sale.source_type)
                         const SaleIcon = saleMeta.icon
                         return (
-                          <div key={sale.id} className="p-4 flex items-center justify-between gap-4 hover:bg-slate-50 transition-colors">
-                            <div className="flex items-start gap-3 min-w-0">
-                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${saleMeta.iconWrap}`}>
+                          <div key={sale.id} className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 hover:bg-emerald-50/30 transition-colors">
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
+                              <div className={clsx("w-10 h-10 rounded-lg flex items-center justify-center shrink-0", saleMeta.iconWrap)}>
                                 <SaleIcon className="w-4 h-4" />
                               </div>
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <p className="font-semibold text-slate-800">{sale.title || saleMeta.label}</p>
-                                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${saleMeta.badge}`}>
+                                  <p className="font-semibold text-slate-900 break-words">{sale.title || saleMeta.label}</p>
+                                  <span className={clsx("px-2 py-0.5 rounded-md text-[11px] font-semibold", saleMeta.badge)}>
                                     {saleMeta.label}
                                   </span>
                                 </div>
-                                <p className="text-sm text-slate-500 mt-0.5">
+                                <p className="text-sm text-slate-500 mt-0.5 break-words">
                                   {sale.category}
                                   {sale.account_number ? ` • Số TK: ${sale.account_number}` : ''}
                                 </p>
-                                {sale.note && <p className="text-xs text-slate-400 mt-1 line-clamp-1">{sale.note}</p>}
+                                {sale.note && <p className="text-xs text-slate-500 mt-1 break-words">{sale.note}</p>}
                               </div>
                             </div>
-                            <div className="text-right flex flex-col items-end gap-1 shrink-0">
-                              <p className="font-bold text-slate-800">
+                            <div className="sm:text-right flex sm:flex-col items-start sm:items-end gap-2 sm:gap-1 shrink-0 pl-[52px] sm:pl-0">
+                              <p className="font-bold text-slate-900 tabular-nums">
                                 {sale.source_type === 'PRODUCT'
                                   ? formatMetricValue(getRecordMetricValue(sale), getRecordUnitLabel(sale))
                                   : formatCurrency(Number(sale.amount || 0))}
                               </p>
-                              <div className="mt-1">{getStatusBadge(sale.status)}</div>
-                              <p className="text-xs text-slate-500 mt-1">
+                              {getStatusBadge(sale.status)}
+                              <p className="text-xs text-slate-500">
                                 {new Date(sale.sale_date).toLocaleDateString('vi-VN')}
                               </p>
                             </div>
@@ -522,28 +535,35 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                 </div>
               </div>
 
-              {/* Unexploited Products Section */}
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-4 bg-slate-50/50">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-rose-500" />
-                      Gợi ý Bán chéo (Chưa khai thác)
-                    </h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Chỉ hiện sản phẩm chưa có dữ liệu trên hồ sơ. CIF mới không áp dụng cho KH đã tồn tại — phát sinh thêm thì ghi nhận thủ công.
-                    </p>
-                  </div>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                <div className="px-4 sm:px-5 py-4 border-b border-emerald-100 bg-gradient-to-r from-white to-emerald-50/40">
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200">
+                      <Sparkles className="w-4 h-4" />
+                    </span>
+                    Gợi ý bán chéo
+                  </h3>
+                  <p className="mt-1.5 text-xs text-slate-500 leading-relaxed max-w-2xl">
+                    Sản phẩm chưa khai thác trên hồ sơ. Bấm để mở form ghi nhận bán hàng nhanh.
+                  </p>
                 </div>
-                <div className="p-5">
+                <div className="p-4 sm:p-5">
                   {unexploitedProducts.length === 0 ? (
-                    <div className="text-center text-slate-500 text-sm">Khách hàng này đã khai thác toàn bộ sản phẩm.</div>
+                    <div className="py-6 text-center">
+                      <p className="text-sm font-medium text-emerald-700">Đã khai thác toàn bộ sản phẩm</p>
+                      <p className="text-xs text-slate-500 mt-1">Không còn gợi ý bán chéo cho khách hàng này.</p>
+                    </div>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {unexploitedProducts.map(p => (
-                        <span key={p.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-700 rounded-lg text-sm font-medium border border-rose-100 shadow-sm cursor-default hover:bg-rose-100 transition-colors">
-                          <Plus className="w-3.5 h-3.5" /> {p.name}
-                        </span>
+                        <Link
+                          key={p.id}
+                          href={`/sales?create=1&type=PRODUCT&customerId=${customerId}&productId=${p.id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-2 bg-white text-emerald-800 rounded-lg text-sm font-semibold border border-emerald-200 shadow-sm hover:bg-emerald-50 hover:border-emerald-300 transition-colors min-h-[40px]"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-gold-600 shrink-0" />
+                          <span className="break-words">{p.name}</span>
+                        </Link>
                       ))}
                     </div>
                   )}
@@ -667,10 +687,12 @@ function QuickInteractionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-900/5 animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="w-full max-w-lg rounded-xl bg-white p-5 sm:p-6 shadow-2xl ring-1 ring-emerald-100 animate-in fade-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between gap-4 pb-4 border-b border-slate-100 shrink-0">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <Phone className="w-5 h-5 text-sky-500" />
+          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+              <Phone className="w-4 h-4" />
+            </span>
             Ghi nhận tương tác mới
           </h3>
           <button
@@ -688,7 +710,7 @@ function QuickInteractionModal({
               <select
                 value={form.type}
                 onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 {INTERACTION_TYPES.map(t => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -700,7 +722,7 @@ function QuickInteractionModal({
               <select
                 value={form.result}
                 onChange={e => setForm(f => ({ ...f, result: e.target.value }))}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
                 {RESULT_OPTIONS.map(r => (
                   <option key={r.value} value={r.value}>{r.label}</option>
@@ -716,7 +738,7 @@ function QuickInteractionModal({
               value={form.purpose}
               onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))}
               placeholder="VD: Giới thiệu sản phẩm vay tín chấp, nhắc đáo hạn tiền gửi..."
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
 
@@ -727,7 +749,7 @@ function QuickInteractionModal({
                 type="date"
                 value={form.interaction_date}
                 onChange={e => setForm(f => ({ ...f, interaction_date: e.target.value }))}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
             <div>
@@ -736,7 +758,7 @@ function QuickInteractionModal({
                 type="date"
                 value={form.follow_up_date}
                 onChange={e => setForm(f => ({ ...f, follow_up_date: e.target.value }))}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
           </div>
@@ -748,7 +770,7 @@ function QuickInteractionModal({
               onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               placeholder="Nội dung trao đổi, phản hồi của KH..."
               rows={2}
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
             />
           </div>
 
@@ -759,7 +781,7 @@ function QuickInteractionModal({
               value={form.next_action}
               onChange={e => setForm(f => ({ ...f, next_action: e.target.value }))}
               placeholder="VD: Gửi hồ sơ vào thứ Hai, gọi lại sau 1 tuần..."
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
         </form>
@@ -776,7 +798,7 @@ function QuickInteractionModal({
             type="button"
             onClick={handleSubmit}
             disabled={saving}
-            className="flex-1 px-4 py-2.5 bg-sky-600 text-white rounded-xl text-sm font-semibold hover:bg-sky-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 shadow-md active:scale-98"
+            className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-70 shadow-sm"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Lưu tương tác

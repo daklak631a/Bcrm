@@ -306,6 +306,26 @@ export async function GET(request: Request) {
       actuals.calls += 1
     })
 
+    const { data: cifCustomerActualsData, error: cifCustomerActualsError } = await supabase
+      .from('customers')
+      .select('assigned_manager_id, created_at')
+      .eq('cif_moi', true)
+      .is('deleted_at', null)
+      .gte('created_at', startDate)
+      .lt('created_at', dayjs(endDate).add(1, 'day').format('YYYY-MM-DD'))
+
+    if (cifCustomerActualsError) {
+      return internalServerError(cifCustomerActualsError, '[KPI API] Failed to load CIF customer actuals')
+    }
+
+    const cifCustomerActualsByUser = new Map<string, number>()
+    ;(cifCustomerActualsData || []).forEach((customer: any) => {
+      const managerId = customer.assigned_manager_id
+      if (!managerId) return
+      if (visibleManagerIds && !visibleManagerIds.has(managerId)) return
+      cifCustomerActualsByUser.set(managerId, Number(cifCustomerActualsByUser.get(managerId) || 0) + 1)
+    })
+
     const { data: productSalesData, error: productSalesError } = await supabase
       .from('cross_sell_records')
       .select('agent_id, product_id, result_value, sale_date, created_at, cross_sell_products(id, name, type)')
@@ -358,13 +378,16 @@ export async function GET(request: Request) {
         return Number(extraActuals[actualKey] || 0)
       }
       const otherProductActual = getProductActualByCategory(OTHER_PRODUCTS_ID) || Number(extraActuals[OTHER_PRODUCTS_ID] || 0)
+      const cifMoiActual =
+        Number(cifCustomerActualsByUser.get(row.manager_id) || 0) +
+        Number(extraActuals.cif_moi || 0)
 
       return {
         ...row,
         ...getCoreActuals(row.manager_id),
         product_targets: productTargets,
         product_values: { [OTHER_PRODUCTS_ID]: otherProductActual },
-        cif_moi: getActualValue('cif_moi'),
+        cif_moi: cifMoiActual,
         bidv_direct: getActualValue('bidv_direct'),
         bh_nhan_tho: getActualValue('bh_nhan_tho'),
         bh_khoan_vay: getActualValue('bh_khoan_vay'),

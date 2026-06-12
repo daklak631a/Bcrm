@@ -360,7 +360,7 @@ export default function ReportsPage() {
     if (fieldKey === 'target_cif_moi') {
       const filteredCustomers = customers.filter(c => {
         const cDate = c.created_at ? c.created_at.slice(0, 10) : ''
-        return cDate >= startDateStr && cDate <= endDateStr && targetUserIds.includes(c.assigned_manager_id)
+        return c.cif_moi === true && cDate >= startDateStr && cDate <= endDateStr && targetUserIds.includes(c.assigned_manager_id)
       })
       const productCifCount = crossSellRecords
         .filter((sale) => {
