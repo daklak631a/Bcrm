@@ -1,5 +1,6 @@
 -- Xóa lịch sử tương tác / bán hàng / kế hoạch / kanban — GIỮ NGUYÊN customers (+ loans, deposits).
 -- Chạy trong Supabase SQL Editor hoặc qua API POST /api/admin/clear-activity-data (Admin L0/L1).
+-- Xem migrations/05-maintenance/ và migrations/clear/README.md
 
 CREATE OR REPLACE FUNCTION public.clear_activity_keep_customers()
 RETURNS jsonb

@@ -1,6 +1,7 @@
 -- DEPRECATED: Script cũ — XÓA CẢ loans/deposits.
 -- Nếu chỉ muốn xóa lịch sử tương tác/bán hàng/dự án/kanban và GIỮ KH:
---   → migrations/migration_clear_activity_keep_customers_20260611.sql
+--   → migrations/05-maintenance/migration_clear_activity_keep_customers_20260611.sql
+--   → migrations/clear/ (script xóa theo nhóm)
 --   → hoặc Cài đặt hệ thống → "Xóa lịch sử hoạt động" (Admin L0/L1)
 
 -- Disable triggers temporarily to avoid audit log spam during deletion

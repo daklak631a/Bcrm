@@ -70,12 +70,20 @@ export default function TeamPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalActive, setTotalActive] = useState(0)
   const [totalPending, setTotalPending] = useState(0)
+  const [roleStats, setRoleStats] = useState({ adminL2: 0, specialists: 0 })
 
   useEffect(() => { setMounted(true) }, [])
 
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [profilesPage, allowedPage] = await Promise.all([
+    const [profileTotalPage, profileListPage, pendingPage, statsPage] = await Promise.all([
+      fetchProfilesPage({
+        page: 1,
+        pageSize: 1,
+        search: searchQuery,
+        includeInactive: true,
+        user,
+      }),
       activeTab === 'active'
         ? fetchProfilesPage({
             page: currentPage,
@@ -84,22 +92,31 @@ export default function TeamPage() {
             includeInactive: true,
             user,
           })
-        : fetchProfilesPage({ page: 1, pageSize: 1, includeInactive: true, user }),
-      activeTab === 'pending'
-        ? fetchAllowedEmailsPage({
-            page: currentPage,
-            pageSize: ITEMS_PER_PAGE,
-            search: searchQuery,
-            includeInactive: true,
-            user,
-          })
-        : fetchAllowedEmailsPage({ page: 1, pageSize: 1, includeInactive: true, user }),
+        : Promise.resolve({ data: [], total: 0, page: currentPage, pageSize: ITEMS_PER_PAGE }),
+      fetchAllowedEmailsPage({
+        page: activeTab === 'pending' ? currentPage : 1,
+        pageSize: activeTab === 'pending' ? ITEMS_PER_PAGE : 1,
+        search: searchQuery,
+        includeInactive: true,
+        excludeRegistered: true,
+        user,
+      }),
+      fetchProfilesPage({
+        page: 1,
+        pageSize: 500,
+        includeInactive: true,
+        user,
+      }),
     ])
 
-    setProfiles(profilesPage.data as Profile[])
-    setAllowedEmails(allowedPage.data as AllowedEmail[])
-    setTotalActive(profilesPage.total)
-    setTotalPending(allowedPage.total)
+    setProfiles(profileListPage.data as Profile[])
+    setAllowedEmails(pendingPage.data as AllowedEmail[])
+    setTotalActive(profileTotalPage.total)
+    setTotalPending(pendingPage.total)
+    setRoleStats({
+      adminL2: (statsPage.data as Profile[]).filter(profile => profile.role === 'ADMIN_LEVEL_2').length,
+      specialists: (statsPage.data as Profile[]).filter(profile => profile.role === 'USER').length,
+    })
     setLoading(false)
   }, [activeTab, currentPage, searchQuery, user])
 
@@ -330,11 +347,11 @@ export default function TeamPage() {
           </div>
           <div className="bg-white p-4 md:p-5 rounded-2xl ring-1 ring-slate-900/5">
             <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Admin Cấp 2</p>
-            <h3 className="text-xl md:text-2xl font-bold text-slate-800">{allowedEmails.filter(ae => ae.role === 'ADMIN_LEVEL_2').length}</h3>
+            <h3 className="text-xl md:text-2xl font-bold text-slate-800">{roleStats.adminL2}</h3>
           </div>
           <div className="bg-white p-4 md:p-5 rounded-2xl ring-1 ring-slate-900/5">
             <p className="text-xs md:text-sm font-medium text-slate-500 mb-1">Chuyên Viên</p>
-            <h3 className="text-xl md:text-2xl font-bold text-slate-800">{allowedEmails.filter(ae => ae.role === 'USER').length}</h3>
+            <h3 className="text-xl md:text-2xl font-bold text-slate-800">{roleStats.specialists}</h3>
           </div>
         </div>
 
@@ -375,6 +392,9 @@ export default function TeamPage() {
             Chờ Đăng Nhập ({totalPending})
           </button>
         </div>
+        <p className="text-xs text-slate-500 -mt-4">
+          <strong>Đã Kích Hoạt</strong> = đã đăng nhập Google ít nhất một lần. <strong>Chờ Đăng Nhập</strong> = đã thêm email nhưng chưa đăng nhập lần đầu.
+        </p>
 
         {/* Table */}
         <div className="bg-white rounded-2xl ring-1 ring-slate-900/5 shadow-[0_1px_3px_rgb(0_0_0_/_2%)] overflow-hidden">

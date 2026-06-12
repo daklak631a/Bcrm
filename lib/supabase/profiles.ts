@@ -28,7 +28,14 @@ export type AllowedEmailPageInput = {
   search?: string
   departmentId?: string | null
   includeInactive?: boolean
+  /** Loại email đã có profile (đã đăng nhập ít nhất một lần). */
+  excludeRegistered?: boolean
   user?: CurrentUserScope | null
+}
+
+function buildPostgrestStringInList(values: string[]): string {
+  const quoted = values.map((value) => `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
+  return `(${quoted.join(',')})`
 }
 
 export async function fetchProfiles(): Promise<Tables<'profiles'>[]> {
@@ -110,6 +117,7 @@ export async function fetchAllowedEmailsPage(input: AllowedEmailPageInput = {}):
     search,
     scopedDepartment || 'all',
     input.includeInactive ? 'all-status' : 'active',
+    input.excludeRegistered ? 'unregistered' : 'all',
     input.user?.role || 'anonymous',
   ].join(':')
 
@@ -131,6 +139,26 @@ export async function fetchAllowedEmailsPage(input: AllowedEmailPageInput = {}):
 
     if (search) {
       query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,department_id.ilike.%${search}%`)
+    }
+
+    if (input.excludeRegistered) {
+      const { data: registeredProfiles, error: registeredError } = await supabase
+        .from('profiles')
+        .select('email')
+
+      if (registeredError) throw registeredError
+
+      const registeredEmails = Array.from(new Set(
+        (registeredProfiles || []).flatMap((profile) => {
+          const email = profile.email?.trim()
+          if (!email) return []
+          return [email, email.toLowerCase()]
+        })
+      ))
+
+      if (registeredEmails.length > 0) {
+        query = query.not('email', 'in', buildPostgrestStringInList(registeredEmails))
+      }
     }
 
     const { data, error, count } = await query

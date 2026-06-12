@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     if (rpcError) {
       logger.error('[Clear Activity] RPC failed', { error: getErrorMessage(rpcError) }, { production: true })
       return NextResponse.json({
-        error: 'Chưa chạy migration clear_activity_keep_customers trên Supabase. Xem migrations/migration_clear_activity_keep_customers_20260611.sql',
+        error: 'Chưa chạy migration clear_activity_keep_customers trên Supabase. Xem migrations/05-maintenance/migration_clear_activity_keep_customers_20260611.sql',
       }, { status: 500 })
     }
 

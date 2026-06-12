@@ -96,7 +96,7 @@ Mục tiêu là kiểm thử lõi điều phối luồng B2B: công việc đơn
 - [x] Timeline con hiển thị trực tiếp dưới thanh Gantt của giai đoạn; hover vào mốc con hiện tóm tắt người phụ trách, hạn và trạng thái.
 - [x] Cấu hình giai đoạn chuyển thành các thanh đóng/mở: thông tin giai đoạn, bàn giao/nghiệm thu và timeline con.
 - [x] Bấm một mốc timeline con trên Gantt sẽ mở đúng mốc đó trong phần cấu hình timeline, không bung toàn bộ cấu hình dài.
-- [x] Tạo SQL thử nghiệm `docs/advanced-crm-pilot-migration.sql`.
+- [x] Tạo SQL thử nghiệm `docs/pilot/advanced-crm-pilot-migration.sql`.
 
 ## Dữ liệu thử nghiệm đã bao phủ
 
@@ -144,7 +144,7 @@ Mục tiêu là kiểm thử lõi điều phối luồng B2B: công việc đơn
 ## Việc tiếp theo
 
 - [ ] Tạo môi trường dữ liệu riêng để thử nghiệm.
-- [ ] Áp thủ công `docs/advanced-crm-pilot-migration.sql` vào môi trường thử nghiệm.
+- [ ] Áp thủ công `docs/pilot/advanced-crm-pilot-migration.sql` vào môi trường thử nghiệm.
 - [ ] Nạp dữ liệu khách hàng, cơ hội bán và hồ sơ tương ứng với giao diện.
 - [ ] Thêm biến môi trường riêng nếu cần nối song song.
 - [ ] Tạo route đọc hồ sơ từ môi trường thử nghiệm.
