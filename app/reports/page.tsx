@@ -282,9 +282,8 @@ export default function ReportsPage() {
     return total
   }, [snapshots])
 
-  // Helper to calculate aggregated Target values
-  const getTargetValue = useCallback((fieldKey: string, level: 'month' | 'week' | 'day') => {
-    if (targetUserIds.length === 0) return 0
+  const getTargetValueForScope = useCallback((fieldKey: string, level: 'month' | 'week' | 'day', scopeUserIds: string[]) => {
+    if (scopeUserIds.length === 0) return 0
 
     const getProductTargetValue = (row: any) => {
       const productTargets = row?.product_targets || {}
@@ -305,73 +304,65 @@ export default function ReportsPage() {
 
     if (level === 'month') {
       if (!activeMonthPlan) return 0
-      const activeAssigns = assignments.filter(a => a.plan_id === activeMonthPlan.id && targetUserIds.includes(a.user_id))
+      const activeAssigns = assignments.filter(a => a.plan_id === activeMonthPlan.id && scopeUserIds.includes(a.user_id))
       return activeAssigns.reduce((sum, a) => sum + getProductTargetValue(a), 0)
     }
 
     if (level === 'week') {
-      const activeWeekPlans = weeklyPlans.filter(wp => wp.start_date === selectedMonday && targetUserIds.includes(wp.user_id))
+      const activeWeekPlans = weeklyPlans.filter(wp => wp.start_date === selectedMonday && scopeUserIds.includes(wp.user_id))
       return activeWeekPlans.reduce((sum, wp) => sum + getProductTargetValue(wp), 0)
     }
 
-    // level === 'day'
-    const activeDailyPlans = dailyPlans.filter(dp => dp.target_date === reportDate && targetUserIds.includes(dp.user_id))
+    const activeDailyPlans = dailyPlans.filter(dp => dp.target_date === reportDate && scopeUserIds.includes(dp.user_id))
     return activeDailyPlans.reduce((sum, dp) => sum + getProductTargetValue(dp), 0)
-  }, [targetUserIds, productCategoryById, activeMonthPlan, assignments, weeklyPlans, selectedMonday, dailyPlans, reportDate])
+  }, [productCategoryById, activeMonthPlan, assignments, weeklyPlans, selectedMonday, dailyPlans, reportDate])
 
-  // Helper to calculate aggregated Actual values
-  const getActualValue = useCallback((fieldKey: string, startDateStr: string, endDateStr: string) => {
-    if (targetUserIds.length === 0) return 0
+  const getActualValueForScope = useCallback((fieldKey: string, startDateStr: string, endDateStr: string, scopeUserIds: string[]) => {
+    if (scopeUserIds.length === 0) return 0
 
-    // 1. Loans amount
     if (fieldKey === 'target_loans_amount') {
-      const filteredLoans = loans.filter(l => 
-        l.start_date >= startDateStr && 
-        l.start_date <= endDateStr && 
-        l.customer_id && 
-        customers.some(c => c.id === l.customer_id && targetUserIds.includes(c.assigned_manager_id))
+      const filteredLoans = loans.filter(l =>
+        l.start_date >= startDateStr &&
+        l.start_date <= endDateStr &&
+        l.customer_id &&
+        customers.some(c => c.id === l.customer_id && scopeUserIds.includes(c.assigned_manager_id))
       )
       return filteredLoans.reduce((sum, l) => sum + Number(l.loan_amount || 0), 0)
     }
 
-    // 2. Deposits amount
     if (fieldKey === 'target_deposits_amount') {
-      const filteredDeposits = deposits.filter(d => 
-        d.start_date >= startDateStr && 
-        d.start_date <= endDateStr && 
-        d.customer_id && 
-        customers.some(c => c.id === d.customer_id && targetUserIds.includes(c.assigned_manager_id))
+      const filteredDeposits = deposits.filter(d =>
+        d.start_date >= startDateStr &&
+        d.start_date <= endDateStr &&
+        d.customer_id &&
+        customers.some(c => c.id === d.customer_id && scopeUserIds.includes(c.assigned_manager_id))
       )
       return filteredDeposits.reduce((sum, d) => sum + Number(d.amount || 0), 0)
     }
 
-    // 3. Calls count
     if (fieldKey === 'target_calls') {
-      const filteredInteractions = interactions.filter(i => 
-        i.type === 'CALL' && 
-        i.interaction_date >= startDateStr && 
-        i.interaction_date <= endDateStr && 
-        targetUserIds.includes(i.manager_id)
-      )
-      return filteredInteractions.length
+      return interactions.filter(i =>
+        i.type === 'CALL' &&
+        i.interaction_date >= startDateStr &&
+        i.interaction_date <= endDateStr &&
+        scopeUserIds.includes(i.manager_id)
+      ).length
     }
 
-    // 4. CIF mới count
     if (fieldKey === 'target_cif_moi') {
       const filteredCustomers = customers.filter(c => {
         const cDate = c.created_at ? c.created_at.slice(0, 10) : ''
-        return c.cif_moi === true && cDate >= startDateStr && cDate <= endDateStr && targetUserIds.includes(c.assigned_manager_id)
+        return c.cif_moi === true && cDate >= startDateStr && cDate <= endDateStr && scopeUserIds.includes(c.assigned_manager_id)
       })
       const productCifCount = crossSellRecords
         .filter((sale) => {
           const sDate = sale.sale_date || (sale.created_at ? sale.created_at.slice(0, 10) : '')
-          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && targetUserIds.includes(sale.agent_id)
+          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && scopeUserIds.includes(sale.agent_id)
         })
         .reduce((sum, sale) => sum + getProductMetricValue(sale, sale.cross_sell_products), 0)
       return filteredCustomers.length + productCifCount
     }
 
-    // 5. Product metrics from product catalog, classified into the fixed 8 KPI rows + other products
     if (
       fieldKey === 'target_bidv_direct' ||
       fieldKey === 'target_bh_nhan_tho' ||
@@ -383,49 +374,51 @@ export default function ReportsPage() {
         const sDate = s.sale_date || (s.created_at ? s.created_at.slice(0, 10) : '')
         const category = classifyReportProduct(s.cross_sell_products)
         const isMatch = fieldKey === OTHER_PRODUCTS_ID ? category === OTHER_PRODUCTS_ID : category === fieldKey
-
-        return (
-          isMatch &&
-          sDate >= startDateStr &&
-          sDate <= endDateStr &&
-          targetUserIds.includes(s.agent_id)
-        )
+        return isMatch && sDate >= startDateStr && sDate <= endDateStr && scopeUserIds.includes(s.agent_id)
       })
-
       return filteredSales.reduce((sum, s) => sum + getProductMetricValue(s, s.cross_sell_products), 0)
     }
 
-    // 6. Net growth metrics using snapshots
     if (fieldKey === 'target_huy_dong_tang_rong') {
       const manualActual = crossSellRecords
         .filter((sale) => {
           const sDate = sale.sale_date || (sale.created_at ? sale.created_at.slice(0, 10) : '')
-          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && targetUserIds.includes(sale.agent_id)
+          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && scopeUserIds.includes(sale.agent_id)
         })
         .reduce((sum, sale) => sum + getProductMetricValue(sale, sale.cross_sell_products), 0)
-      return getNetGrowthActual('deposit', targetUserIds, startDateStr, endDateStr) + manualActual
+      return getNetGrowthActual('deposit', scopeUserIds, startDateStr, endDateStr) + manualActual
     }
     if (fieldKey === 'target_du_no_ngan_han_tang_rong') {
       const manualActual = crossSellRecords
         .filter((sale) => {
           const sDate = sale.sale_date || (sale.created_at ? sale.created_at.slice(0, 10) : '')
-          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && targetUserIds.includes(sale.agent_id)
+          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && scopeUserIds.includes(sale.agent_id)
         })
         .reduce((sum, sale) => sum + getProductMetricValue(sale, sale.cross_sell_products), 0)
-      return getNetGrowthActual('short_loan', targetUserIds, startDateStr, endDateStr) + manualActual
+      return getNetGrowthActual('short_loan', scopeUserIds, startDateStr, endDateStr) + manualActual
     }
     if (fieldKey === 'target_du_no_trung_han_tang_rong') {
       const manualActual = crossSellRecords
         .filter((sale) => {
           const sDate = sale.sale_date || (sale.created_at ? sale.created_at.slice(0, 10) : '')
-          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && targetUserIds.includes(sale.agent_id)
+          return classifyReportProduct(sale.cross_sell_products) === fieldKey && sDate >= startDateStr && sDate <= endDateStr && scopeUserIds.includes(sale.agent_id)
         })
         .reduce((sum, sale) => sum + getProductMetricValue(sale, sale.cross_sell_products), 0)
-      return getNetGrowthActual('medium_loan', targetUserIds, startDateStr, endDateStr) + manualActual
+      return getNetGrowthActual('medium_loan', scopeUserIds, startDateStr, endDateStr) + manualActual
     }
 
     return 0
-  }, [targetUserIds, loans, deposits, crossSellRecords, interactions, customers, getNetGrowthActual])
+  }, [loans, deposits, crossSellRecords, interactions, customers, getNetGrowthActual])
+
+  const getTargetValue = useCallback(
+    (fieldKey: string, level: 'month' | 'week' | 'day') => getTargetValueForScope(fieldKey, level, targetUserIds),
+    [getTargetValueForScope, targetUserIds]
+  )
+
+  const getActualValue = useCallback(
+    (fieldKey: string, startDateStr: string, endDateStr: string) => getActualValueForScope(fieldKey, startDateStr, endDateStr, targetUserIds),
+    [getActualValueForScope, targetUserIds]
+  )
 
   // Helper values
   const getPercent = (actual: number, target: number) => {
@@ -460,11 +453,11 @@ export default function ReportsPage() {
       const mTarget = getTargetValue(kpi.key, 'month')
       const mActual = getActualValue(kpi.key, selectedMonthStart, selectedMonthEnd)
       const mPct = getPercent(mActual, mTarget)
-      
+
       const wTarget = getTargetValue(kpi.key, 'week')
       const wActual = getActualValue(kpi.key, selectedMonday, selectedFriday)
       const wPct = getPercent(wActual, wTarget)
-      
+
       const dTarget = getTargetValue(kpi.key, 'day')
       const dActual = getActualValue(kpi.key, reportDate, reportDate)
       const dPct = getPercent(dActual, dTarget)
@@ -484,9 +477,39 @@ export default function ReportsPage() {
       }
     })
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData)
+    const userExportData = scopedProfiles.flatMap((profile) =>
+      KPI_METRICS.map((kpi) => {
+        const userId = profile.id
+        const mTarget = getTargetValueForScope(kpi.key, 'month', [userId])
+        const mActual = getActualValueForScope(kpi.key, selectedMonthStart, selectedMonthEnd, [userId])
+        const wTarget = getTargetValueForScope(kpi.key, 'week', [userId])
+        const wActual = getActualValueForScope(kpi.key, selectedMonday, selectedFriday, [userId])
+        const dTarget = getTargetValueForScope(kpi.key, 'day', [userId])
+        const dActual = getActualValueForScope(kpi.key, reportDate, reportDate, [userId])
+
+        return {
+          'Phòng': profile.department_id || 'Chưa phân phòng',
+          'Chuyên viên': profile.short_name || formatShortName(profile.full_name || ''),
+          'Chỉ tiêu': kpi.label,
+          'Đơn vị': kpi.unit,
+          'Chỉ tiêu Tháng': mTarget,
+          'Thực tế Tháng': mActual,
+          'Hoàn thành Tháng (%)': getPercent(mActual, mTarget) !== null ? `${getPercent(mActual, mTarget)}%` : '-',
+          'Chỉ tiêu Tuần': wTarget,
+          'Thực tế Tuần': wActual,
+          'Hoàn thành Tuần (%)': getPercent(wActual, wTarget) !== null ? `${getPercent(wActual, wTarget)}%` : '-',
+          'Chỉ tiêu Ngày': dTarget,
+          'Kết quả Ngày': dActual,
+          'Hoàn thành Ngày (%)': getPercent(dActual, dTarget) !== null ? `${getPercent(dActual, dTarget)}%` : '-',
+        }
+      })
+    )
+
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "BaoCaoKPI")
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(exportData), 'TongHop')
+    if (userExportData.length > 0) {
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(userExportData), 'TheoChuyenVien')
+    }
     XLSX.writeFile(workbook, `BaoCao_KPISummary_${reportDate}.xlsx`)
     toast.success("Xuất file báo cáo Excel thành công!")
   }
@@ -561,12 +584,109 @@ export default function ReportsPage() {
       const targetUser = profiles.find(p => p.id === selectedUserId)
       return targetUser ? `Chuyên viên: ${targetUser.short_name || formatShortName(targetUser.full_name || '')}` : 'Cấp phòng'
     }
-    // Admin L1
     if (viewMode === 'all') return 'Toàn bộ Chi nhánh'
     if (viewMode === 'department') return `Phòng: ${selectedDepartment}`
     const targetUser = profiles.find(p => p.id === selectedUserId)
     return targetUser ? `Chuyên viên: ${targetUser.short_name || formatShortName(targetUser.full_name || '')}` : 'Chi nhánh'
   }, [isUser, isAdminL2, viewMode, selectedUserId, selectedDepartment, user, profiles])
+
+  const scopedProfiles = useMemo(() => {
+    return profiles
+      .filter((profile) => targetUserIds.includes(profile.id))
+      .sort((a, b) => {
+        const deptCompare = (a.department_id || 'ZZZ').localeCompare(b.department_id || 'ZZZ')
+        if (deptCompare !== 0) return deptCompare
+        return (a.full_name || '').localeCompare(b.full_name || '')
+      })
+  }, [profiles, targetUserIds])
+
+  const departmentGroups = useMemo(() => {
+    const groups = new Map<string, any[]>()
+    scopedProfiles.forEach((profile) => {
+      const dept = profile.department_id || 'Chưa phân phòng'
+      if (!groups.has(dept)) groups.set(dept, [])
+      groups.get(dept)!.push(profile)
+    })
+    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b))
+  }, [scopedProfiles])
+
+  const showOrgBreakdown = targetUserIds.length > 1
+  const showDepartmentSections = useMemo(() => {
+    if (!showOrgBreakdown || isUser) return false
+    if (viewMode === 'all') return departmentGroups.length > 1
+    if (viewMode === 'department') return selectedDepartment === 'ALL' && departmentGroups.length > 1
+    return false
+  }, [showOrgBreakdown, isUser, viewMode, departmentGroups.length, selectedDepartment])
+
+  const renderUserKpiCell = (kpi: ReportMetric, userId: string) => {
+    const mTarget = getTargetValueForScope(kpi.key, 'month', [userId])
+    const mActual = getActualValueForScope(kpi.key, selectedMonthStart, selectedMonthEnd, [userId])
+    const wTarget = getTargetValueForScope(kpi.key, 'week', [userId])
+    const wActual = getActualValueForScope(kpi.key, selectedMonday, selectedFriday, [userId])
+    const dTarget = getTargetValueForScope(kpi.key, 'day', [userId])
+    const dActual = getActualValueForScope(kpi.key, reportDate, reportDate, [userId])
+
+    return (
+      <div className="space-y-1 text-[10px] leading-tight">
+        <div>
+          <span className="text-slate-400">T:</span>{' '}
+          <span className="font-bold text-slate-800">{formatValue(mActual, kpi.type)}</span>
+          <span className="text-slate-400"> / {formatValue(mTarget, kpi.type)}</span>
+          <span className={clsx("ml-1 font-bold", getPercentColorClass(getPercent(mActual, mTarget)))}>
+            ({getPercent(mActual, mTarget) !== null ? `${getPercent(mActual, mTarget)}%` : '-'})
+          </span>
+        </div>
+        <div className="text-slate-500">
+          Tuần {formatValue(wActual, kpi.type)}/{formatValue(wTarget, kpi.type)}
+          {' · '}
+          Ngày {formatValue(dActual, kpi.type)}/{formatValue(dTarget, kpi.type)}
+        </div>
+      </div>
+    )
+  }
+
+  const renderUserBreakdownTable = (users: any[], title?: string) => (
+    <div key={title || 'all-users'} className="space-y-3">
+      {title && (
+        <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-2 ring-1 ring-emerald-100">
+          <h4 className="text-sm font-bold text-emerald-900">{title}</h4>
+          <span className="text-xs font-semibold text-emerald-700">{users.length} chuyên viên</span>
+        </div>
+      )}
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full border-collapse text-left min-w-[960px]">
+          <thead>
+            <tr className="bg-[#002625] text-white">
+              <th className="sticky left-0 z-10 min-w-[180px] bg-[#002625] px-3 py-3 text-xs font-semibold uppercase tracking-wide border-r border-[#001b1a]">
+                Chỉ tiêu
+              </th>
+              {users.map((profile) => (
+                <th key={profile.id} className="min-w-[150px] px-3 py-3 text-xs font-semibold border-r border-[#001b1a]">
+                  <div className="font-bold">{profile.short_name || formatShortName(profile.full_name || '')}</div>
+                  <div className="mt-0.5 text-[10px] font-normal text-emerald-100/90">{profile.department_id || 'Chưa phân phòng'}</div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {KPI_METRICS.map((kpi, idx) => (
+              <tr key={kpi.key} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                <td className="sticky left-0 z-10 bg-inherit px-3 py-3 text-sm font-semibold text-slate-800 border-r border-slate-100">
+                  <div>{kpi.label}</div>
+                  <div className="text-[10px] font-medium text-slate-400">{kpi.unit}</div>
+                </td>
+                {users.map((profile) => (
+                  <td key={`${profile.id}-${kpi.key}`} className="px-3 py-3 align-top border-r border-slate-100">
+                    {renderUserKpiCell(kpi, profile.id)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 
   if (!mounted) return null
 
@@ -860,9 +980,9 @@ export default function ReportsPage() {
         <section className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-md">
           <div className="flex flex-col gap-4 border-b border-slate-200/80 p-5 lg:flex-row lg:items-center lg:justify-between bg-slate-50/50">
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Báo cáo chỉ tiêu KPI liên thông 3 Cấp</h3>
+              <h3 className="text-lg font-bold text-slate-900">Tổng hợp chỉ tiêu theo 3 kỳ hạn</h3>
               <p className="mt-1 text-xs text-slate-500">
-                Hiển thị song hành chỉ tiêu và kết quả thực tế của kỳ hạn Tháng (Lũy kế), Tuần (Lũy kế T2-T6) và Ngày đã chọn.
+                Bảng dưới gộp toàn bộ phạm vi đã lọc ({reportTitleScope}). Cột Tháng/Tuần/Ngày là 3 kỳ thời gian — không phải cấp tổ chức.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 shrink-0 items-center">
@@ -1068,6 +1188,23 @@ export default function ReportsPage() {
             </>
           )}
         </section>
+
+        {showOrgBreakdown && (
+          <section className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-md">
+            <div className="border-b border-slate-200/80 bg-emerald-50/40 p-5">
+              <h3 className="text-lg font-bold text-slate-900">Phân tích theo chuyên viên</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Drill-down từng người trong phạm vi <span className="font-semibold text-emerald-800">{reportTitleScope}</span>.
+                Mỗi ô hiển thị Thực tế/Chỉ tiêu/% Tháng, kèm số liệu Tuần và Ngày.
+              </p>
+            </div>
+            <div className="space-y-6 p-4 sm:p-5">
+              {showDepartmentSections
+                ? departmentGroups.map(([dept, users]) => renderUserBreakdownTable(users, `Phòng: ${dept}`))
+                : renderUserBreakdownTable(scopedProfiles)}
+            </div>
+          </section>
+        )}
 
         {/* Empty status check */}
         {!loading && targetUserIds.length === 0 && (
