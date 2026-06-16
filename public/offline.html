@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Ngoại tuyến — Nexus Banking CRM</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+        padding: 24px;
+      }
+      .card {
+        max-width: 360px;
+        text-align: center;
+      }
+      .badge {
+        width: 72px;
+        height: 72px;
+        margin: 0 auto 20px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, #00928a, #006b68);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .badge svg { width: 40px; height: 40px; }
+      h1 { font-size: 20px; margin: 0 0 8px; }
+      p { margin: 0 0 20px; color: #64748b; line-height: 1.5; font-size: 15px; }
+      button {
+        border: 0;
+        background: #006b68;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 600;
+        padding: 12px 24px;
+        border-radius: 12px;
+        cursor: pointer;
+      }
+      button:active { opacity: 0.85; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+          <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+          <line x1="12" y1="20" x2="12.01" y2="20" />
+        </svg>
+      </div>
+      <h1>Bạn đang ngoại tuyến</h1>
+      <p>Không có kết nối mạng. Vui lòng kiểm tra kết nối và thử lại.</p>
+      <button onclick="location.reload()">Thử lại</button>
+    </div>
+  </body>
+</html>
