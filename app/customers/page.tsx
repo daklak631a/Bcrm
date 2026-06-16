@@ -55,12 +55,17 @@ function buildProductByKey(products: any[]): Record<string, any> {
 
 const ITEMS_PER_PAGE = 25
 
-function CustomerMetaBadges({ customer }: { customer: any }) {
+function CustomerMetaBadges({ customer, managerName }: { customer: any; managerName?: string }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
       {customer.cif_code && (
         <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 rounded">
           CIF: {customer.cif_code}
+        </span>
+      )}
+      {managerName && (
+        <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 rounded">
+          CV: {managerName}
         </span>
       )}
       {customer.customer_type === 'ENTERPRISE' ? (
@@ -639,50 +644,41 @@ export default function CustomersPage() {
                   <article
                     key={customer.id}
                     className={clsx(
-                      "p-4 space-y-3 transition-colors",
+                      "p-3 space-y-2 transition-colors",
                       selectedIds.includes(customer.id) ? "bg-emerald-50/60" : "bg-white"
                     )}
                   >
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-2.5">
                       {isAdmin && (
                         <input
                           type="checkbox"
                           checked={selectedIds.includes(customer.id)}
                           onChange={() => handleToggleSelect(customer.id)}
-                          className="mt-1 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-5 h-5 shrink-0"
+                          className="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-5 h-5 shrink-0"
                           aria-label={`Chọn khách hàng ${getCustomerFullName(customer)}`}
                         />
                       )}
                       <div className="min-w-0 flex-1">
                         <Link
                           href={`/customers/${customer.id}`}
-                          className="text-[15px] font-semibold text-slate-800 hover:text-emerald-600 transition-colors block break-words leading-snug"
+                          className="text-sm font-semibold text-slate-800 hover:text-emerald-600 transition-colors block break-words leading-snug"
                         >
                           {getCustomerFullName(customer)}
                         </Link>
-                        <CustomerMetaBadges customer={customer} />
+                        <CustomerMetaBadges customer={customer} managerName={customer.profiles?.full_name} />
+                      </div>
+                      <div className="shrink-0">
+                        <CustomerActionButtons customerId={customer.id} />
                       </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Sản phẩm</p>
-                      <CustomerProductTags
-                        customer={customer}
-                        productByKey={productByKey}
-                        statusByCustomerProduct={statusByCustomerProduct}
-                        creatingProduct={creatingProduct}
-                        onCreateSale={handleCreateProductSale}
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap items-start gap-x-2 gap-y-1 text-sm">
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 shrink-0">Chuyên viên</span>
-                      <span className="text-slate-600 break-words flex-1">{customer.profiles?.full_name || '—'}</span>
-                    </div>
-
-                    <div className="flex justify-end pt-1 border-t border-slate-100">
-                      <CustomerActionButtons customerId={customer.id} />
-                    </div>
+                    <CustomerProductTags
+                      customer={customer}
+                      productByKey={productByKey}
+                      statusByCustomerProduct={statusByCustomerProduct}
+                      creatingProduct={creatingProduct}
+                      onCreateSale={handleCreateProductSale}
+                    />
                   </article>
                 ))}
                 {customers.length === 0 && (

@@ -437,19 +437,24 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
 
               <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 {[
-                  { count: loanSalesCount, label: 'Khoản vay', icon: Briefcase, tone: 'text-emerald-700 bg-emerald-50 ring-emerald-100' },
-                  { count: depositSalesCount, label: 'Tiền gửi', icon: CreditCard, tone: 'text-emerald-600 bg-emerald-50 ring-emerald-100' },
-                  { count: productSalesCount, label: 'SP Dịch vụ', icon: ShoppingCart, tone: 'text-gold-700 bg-gold-50 ring-gold-100' },
+                  { count: loanSalesCount, label: 'Khoản vay', icon: Briefcase, tone: 'text-emerald-700 bg-emerald-50 ring-emerald-100', type: 'LOAN' },
+                  { count: depositSalesCount, label: 'Tiền gửi', icon: CreditCard, tone: 'text-emerald-600 bg-emerald-50 ring-emerald-100', type: 'DEPOSIT' },
+                  { count: productSalesCount, label: 'SP Dịch vụ', icon: ShoppingCart, tone: 'text-gold-700 bg-gold-50 ring-gold-100', type: 'PRODUCT' },
                 ].map((stat) => {
                   const StatIcon = stat.icon
                   return (
-                    <div key={stat.label} className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm flex flex-col items-center text-center">
+                    <Link
+                      key={stat.label}
+                      href={`/sales?customerId=${customerId}&type=${stat.type}`}
+                      className="bg-white rounded-xl border border-slate-200 p-3 sm:p-4 shadow-sm flex flex-col items-center text-center hover:border-emerald-300 hover:shadow transition-all active:scale-95"
+                      title={`Xem danh sách ${stat.label} của khách hàng`}
+                    >
                       <div className={clsx("w-8 h-8 rounded-lg flex items-center justify-center mb-2 ring-1", stat.tone)}>
                         <StatIcon className="w-4 h-4" />
                       </div>
                       <p className="text-lg sm:text-xl font-bold text-slate-900 tabular-nums">{stat.count}</p>
                       <p className="text-[11px] sm:text-xs font-medium text-slate-500 leading-tight">{stat.label}</p>
-                    </div>
+                    </Link>
                   )
                 })}
               </div>
