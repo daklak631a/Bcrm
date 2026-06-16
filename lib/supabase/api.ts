@@ -107,6 +107,7 @@ export {
   fetchProductSalesByAgentId,
   fetchProductSalesByAgentIds,
   fetchProductSalesByCustomer,
+  fetchProductSalesByCustomerIds,
   fetchBatchSales,
   createBatchSale,
   allocateBatchSale,

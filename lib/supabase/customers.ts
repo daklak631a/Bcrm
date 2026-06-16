@@ -318,8 +318,13 @@ export async function updateCustomer(id: string, updates: Partial<{
     .update({ ...customerToUpdate, updated_at: new Date().toISOString() } as TablesUpdate<'customers'>)
     .eq('id', id)
     .select()
-    .single()
+    .maybeSingle()
   if (error) throw error
+  // UPDATE chạm 0 dòng (thường do RLS chặn): báo lỗi quyền rõ ràng thay vì
+  // để PostgREST ném PGRST116 "Cannot coerce the result to a single JSON object".
+  if (!data) {
+    throw new Error('Bạn không có quyền chỉnh sửa khách hàng này (chỉ chuyên viên phụ trách hoặc quản trị viên mới được sửa).')
+  }
 
   await logAudit({
     action: 'UPDATE',

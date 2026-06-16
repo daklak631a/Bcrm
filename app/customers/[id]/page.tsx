@@ -36,6 +36,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   
   const [notesDraft, setNotesDraft] = useState("")
   const [savingNotes, setSavingNotes] = useState(false)
+  const [completingId, setCompletingId] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     try {
@@ -123,6 +124,20 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
   const handleCancelEdit = () => {
     setEditForm(customer)
     setIsEditing(false)
+  }
+
+  const handleCompleteProductSale = async (sale: any) => {
+    try {
+      setCompletingId(sale.id)
+      const { updateProductSale } = await import('@/lib/supabase/api')
+      await updateProductSale(sale.source_id, { status: 'COMPLETED' })
+      setSalesRecords(prev => prev.map(s => s.id === sale.id ? { ...s, status: 'COMPLETED' } : s))
+      toast.success('Đã chuyển sang Hoàn thành')
+    } catch (err: unknown) {
+      toast.error('Lỗi: ' + getErrorMessage(err))
+    } finally {
+      setCompletingId(null)
+    }
   }
 
   const getStatusBadge = (status: string) => {
@@ -523,6 +538,17 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                                   : formatCurrency(Number(sale.amount || 0))}
                               </p>
                               {getStatusBadge(sale.status)}
+                              {sale.source_type === 'PRODUCT' && sale.status !== 'COMPLETED' && (
+                                <button
+                                  onClick={() => handleCompleteProductSale(sale)}
+                                  disabled={completingId === sale.id}
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                                  title="Đánh dấu giao dịch đã hoàn thành"
+                                >
+                                  {completingId === sale.id && <Loader2 className="w-3 h-3 animate-spin" />}
+                                  Hoàn thành
+                                </button>
+                              )}
                               <p className="text-xs text-slate-500">
                                 {new Date(sale.sale_date).toLocaleDateString('vi-VN')}
                               </p>

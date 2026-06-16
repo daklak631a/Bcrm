@@ -7,22 +7,51 @@ import { useAuthStore } from "@/store/useAuthStore"
 import { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import * as XLSX from "xlsx"
 import clsx from "clsx"
-import { createCustomer, updateCustomer, getCustomerFullName, fetchCustomersPage, fetchProfilesPage } from "@/lib/supabase/api"
+import { createCustomer, updateCustomer, getCustomerFullName, fetchCustomersPage, fetchProfilesPage, fetchProducts, fetchProductSalesByCustomerIds, createProductSale } from "@/lib/supabase/api"
 import { getSupabase } from "@/lib/supabase/client"
+import { classifyKpiProduct } from "@/lib/kpi/classify"
 import { Modal, FormField, FormInput, FormSelect, FormTextarea, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 import { getErrorMessage } from "@/lib/errors"
 import { logger } from "@/lib/logger"
 
-const PRODUCT_MAP = [
-  { key: 'cif_moi', label: 'CIF Mới', short: 'CIF' },
-  { key: 'smart_banking', label: 'Ngân Hàng Số', short: 'NHS' },
-  { key: 'bao_hiem_nhan_tho', label: 'Bảo Hiểm Nhân Thọ', short: 'BHNT' },
-  { key: 'bao_hiem_khoan_vay', label: 'Bảo Hiểm Khoản Vay', short: 'BHKV' },
-  { key: 'the_tin_dung', label: 'Thẻ Tín Dụng', short: 'TTD' },
-  { key: 'chuyen_tien_ngoai', label: 'Chuyển Tiền Ngoài', short: 'CTN' },
-  { key: 'merchant_qr', label: 'Merchant QR', short: 'QR' },
+// Mỗi nút map sang một sản phẩm trong cross_sell_products để bấm là tạo được
+// giao dịch bán (cross_sell_records). Ưu tiên khớp theo nhóm KPI; nếu không có
+// thì khớp theo từ khoá tên/short_name (dùng cho TTD/CTN/QR thuộc nhóm "khác").
+const PRODUCT_MAP: Array<{
+  key: string
+  label: string
+  short: string
+  kpiCategory?: string
+  nameKeywords: string[]
+}> = [
+  { key: 'cif_moi', label: 'CIF Mới', short: 'CIF', kpiCategory: 'cif_moi', nameKeywords: ['CIF'] },
+  { key: 'smart_banking', label: 'Ngân Hàng Số', short: 'NHS', kpiCategory: 'bidv_direct', nameKeywords: ['DIRECT', 'NGÂN HÀNG SỐ', 'SMART'] },
+  { key: 'bao_hiem_nhan_tho', label: 'Bảo Hiểm Nhân Thọ', short: 'BHNT', kpiCategory: 'bh_nhan_tho', nameKeywords: ['NHÂN THỌ', 'BHNT'] },
+  { key: 'bao_hiem_khoan_vay', label: 'Bảo Hiểm Khoản Vay', short: 'BHKV', kpiCategory: 'bh_khoan_vay', nameKeywords: ['KHOẢN VAY', 'BHKV'] },
+  { key: 'the_tin_dung', label: 'Thẻ Tín Dụng', short: 'TTD', nameKeywords: ['THẺ TÍN DỤNG', 'THẺ'] },
+  { key: 'chuyen_tien_ngoai', label: 'Chuyển Tiền Ngoài', short: 'CTN', nameKeywords: ['CHUYỂN TIỀN NGOÀI', 'CHUYỂN TIỀN'] },
+  { key: 'merchant_qr', label: 'Merchant QR', short: 'QR', nameKeywords: ['MERCHANT QR', 'MERCHANT', 'QR'] },
 ]
+
+/** Tìm sản phẩm tương ứng cho từng nút từ danh mục đã tải. */
+function buildProductByKey(products: any[]): Record<string, any> {
+  const upper = (value: string) => (value || '').toUpperCase()
+  const map: Record<string, any> = {}
+  for (const prod of PRODUCT_MAP) {
+    let found: any = null
+    if (prod.kpiCategory) {
+      found = products.find(p => classifyKpiProduct(p) === prod.kpiCategory)
+    }
+    if (!found) {
+      found = products.find(p =>
+        prod.nameKeywords.some(kw => upper(p.name).includes(upper(kw)) || upper(p.short_name).includes(upper(kw)))
+      )
+    }
+    if (found) map[prod.key] = found
+  }
+  return map
+}
 
 const ITEMS_PER_PAGE = 25
 
@@ -55,33 +84,53 @@ function CustomerMetaBadges({ customer }: { customer: any }) {
 
 function CustomerProductTags({
   customer,
-  updatingProduct,
-  onToggleProduct,
+  productByKey,
+  statusByCustomerProduct,
+  creatingProduct,
+  onCreateSale,
 }: {
   customer: any
-  updatingProduct: { customerId: string; productKey: string } | null
-  onToggleProduct: (customer: any, productKey: string, currentValue: boolean) => void
+  productByKey: Record<string, any>
+  statusByCustomerProduct: Record<string, Record<string, string>>
+  creatingProduct: { customerId: string; productKey: string } | null
+  onCreateSale: (customer: any, prod: typeof PRODUCT_MAP[number], product: any) => void
 }) {
   return (
     <div className="flex flex-wrap gap-1.5">
       {PRODUCT_MAP.map(prod => {
-        const hasProduct = !!customer[prod.key]
-        const isUpdating = updatingProduct?.customerId === customer.id && updatingProduct?.productKey === prod.key
+        const product = productByKey[prod.key]
+        const status = product ? statusByCustomerProduct[customer.id]?.[product.id] : undefined
+        const isCompleted = status === 'COMPLETED'
+        const isPending = !!status && !isCompleted // PENDING/INTERESTED... = chưa hoàn thành
+        const isCreating = creatingProduct?.customerId === customer.id && creatingProduct?.productKey === prod.key
+        const noProduct = !product
+
+        const title = noProduct
+          ? `${prod.label} (chưa có trong Danh Mục Sản Phẩm)`
+          : isCompleted
+            ? `${prod.label}: Đã hoàn thành`
+            : isPending
+              ? `${prod.label}: Đang chờ — vào Bảng Bán Hàng để chuyển trạng thái`
+              : `${prod.label}: Bấm để tạo giao dịch chờ`
+
         return (
           <button
             key={prod.key}
-            title={prod.label}
-            disabled={isUpdating}
-            onClick={() => onToggleProduct(customer, prod.key, hasProduct)}
+            title={title}
+            disabled={isCreating || noProduct}
+            onClick={() => onCreateSale(customer, prod, product)}
             className={clsx(
               "font-semibold border rounded transition-all flex items-center gap-0.5 min-h-[28px] min-w-[36px] justify-center px-2 py-1 text-[11px]",
-              hasProduct
+              isCompleted
                 ? "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700"
-                : "bg-white border-slate-200 text-slate-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700",
-              isUpdating && "opacity-50 cursor-not-allowed"
+                : isPending
+                  ? "bg-emerald-100 border-emerald-200 text-emerald-700"
+                  : "bg-white border-slate-200 text-slate-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700",
+              isCreating && "opacity-50 cursor-not-allowed",
+              noProduct && "opacity-40 cursor-not-allowed"
             )}
           >
-            {isUpdating && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
+            {isCreating && <Loader2 className="w-2.5 h-2.5 animate-spin" />}
             {prod.short}
           </button>
         )
@@ -125,7 +174,9 @@ export default function CustomersPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [formLoading, setFormLoading] = useState(false)
   const [customerType, setCustomerType] = useState<'INDIVIDUAL' | 'ENTERPRISE'>('INDIVIDUAL')
-  const [updatingProduct, setUpdatingProduct] = useState<{customerId: string, productKey: string} | null>(null)
+  const [creatingProduct, setCreatingProduct] = useState<{customerId: string, productKey: string} | null>(null)
+  const [products, setProducts] = useState<any[]>([])
+  const [productSales, setProductSales] = useState<any[]>([])
   const [importing, setImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -136,7 +187,7 @@ export default function CustomersPage() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true)
-      const [customersPage, profilesPage] = await Promise.all([
+      const [customersPage, profilesPage, productsData] = await Promise.all([
         fetchCustomersPage({
           page: currentPage,
           pageSize: ITEMS_PER_PAGE,
@@ -147,11 +198,15 @@ export default function CustomersPage() {
           page: 1,
           pageSize: 100,
           user,
-        })
+        }),
+        fetchProducts(),
       ])
       setCustomers(customersPage.data)
       setTotalCustomers(customersPage.total)
       setProfiles(profilesPage.data)
+      setProducts(productsData)
+      const pageIds = customersPage.data.map((c: any) => c.id)
+      setProductSales(await fetchProductSalesByCustomerIds(pageIds))
     } catch (err: unknown) {
       const message = getErrorMessage(err)
       logger.error("[Customers] Failed to load customers", { error: message })
@@ -185,6 +240,19 @@ export default function CustomersPage() {
   const paginatedCustomers = customers
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE + 1
   const endIndex = Math.min((currentPage - 1) * ITEMS_PER_PAGE + customers.length, totalCustomers)
+
+  const productByKey = useMemo(() => buildProductByKey(products), [products])
+  const statusByCustomerProduct = useMemo(() => {
+    const map: Record<string, Record<string, string>> = {}
+    for (const sale of productSales) {
+      if (!sale.customer_id || !sale.product_id) continue
+      const byProduct = map[sale.customer_id] || (map[sale.customer_id] = {})
+      // Ưu tiên COMPLETED: đã hoàn thành thì không bị ghi đè bởi bản ghi chờ.
+      if (byProduct[sale.product_id] === 'COMPLETED') continue
+      byProduct[sale.product_id] = sale.status
+    }
+    return map
+  }, [productSales])
 
   const pageCustomerIds = useMemo(() => paginatedCustomers.map((c: any) => c.id), [paginatedCustomers])
   const isAllPageSelected = useMemo(() => pageCustomerIds.length > 0 && pageCustomerIds.every(id => selectedIds.includes(id)), [pageCustomerIds, selectedIds])
@@ -277,16 +345,37 @@ export default function CustomersPage() {
     }
   }
 
-  const handleToggleProduct = async (customer: any, productKey: string, currentValue: boolean) => {
+  const handleCreateProductSale = async (customer: any, prod: typeof PRODUCT_MAP[number], product: any) => {
+    if (!product) {
+      toast.error(`Chưa có sản phẩm "${prod.label}" trong Danh Mục Sản Phẩm`)
+      return
+    }
+    // Đã có giao dịch (chờ hoặc hoàn thành): không tạo trùng, không huỷ bằng nút nhanh.
+    const existingStatus = statusByCustomerProduct[customer.id]?.[product.id]
+    if (existingStatus) {
+      toast.info('Đã ghi nhận. Vào Bảng Bán Hàng để chuyển trạng thái sản phẩm này.')
+      return
+    }
     try {
-      setUpdatingProduct({ customerId: customer.id, productKey })
-      await updateCustomer(customer.id, { [productKey]: !currentValue })
-      setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, [productKey]: !currentValue } : c))
-      toast.success(`Đã ${!currentValue ? 'thêm' : 'hủy'} sản phẩm cho ${getCustomerFullName(customer)}`)
-    } catch (err: any) {
-      toast.error('Lỗi: ' + err.message)
+      setCreatingProduct({ customerId: customer.id, productKey: prod.key })
+      // Giao dịch chờ: số lượng mặc định 1, giá trị (AMOUNT) để 0 — nhập khi hoàn thành.
+      const resultValue = product.metric_type === 'AMOUNT' ? 0 : 1
+      const created = await createProductSale({
+        product_id: product.id,
+        customer_id: customer.id,
+        agent_id: customer.assigned_manager_id || user!.id,
+        status: 'PENDING',
+        result_value: resultValue,
+      })
+      setProductSales(prev => [
+        ...prev,
+        { id: created.id, customer_id: customer.id, product_id: product.id, status: 'PENDING', sale_date: created.sale_date },
+      ])
+      toast.success(`Đã tạo giao dịch chờ "${product.short_name || product.name}" cho ${getCustomerFullName(customer)}`)
+    } catch (err: unknown) {
+      toast.error('Lỗi: ' + getErrorMessage(err))
     } finally {
-      setUpdatingProduct(null)
+      setCreatingProduct(null)
     }
   }
 
@@ -515,8 +604,10 @@ export default function CustomersPage() {
                         <td className="py-3 px-4 align-top">
                           <CustomerProductTags
                             customer={customer}
-                            updatingProduct={updatingProduct}
-                            onToggleProduct={handleToggleProduct}
+                            productByKey={productByKey}
+                            statusByCustomerProduct={statusByCustomerProduct}
+                            creatingProduct={creatingProduct}
+                            onCreateSale={handleCreateProductSale}
                           />
                         </td>
                         <td className="py-3 px-4 text-sm text-slate-600 align-top">
@@ -577,8 +668,10 @@ export default function CustomersPage() {
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Sản phẩm</p>
                       <CustomerProductTags
                         customer={customer}
-                        updatingProduct={updatingProduct}
-                        onToggleProduct={handleToggleProduct}
+                        productByKey={productByKey}
+                        statusByCustomerProduct={statusByCustomerProduct}
+                        creatingProduct={creatingProduct}
+                        onCreateSale={handleCreateProductSale}
                       />
                     </div>
 

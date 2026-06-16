@@ -90,6 +90,17 @@ export async function fetchProductSalesByAgentIds(agentIds: string[]): Promise<a
   return data || []
 }
 
+export async function fetchProductSalesByCustomerIds(customerIds: string[]): Promise<any> {
+  if (customerIds.length === 0) return []
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('cross_sell_records')
+    .select('id, customer_id, product_id, status, sale_date')
+    .in('customer_id', customerIds)
+  if (error) throw error
+  return data || []
+}
+
 export async function fetchProductSalesByCustomer(customerId: string): Promise<any> {
   const supabase = getSupabase()
   const { data, error } = await supabase
