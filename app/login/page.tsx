@@ -194,22 +194,6 @@ export default function LoginPage() {
                 <p className="text-sm text-rose-100 font-medium leading-relaxed">{error}</p>
               </div>
             )}
-
-            {/* Divider */}
-            <div className="mt-8 relative" aria-hidden="true">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/10" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="px-4 bg-transparent text-[11px] text-teal-100/40 font-bold tracking-wider uppercase">
-                  Bảo mật nội bộ
-                </span>
-              </div>
-            </div>
-
-            <p className="mt-6 text-center text-[13px] text-teal-100/50 leading-relaxed px-4">
-              Chỉ tài khoản được Admin cấp quyền mới có thể truy cập hệ thống.
-            </p>
           </div>
         </div>
 
