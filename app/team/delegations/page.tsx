@@ -29,15 +29,15 @@ export default function DelegationsPage() {
     // Fetch delegations
     let query = supabase.from('role_delegations').select(`
       *,
-      delegatee:delegatee_id(full_name, email, department_id),
-      delegator:delegator_id(full_name, email, department_id)
+      delegatee:profiles!delegatee_id(full_name, email, department_id),
+      delegator:profiles!delegator_id(full_name, email, department_id)
     `).order('created_at', { ascending: false })
-    
+
     // Fetch L3 users
     let l3Query = supabase.from('profiles').select('*').eq('role', 'ADMIN_LEVEL_3')
-    
+
     if (user?.role === 'ADMIN_LEVEL_2') {
-      l3Query = l3Query.eq('department_id', user.department_id)
+      l3Query = l3Query.eq('department_id', user.department_id || '')
     }
 
     const [delRes, l3Res] = await Promise.all([query, l3Query])
@@ -47,7 +47,7 @@ export default function DelegationsPage() {
             return delegation.delegatee?.department_id === user.department_id || delegation.delegator?.department_id === user.department_id
           })
         : delRes.data
-      setDelegations(visibleDelegations as RoleDelegation[])
+      setDelegations(visibleDelegations as unknown as RoleDelegation[])
     }
     if (l3Res.data) setL3Profiles(l3Res.data as Profile[])
       

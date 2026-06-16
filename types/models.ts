@@ -10,7 +10,7 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   original_role?: UserRole; // Client-side addition for delegated L3
-  department_id?: string;
+  department_id?: string | null;
   is_active?: boolean;
   full_name_slug?: string | null;
   short_name?: string | null;
@@ -163,6 +163,8 @@ export type ProductMetricType = 'QUANTITY' | 'AMOUNT';
 export interface Product {
   id: string;
   name: string;
+  short_name?: string | null;
+  kpi_category?: string | null;
   type: string;
   description?: string | null;
   target?: number | null;

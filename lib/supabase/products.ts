@@ -22,6 +22,8 @@ export async function fetchProducts(): Promise<any> {
 
 export async function createProduct(product: {
   name: string
+  short_name?: string
+  kpi_category?: string
   type: string
   description?: string
   target?: number

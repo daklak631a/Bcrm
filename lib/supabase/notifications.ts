@@ -1,4 +1,5 @@
 import { getSupabase } from './client'
+import type { TablesInsert } from '@/types/database'
 
 export async function fetchNotifications(userId: string): Promise<any> {
   const supabase = getSupabase()
@@ -22,7 +23,7 @@ export async function createNotification(notification: {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('notifications')
-    .insert(notification)
+    .insert(notification as TablesInsert<'notifications'>)
     .select()
     .single()
   if (error) throw error

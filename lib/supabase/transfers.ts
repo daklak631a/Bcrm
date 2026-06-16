@@ -76,14 +76,14 @@ export async function fetchTransferRequests(): Promise<any> {
     .from('manager_transfer_requests')
     .select(`
       *,
-      customer:customer_id(id, full_name),
-      requester:requester_id(id, full_name, email),
-      target_manager:target_manager_id(id, full_name, email)
+      customer:customers!customer_id(id, full_name),
+      requester:profiles!requester_id(id, full_name, email),
+      target_manager:profiles!target_manager_id(id, full_name, email)
     `)
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return (data || []) as ManagerTransferRequest[]
+  return (data || []) as unknown as ManagerTransferRequest[]
 }
 
 export async function updateTransferRequestStatus(
@@ -98,9 +98,9 @@ export async function updateTransferRequestStatus(
     .eq('status', 'PENDING')
     .select(`
       *,
-      customer:customer_id(id, full_name),
-      requester:requester_id(id, full_name, email),
-      target_manager:target_manager_id(id, full_name, email)
+      customer:customers!customer_id(id, full_name),
+      requester:profiles!requester_id(id, full_name, email),
+      target_manager:profiles!target_manager_id(id, full_name, email)
     `)
     .single()
 

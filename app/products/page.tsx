@@ -12,6 +12,7 @@ import { fetchProducts, fetchProductSales, createProduct, deleteProduct, fetchCu
 import { Modal, FormField, FormInput, FormSelect, SubmitButton } from "@/components/ui/modal"
 import { toast } from "sonner"
 import { ProductMetricType } from "@/types/models"
+import { KPI_CATEGORY_VALUES, KPI_CATEGORY_LABELS, OTHER_PRODUCTS_ID, classifyKpiProduct, classifyKpiProductByName } from "@/lib/kpi/classify"
 import { filterAgentRecordsByAccess, filterCustomersByAccess } from "@/lib/access-control"
 import { getErrorMessage } from "@/lib/errors"
 import { logger } from "@/lib/logger"
@@ -31,17 +32,11 @@ function ProductsPageContent() {
   const [profiles, setProfiles] = useState<any[]>([])
   const [planAssignments, setPlanAssignments] = useState<any[]>([])
 
-  const getProductTargetField = (productName: string): string | null => {
-    const name = productName.toUpperCase()
-    if (name.includes("CIF")) return "target_cif_moi"
-    if (name.includes("DIRECT")) return "target_bidv_direct"
-    if (name.includes("NHÂN THỌ")) return "target_bh_nhan_tho"
-    if (name.includes("KHOẢN VAY")) return "target_bh_khoan_vay"
-    if (name.includes("HUY ĐỘNG")) return "target_huy_dong_tang_rong"
-    if (name.includes("NGẮN HẠN")) return "target_du_no_ngan_han_tang_rong"
-    if (name.includes("TRUNG DÀI HẠN") || name.includes("TRUNG HẠN")) return "target_du_no_trung_han_tang_rong"
-    if (name.includes("HMTD")) return "target_cap_moi_hmtd"
-    return null
+  // Map sản phẩm -> cột target_* qua nhóm KPI (nguồn chung lib/kpi/classify),
+  // thay cho string-match riêng. SP nhóm "khác" trả null (dùng product.target).
+  const getProductTargetField = (product: { name?: string | null; type?: string | null; kpi_category?: string | null }): string | null => {
+    const category = classifyKpiProduct(product)
+    return category === OTHER_PRODUCTS_ID ? null : `target_${category}`
   }
 
   // Sale Modal state
@@ -57,6 +52,9 @@ function ProductsPageContent() {
   const [customerType, setCustomerType] = useState("INDIVIDUAL")
   const [preFilledSearch, setPreFilledSearch] = useState("")
   const [newProductName, setNewProductName] = useState("")
+  const [newProductShortName, setNewProductShortName] = useState("")
+  const [newProductKpiCategory, setNewProductKpiCategory] = useState<string>(OTHER_PRODUCTS_ID)
+  const [kpiCategoryTouched, setKpiCategoryTouched] = useState(false)
   const [newProductType, setNewProductType] = useState("Thẻ")
   const [newProductMetricType, setNewProductMetricType] = useState<ProductMetricType>("QUANTITY")
   const [newProductUnitLabel, setNewProductUnitLabel] = useState("SL")
@@ -147,6 +145,12 @@ function ProductsPageContent() {
     setNewProductUnitLabel(defaults.unitLabel)
   }, [newProductName, newProductType, productMetricTouched])
 
+  // Tự gợi ý nhóm KPI theo tên/loại cho tới khi người dùng tự chọn.
+  useEffect(() => {
+    if (kpiCategoryTouched) return
+    setNewProductKpiCategory(classifyKpiProductByName({ name: newProductName, type: newProductType }))
+  }, [newProductName, newProductType, kpiCategoryTouched])
+
   const productPerformanceMap = useMemo(() => {
     const performanceMap = new Map<string, { metricValue: number; completedCount: number }>()
 
@@ -163,7 +167,7 @@ function ProductsPageContent() {
   }, [profiles, sales, user])
 
   const getProductTarget = useCallback((product: any) => {
-    const targetField = getProductTargetField(product.name)
+    const targetField = getProductTargetField(product)
     if (!targetField || planAssignments.length === 0) {
       return Number(product.target || 0)
     }
@@ -212,11 +216,32 @@ function ProductsPageContent() {
   const openAddProductModal = () => {
     const defaults = getProductMetricDefinition({ name: '', type: 'Thẻ' })
     setNewProductName('')
+    setNewProductShortName('')
+    setNewProductKpiCategory(OTHER_PRODUCTS_ID)
+    setKpiCategoryTouched(false)
     setNewProductType('Thẻ')
     setNewProductMetricType(defaults.metricType)
     setNewProductUnitLabel(defaults.unitLabel)
     setProductMetricTouched(false)
     setShowAddModal(true)
+  }
+
+  const openQuickSaleModal = (product: any) => {
+    setSelectedProduct(product)
+    if (customerIdParam) {
+      const presetCustomer = filterCustomersByAccess(customers, profiles, user).find(c => c.id === customerIdParam)
+      if (presetCustomer) {
+        setSelectedCustomerId(presetCustomer.id)
+        setCustomerSearch(getCustomerFullName(presetCustomer))
+      } else {
+        setSelectedCustomerId("")
+        setCustomerSearch("")
+      }
+    } else {
+      setSelectedCustomerId("")
+      setCustomerSearch("")
+    }
+    setShowSaleModal(true)
   }
 
   const handleAddProduct = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -239,6 +264,8 @@ function ProductsPageContent() {
       setFormLoading(true)
       await createProduct({
         name: normalizedName,
+        short_name: newProductShortName.trim() || undefined,
+        kpi_category: newProductKpiCategory,
         type: newProductType,
         target: Number(form.get('target')) || 0,
         metric_type: newProductMetricType,
@@ -369,7 +396,7 @@ function ProductsPageContent() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full min-w-[1000px] border-collapse text-left">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/75 text-[11px] font-bold uppercase tracking-wider text-slate-500">
@@ -430,28 +457,12 @@ function ProductsPageContent() {
                         <td className="py-4 px-6 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
-                              onClick={() => {
-                                setSelectedProduct(product)
-                                if (customerIdParam) {
-                                  const presetCustomer = filterCustomersByAccess(customers, profiles, user).find(c => c.id === customerIdParam)
-                                  if (presetCustomer) {
-                                    setSelectedCustomerId(presetCustomer.id)
-                                    setCustomerSearch(getCustomerFullName(presetCustomer))
-                                  } else {
-                                    setSelectedCustomerId("")
-                                    setCustomerSearch("")
-                                  }
-                                } else {
-                                  setSelectedCustomerId("")
-                                  setCustomerSearch("")
-                                }
-                                setShowSaleModal(true)
-                              }}
+                              onClick={() => openQuickSaleModal(product)}
                               className="px-3 py-1.5 bg-teal-50 text-[#006b68] hover:bg-teal-100/50 border border-teal-200/50 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1"
                             >
                               <ShoppingCart className="w-3.5 h-3.5" /> Ghi nhanh
                             </button>
-                            
+
                             <Link
                               href={getCreateSaleHref(product.id)}
                               className="px-3 py-1.5 bg-[#006b68] hover:bg-[#005451] text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1"
@@ -460,8 +471,8 @@ function ProductsPageContent() {
                             </Link>
 
                             {isAdmin && (
-                              <button 
-                                onClick={() => handleDeleteProduct(product.id)} 
+                              <button
+                                onClick={() => handleDeleteProduct(product.id)}
                                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors ml-1"
                                 title="Xóa sản phẩm"
                               >
@@ -476,6 +487,63 @@ function ProductsPageContent() {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile: card list */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filteredProducts.map((product: any) => {
+                const metricDefinition = getProductMetricDefinition(product)
+                const performance = productPerformanceMap.get(product.id) || { metricValue: 0, completedCount: 0 }
+                const currentMetricValue = performance.metricValue
+                const resolvedTarget = getProductTarget(product)
+                const percent = resolvedTarget > 0 ? Math.min(Math.round((currentMetricValue / resolvedTarget) * 100), 100) : 0
+                return (
+                  <article key={product.id} className="p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-teal-50 text-[#006b68] border border-teal-100/50 flex items-center justify-center shrink-0">
+                        <PackageSearch className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-slate-800 text-sm break-words">{product.short_name || product.name}</p>
+                        <p className="text-xs text-slate-400 font-medium mt-0.5">{product.type} • {metricDefinition.unitLabel}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500">Mục tiêu: <span className="font-semibold text-slate-700">{formatMetricValue(resolvedTarget, metricDefinition.unitLabel)}</span></span>
+                      <span className="text-slate-500">Thực tế: <span className="font-bold text-[#006b68]">{formatMetricValue(currentMetricValue, metricDefinition.unitLabel)}</span></span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 bg-slate-100 rounded-full h-2">
+                        <div className={clsx("h-2 rounded-full transition-all duration-500", percent >= 100 ? "bg-emerald-500" : "bg-[#006b68]")} style={{ width: `${percent}%` }} />
+                      </div>
+                      <span className="text-xs font-bold text-slate-700 shrink-0 w-9 text-right">{percent}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openQuickSaleModal(product)}
+                        className="flex-1 min-h-[40px] bg-teal-50 text-[#006b68] hover:bg-teal-100/50 border border-teal-200/50 rounded-lg text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        <ShoppingCart className="w-4 h-4" /> Ghi nhanh
+                      </button>
+                      <Link
+                        href={getCreateSaleHref(product.id)}
+                        className="flex-1 min-h-[40px] bg-[#006b68] hover:bg-[#005451] text-white rounded-lg text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                      >
+                        <ShoppingCart className="w-4 h-4" /> Bán hàng
+                      </Link>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteProduct(product.id)}
+                          className="min-h-[40px] min-w-[40px] flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-slate-200 transition-colors"
+                          title="Xóa sản phẩm"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -484,7 +552,24 @@ function ProductsPageContent() {
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Thêm Sản Phẩm Bán Chéo">
         <form onSubmit={handleAddProduct} className="space-y-4">
           <FormField label="Tên sản phẩm" required>
-            <FormInput value={newProductName} onChange={(e) => setNewProductName(e.target.value)} required placeholder="VD: Thẻ BIDV Chip" />
+            <FormInput value={newProductName} onChange={(e) => setNewProductName(e.target.value)} required placeholder="VD: DƯ NỢ TÍN DỤNG TĂNG RÒNG (Ngắn hạn)" />
+          </FormField>
+          <FormField label="Tên rút gọn (hiển thị trên nút mobile)">
+            <FormInput value={newProductShortName} onChange={(e) => setNewProductShortName(e.target.value)} placeholder="VD: DN Ngắn hạn" />
+          </FormField>
+          <FormField label="Nhóm KPI" required>
+            <FormSelect
+              value={newProductKpiCategory}
+              onChange={(e) => {
+                setKpiCategoryTouched(true)
+                setNewProductKpiCategory(e.target.value)
+              }}
+              required
+            >
+              {KPI_CATEGORY_VALUES.map((value) => (
+                <option key={value} value={value}>{KPI_CATEGORY_LABELS[value]}</option>
+              ))}
+            </FormSelect>
           </FormField>
           <FormField label="Loại sản phẩm" required>
             <FormSelect value={newProductType} onChange={(e) => setNewProductType(e.target.value)} required>

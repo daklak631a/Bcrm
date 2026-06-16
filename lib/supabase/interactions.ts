@@ -1,4 +1,5 @@
 import { getSupabase } from './client'
+import type { TablesInsert } from '@/types/database'
 import { cached, invalidateCache } from './cache'
 import { logAudit } from './audit'
 import { extractDateOnly } from './mappers'
@@ -45,7 +46,7 @@ export async function createInteraction(interaction: {
   }
   const { data, error } = await supabase
     .from('interactions')
-    .insert(payload)
+    .insert(payload as TablesInsert<'interactions'>)
     .select()
     .single()
   if (error) throw error

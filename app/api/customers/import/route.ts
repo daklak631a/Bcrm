@@ -2,7 +2,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { checkRateLimit, getClientIp } from '@/lib/middleware/rate-limit'
 import { internalServerError } from '@/lib/api-errors'
-import { getErrorMessage } from '@/lib/errors'
+import { getErrorMessage, toPublicErrorMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import {
   INSERT_BATCH_SIZE,
@@ -238,7 +238,9 @@ export async function POST(request: Request) {
         .update({ ...row.customer, updated_at: new Date().toISOString() })
         .eq('id', customerId)
       if (error) {
-        updateErrors.push(`Dòng ${row.rowNumber}: ${error.message}`)
+        // Giữ chi tiết lỗi DB ở log server, chỉ trả message đã lọc cho client.
+        logger.error('[Customers Import API] Update row failed', { rowNumber: row.rowNumber, error: getErrorMessage(error) }, { production: true })
+        updateErrors.push(`Dòng ${row.rowNumber}: ${toPublicErrorMessage(error, 'Không thể cập nhật.')}`)
       }
     })
 

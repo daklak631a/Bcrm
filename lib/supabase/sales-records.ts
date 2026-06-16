@@ -52,8 +52,8 @@ export async function fetchSalesRecordsByAgent(agentId: string): Promise<any> {
   const loans = (loansData.data || []).filter((l: any) => l.customers?.assigned_manager_id === agentId)
   const deposits = (depositsData.data || []).filter((d: any) => d.customers?.assigned_manager_id === agentId)
   return sortSalesRecords([
-    ...loans.map(mapLoanToSalesRecord),
-    ...deposits.map(mapDepositToSalesRecord),
+    ...loans.map((l) => mapLoanToSalesRecord(l as any)),
+    ...deposits.map((d) => mapDepositToSalesRecord(d as any)),
     ...productSales.map(mapProductSaleToSalesRecord),
   ])
 }

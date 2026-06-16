@@ -570,7 +570,8 @@ function SalesPageContent() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* Desktop: bảng */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[920px]">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr className="text-sm text-slate-600 font-medium">
@@ -618,13 +619,49 @@ function SalesPageContent() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Mobile: card list */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {paginatedRecords.map((record) => {
+                  const sourceMeta = getSourceMeta(record.source_type)
+                  const Icon = sourceMeta.icon
+                  const metricValue = getRecordMetricValue(record)
+                  const unitLabel = getRecordUnitLabel(record)
+                  return (
+                    <article key={record.id} className="p-4 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="font-semibold text-slate-800 break-words min-w-0">{record.customer_name}</span>
+                        <span className={clsx("inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium shrink-0", sourceMeta.color)}>
+                          <Icon className="w-3.5 h-3.5" /> {sourceMeta.label}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-slate-800 break-words">{record.title}</div>
+                        <div className="text-xs text-slate-500 mt-0.5 break-words">{record.category}{record.account_number ? ` • ${record.account_number}` : ""}{record.source_type === "PRODUCT" ? ` • ${unitLabel}` : ""}</div>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="font-semibold text-emerald-700">
+                          {record.source_type === "PRODUCT"
+                            ? formatMetricValue(metricValue, unitLabel)
+                            : formatCurrency(Number(record.amount || 0))}
+                        </span>
+                        <span className="text-slate-500">{getStatusLabel(record)}</span>
+                      </div>
+                      <div className="text-xs text-slate-400">{new Date(record.sale_date).toLocaleDateString("vi-VN")}</div>
+                    </article>
+                  )
+                })}
+                {filteredRecords.length === 0 && (
+                  <div className="py-12 text-center text-slate-500">Chưa có giao dịch bán hàng nào.</div>
+                )}
+              </div>
               <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-sm text-slate-500">
                 <span>{filteredRecords.length > 0 ? `Hiển thị ${(currentPage - 1) * ITEMS_PER_PAGE + 1} - ${Math.min(currentPage * ITEMS_PER_PAGE, filteredRecords.length)} / ${filteredRecords.length}` : "Không có dữ liệu"}</span>
                 {totalPages > 1 && (
                   <div className="flex items-center gap-1">
-                    <button onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} className="px-3 py-1.5 border rounded bg-white hover:bg-slate-50 disabled:opacity-40">Trước</button>
+                    <button onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={currentPage === 1} className="px-3 min-h-[40px] border rounded bg-white hover:bg-slate-50 disabled:opacity-40">Trước</button>
                     <span className="px-2">{currentPage}/{totalPages}</span>
-                    <button onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 border rounded bg-white hover:bg-slate-50 disabled:opacity-40">Sau</button>
+                    <button onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages} className="px-3 min-h-[40px] border rounded bg-white hover:bg-slate-50 disabled:opacity-40">Sau</button>
                   </div>
                 )}
               </div>

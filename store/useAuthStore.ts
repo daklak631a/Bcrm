@@ -24,7 +24,7 @@ function profileToUser(profile: Profile): User {
     role: (profile as any).effective_role || profile.role as Role,
     original_role: profile.role as Role,
     branchId: profile.department_id || 'ALL',
-    department_id: profile.department_id,
+    department_id: profile.department_id ?? undefined,
     is_active: profile.is_active ?? true,
   }
 }

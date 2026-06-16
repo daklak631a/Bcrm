@@ -1,8 +1,17 @@
 "use client"
 
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { getSupabase } from "@/lib/supabase/client"
 import { getErrorMessage } from "@/lib/errors"
 import { logger } from "@/lib/logger"
+
+/**
+ * Bảng `workflow_configs` cố ý nằm NGOÀI schema typed (tính năng best-effort,
+ * có fallback localStorage). Dùng client untyped cho riêng các truy vấn này.
+ */
+function getUntypedSupabase(): SupabaseClient {
+  return getSupabase() as unknown as SupabaseClient
+}
 
 export type ConfigOption = {
   id: string
@@ -367,7 +376,7 @@ export async function loadWorkflowConfig(): Promise<WorkflowConfigLoadResult> {
   const localConfig = getWorkflowConfig()
 
   try {
-    const supabase = getSupabase()
+    const supabase = getUntypedSupabase()
     const { data, error } = await supabase
       .from("workflow_configs")
       .select("payload, updated_at")
@@ -405,7 +414,7 @@ export async function saveWorkflowConfig(config: WorkflowConfig): Promise<Workfl
   workflowConfigMemoryCacheExpiresAt = Date.now() + workflowConfigCacheTtlMs
 
   try {
-    const supabase = getSupabase()
+    const supabase = getUntypedSupabase()
     const { data: userResult } = await supabase.auth.getUser()
     const userId = userResult.user?.id || null
     const { error } = await supabase

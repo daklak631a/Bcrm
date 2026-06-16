@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import type { NextRequest, NextResponse } from 'next/server'
+import type { Database } from '@/types/database'
 
 export function createSupabaseServerClient(
   request: NextRequest,
@@ -12,7 +13,7 @@ export function createSupabaseServerClient(
     throw new Error('Thiếu NEXT_PUBLIC_SUPABASE_URL hoặc NEXT_PUBLIC_SUPABASE_ANON_KEY.')
   }
 
-  return createServerClient(supabaseUrl, supabaseAnonKey, {
+  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll()

@@ -7,29 +7,7 @@ import { getProductMetricValue } from '@/lib/product-metrics'
 import { getErrorMessage } from '@/lib/errors'
 import { logger } from '@/lib/logger'
 import { kpiSummaryQuerySchema } from '@/lib/api-validation'
-
-const OTHER_PRODUCTS_ID = 'other_spdv'
-
-function classifyKpiProduct(product?: any): string {
-  const upperName = `${product?.name || ''}`.toUpperCase()
-  const upperType = `${product?.type || ''}`.toUpperCase()
-  const text = `${upperName} ${upperType}`
-
-  if (text.includes('CIF')) return 'cif_moi'
-  if (text.includes('DIRECT')) return 'bidv_direct'
-  if (text.includes('HMTD') || text.includes('HẠN MỨC') || text.includes('HAN MUC')) return 'cap_moi_hmtd'
-  if (text.includes('BẢO HIỂM') || text.includes('BAO HIEM') || text.includes('BH ') || text.includes('LIFE')) {
-    if (text.includes('KHOẢN VAY') || text.includes('KHOAN VAY') || text.includes('LOAN')) return 'bh_khoan_vay'
-    return 'bh_nhan_tho'
-  }
-  if (text.includes('HUY ĐỘNG') || text.includes('HUY DONG')) return 'huy_dong_tang_rong'
-  if (text.includes('DƯ NỢ') || text.includes('DU NO')) {
-    if (text.includes('NGẮN HẠN') || text.includes('NGAN HAN')) return 'du_no_ngan_han_tang_rong'
-    if (text.includes('TRUNG') || text.includes('DÀI HẠN') || text.includes('DAI HAN')) return 'du_no_trung_han_tang_rong'
-  }
-
-  return OTHER_PRODUCTS_ID
-}
+import { OTHER_PRODUCTS_ID, classifyKpiProduct } from '@/lib/kpi/classify'
 
 const TARGET_FIELDS = [
   'target_loans_amount',
@@ -155,7 +133,7 @@ export async function GET(request: Request) {
 
     const { data: activeProductsData, error: activeProductsError } = await supabase
       .from('cross_sell_products')
-      .select('id, name, type')
+      .select('id, name, type, kpi_category')
       .order('name', { ascending: true })
 
     if (activeProductsError) {
@@ -328,7 +306,7 @@ export async function GET(request: Request) {
 
     const { data: productSalesData, error: productSalesError } = await supabase
       .from('cross_sell_records')
-      .select('agent_id, product_id, result_value, sale_date, created_at, cross_sell_products(id, name, type)')
+      .select('agent_id, product_id, result_value, sale_date, created_at, cross_sell_products(id, name, type, kpi_category)')
       .or(`and(sale_date.gte.${startDate},sale_date.lte.${endDate}),and(sale_date.is.null,created_at.gte.${startDate},created_at.lt.${dayjs(endDate).add(1, 'day').format('YYYY-MM-DD')})`)
 
     if (productSalesError) {
@@ -362,20 +340,29 @@ export async function GET(request: Request) {
           categoryTargets[`target_${categoryKey}`] = Number(categoryTargets[`target_${categoryKey}`] || 0) + Number(value || 0)
         }
       })
+      // Thực tế (actual) của 1 nhóm KPI được lấy theo thứ tự ưu tiên, tương ứng
+      // 3 KỊCH BẢN DB DEPLOY khác nhau (đây là lý do tồn tại "nhiều đường tính"):
+      //   1) RPC get_kpi_summary BẢN CŨ — trả cột cố định (row.bidv_direct...).
+      //   2) RPC get_kpi_summary BẢN ĐỘNG — trả product_actuals JSONB theo product id.
+      //   3) KHÔNG có RPC — tự tổng hợp từ cross_sell_records (extraActuals).
+      // KHÔNG xoá nhánh nào nếu chưa xác nhận MỌI môi trường đã chạy RPC bản động,
+      // vì xoá nhầm sẽ làm KPI về 0 trên deploy còn ở kịch bản 1 hoặc 3.
       const extraActuals = extraActualsByUser.get(row.manager_id) || {}
       const productActuals = row.product_actuals || {}
-      const getProductActualByCategory = (categoryKey: string) => {
+      const actualFromDynamicRpc = (categoryKey: string) => {
         return Object.entries(productActuals).reduce((sum, [productId, value]) => {
           const productCategory = productId === OTHER_PRODUCTS_ID ? OTHER_PRODUCTS_ID : productCategoryById.get(productId) || OTHER_PRODUCTS_ID
           return productCategory === categoryKey ? sum + Number(value || 0) : sum
         }, 0)
       }
+      // Giữ tên cũ để không đổi hành vi nơi khác.
+      const getProductActualByCategory = actualFromDynamicRpc
       const getActualValue = (actualKey: string) => {
-        const legacyValue = Number(row?.[actualKey] || 0)
+        const legacyValue = Number(row?.[actualKey] || 0)        // (1) RPC bản cũ
         if (legacyValue !== 0) return legacyValue
-        const productActualValue = getProductActualByCategory(actualKey)
+        const productActualValue = actualFromDynamicRpc(actualKey) // (2) RPC bản động
         if (productActualValue !== 0) return productActualValue
-        return Number(extraActuals[actualKey] || 0)
+        return Number(extraActuals[actualKey] || 0)               // (3) fallback thủ công
       }
       const otherProductActual = getProductActualByCategory(OTHER_PRODUCTS_ID) || Number(extraActuals[OTHER_PRODUCTS_ID] || 0)
       const cifMoiActual =

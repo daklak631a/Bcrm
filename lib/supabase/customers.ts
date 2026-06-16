@@ -1,4 +1,5 @@
 import { getSupabase } from './client'
+import type { TablesInsert, TablesUpdate } from '@/types/database'
 import {
   CurrentUserScope,
   DEFAULT_CACHE_TTL_MS,
@@ -249,7 +250,7 @@ export async function createCustomer(customer: {
 
   const { data, error } = await supabase
     .from('customers')
-    .insert(customerToInsert)
+    .insert(customerToInsert as TablesInsert<'customers'>)
     .select()
     .single()
   if (error) throw error
@@ -314,7 +315,7 @@ export async function updateCustomer(id: string, updates: Partial<{
 
   const { data, error } = await supabase
     .from('customers')
-    .update({ ...customerToUpdate, updated_at: new Date().toISOString() })
+    .update({ ...customerToUpdate, updated_at: new Date().toISOString() } as TablesUpdate<'customers'>)
     .eq('id', id)
     .select()
     .single()

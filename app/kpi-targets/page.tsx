@@ -657,21 +657,32 @@ export default function KpiTargetsPage() {
         const slugify = (s: string) => s.toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '')
 
         let applied = 0
+        const unmatched: string[] = []
         const nextDrafts: Record<string, AssignmentDraft> = { ...drafts }
         for (const row of rows) {
           const name = String(row['Chuyên viên'] || '').trim()
+          if (!name) continue
           const match = visibleUsers.find(p => slugify(p.short_name || formatShortName(p.full_name || '')) === slugify(name))
-          if (!match) continue
-          
+          if (!match) { unmatched.push(name); continue }
+
           const newDraft = buildDefaultDraft(ALL_ASSIGNMENT_FIELDS)
           ALL_ASSIGNMENT_FIELDS.forEach(f => {
-            newDraft[f.key] = Number(row[`${f.label} (${f.unit})`] || 0)
+            // Hỗ trợ số kiểu Việt ("1.000.000", "1.000,5") thay vì Number() thuần -> tránh mất dữ liệu thành 0.
+            const cell = row[`${f.label} (${f.unit})`]
+            const parsed = typeof cell === 'number' ? cell : parseNumericCell(String(cell ?? ''))
+            newDraft[f.key] = Number.isFinite(parsed as number) ? (parsed as number) : 0
           })
           nextDrafts[match.id] = newDraft
           applied++
         }
         setDrafts(nextDrafts)
-        toast.success(`Đã đọc KPI cho ${applied}/${rows.length} chuyên viên. Kiểm tra lại và nhấn Lưu tất cả.`)
+        if (unmatched.length > 0) {
+          toast.warning(
+            `Đã đọc KPI cho ${applied}/${rows.length} chuyên viên. ${unmatched.length} dòng không khớp tên (bị bỏ qua): ${unmatched.slice(0, 5).join(', ')}${unmatched.length > 5 ? '…' : ''}`
+          )
+        } else {
+          toast.success(`Đã đọc KPI cho ${applied}/${rows.length} chuyên viên. Kiểm tra lại và nhấn Lưu tất cả.`)
+        }
       } catch (err: any) {
         toast.error('Lỗi đọc file: ' + err.message)
       } finally {

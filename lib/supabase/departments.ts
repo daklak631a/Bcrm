@@ -1,4 +1,5 @@
 import { getSupabase } from './client'
+import type { TablesInsert, TablesUpdate } from '@/types/database'
 import { DEFAULT_CACHE_TTL_MS, LONG_CACHE_TTL_MS, PageResult, cached, invalidateCache, pageRange } from './cache'
 
 export type Department = {
@@ -65,7 +66,7 @@ export async function createDepartment(input: DepartmentInput): Promise<Departme
     description: input.description?.trim() || null,
     is_active: input.is_active ?? true,
   }
-  const { data, error } = await supabase.from('departments').insert(payload).select().single()
+  const { data, error } = await supabase.from('departments').insert(payload as TablesInsert<'departments'>).select().single()
   if (error) throw error
   invalidateCache('departments:')
   return data as Department
@@ -79,7 +80,7 @@ export async function updateDepartment(id: string, updates: Partial<DepartmentIn
   if (updates.description !== undefined) payload.description = updates.description?.trim() || null
   if (updates.is_active !== undefined) payload.is_active = updates.is_active
 
-  const { data, error } = await supabase.from('departments').update(payload).eq('id', id).select().single()
+  const { data, error } = await supabase.from('departments').update(payload as TablesUpdate<'departments'>).eq('id', id).select().single()
   if (error) throw error
   invalidateCache('departments:')
   return data as Department

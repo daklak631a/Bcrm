@@ -1,4 +1,5 @@
 import { getSupabase } from './client'
+import type { TablesInsert } from '@/types/database'
 import { cached, invalidateCache } from './cache'
 import { logAudit } from './audit'
 import { extractDateOnly } from './mappers'
@@ -50,7 +51,7 @@ export async function createLoan(loan: {
   }
   const { data, error } = await supabase
     .from('loans')
-    .insert(payload)
+    .insert(payload as TablesInsert<'loans'>)
     .select()
     .single()
   if (error) throw error

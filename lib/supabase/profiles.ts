@@ -1,5 +1,5 @@
 import { getSupabase } from './client'
-import type { Tables } from '@/types/database'
+import type { Tables, TablesInsert, TablesUpdate } from '@/types/database'
 import {
   CurrentUserScope,
   DEFAULT_CACHE_TTL_MS,
@@ -79,7 +79,7 @@ export async function fetchProfilesPage(input: ProfilePageInput = {}): Promise<P
     }
 
     if (input.role) {
-      query = query.eq('role', input.role)
+      query = query.eq('role', input.role as Tables<'profiles'>['role'])
     }
 
     const scopedDepartment = input.departmentId || (
@@ -199,7 +199,7 @@ export async function createAllowedEmail(entry: {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('allowed_emails')
-    .insert(entry)
+    .insert(entry as TablesInsert<'allowed_emails'>)
     .select()
     .single()
   if (error) throw error
@@ -210,7 +210,7 @@ export async function updateAllowedEmail(id: string, updates: Record<string, any
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('allowed_emails')
-    .update(updates)
+    .update(updates as TablesUpdate<'allowed_emails'>)
     .eq('id', id)
     .select()
     .single()

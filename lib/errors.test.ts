@@ -26,9 +26,25 @@ describe("toPublicErrorMessage", () => {
     "violates row-level security policy",
     "service_role key is missing",
     "Schema cache is stale",
+    'duplicate key value violates unique constraint "customers_cif_code_key"',
+    'null value in column "full_name" violates not-null constraint',
+    'column "foo" does not exist',
+    "permission denied for table customers",
+    "PGRST116: no rows returned",
+    "connect ECONNREFUSED 127.0.0.1:5432",
+    "Error\n    at handler (/app/route.ts:12:34)",
   ])("hides technical details: %s", (message) => {
     expect(toPublicErrorMessage(new Error(message), "Không thể xử lý yêu cầu.")).toBe(
       "Không thể xử lý yêu cầu."
+    )
+  })
+
+  it("keeps Vietnamese business-rule messages", () => {
+    expect(toPublicErrorMessage(new Error("Khách hàng đã tồn tại trong hệ thống."))).toBe(
+      "Khách hàng đã tồn tại trong hệ thống."
+    )
+    expect(toPublicErrorMessage(new Error("Vui lòng nhập số điện thoại hợp lệ."))).toBe(
+      "Vui lòng nhập số điện thoại hợp lệ."
     )
   })
 })

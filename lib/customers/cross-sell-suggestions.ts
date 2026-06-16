@@ -16,7 +16,7 @@ type CustomerLike = {
   limit_approval_count?: number | null
 }
 
-type ProductLike = { id: string; name: string; type?: string | null }
+type ProductLike = { id: string; name: string; short_name?: string | null; type?: string | null }
 type SalesRecordLike = {
   source_type?: string | null
   title?: string | null

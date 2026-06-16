@@ -562,7 +562,7 @@ export default function CustomerDetailPage({ params }: { params: Promise<{ id: s
                           className="inline-flex items-center gap-1.5 px-3 py-2 bg-white text-emerald-800 rounded-lg text-sm font-semibold border border-emerald-200 shadow-sm hover:bg-emerald-50 hover:border-emerald-300 transition-colors min-h-[40px]"
                         >
                           <Plus className="w-3.5 h-3.5 text-gold-600 shrink-0" />
-                          <span className="break-words">{p.name}</span>
+                          <span className="break-words">{p.short_name || p.name}</span>
                         </Link>
                       ))}
                     </div>

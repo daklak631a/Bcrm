@@ -130,7 +130,7 @@ export function Header({
   return (
     <header className="relative z-30 h-16 bg-white border-b flex items-center justify-between px-4 md:px-6 flex-shrink-0">
       <div className="flex items-center gap-3 overflow-hidden">
-        <button onClick={onMenuClick} className="md:hidden text-slate-500 hover:text-slate-700 focus:outline-none shrink-0">
+        <button onClick={onMenuClick} aria-label="Mở menu" className="md:hidden inline-flex items-center justify-center h-10 w-10 -ml-2 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 focus:outline-none shrink-0">
           <Menu className="w-6 h-6" />
         </button>
         <button
@@ -149,7 +149,8 @@ export function Header({
         <div className="relative" ref={notifRef}>
           <button
             onClick={handleBellClick}
-            className="relative p-2 text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label="Thông báo"
+            className="relative inline-flex items-center justify-center h-10 w-10 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
           >
             <Bell className="w-5 h-5" />
             {unreadCount > 0 && (
@@ -213,7 +214,7 @@ export function Header({
               {mounted && isDelegatedRole ? ` (ủy quyền từ ${getRoleName(user?.original_role)})` : ''}
             </p>
           </div>
-          <button onClick={handleLogout} className="p-2 ml-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors" title="Đăng xuất">
+          <button onClick={handleLogout} aria-label="Đăng xuất" className="inline-flex items-center justify-center h-10 w-10 ml-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors" title="Đăng xuất">
             <LogOut className="w-5 h-5" />
           </button>
         </div>

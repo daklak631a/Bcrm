@@ -2,7 +2,7 @@
  * AUTO-GENERATED — không sửa tay.
  * Sinh từ schema PostgREST (DB Supabase thật).
  * Chạy lại: npm run gen:types
- * Generated at: 2026-06-11T04:32:07.597Z
+ * Generated at: 2026-06-15T09:48:44.769Z
  */
 
 export type Json =
@@ -22,141 +22,170 @@ export interface Database {
           email: string
           full_name: string
           role: 'USER' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_3' | 'ADVISOR' | 'ADMIN_LEVEL_0'
-          department_id?: string
+          department_id: string | null
           is_active: boolean
           created_at: string
-          created_by?: string
-          full_name_slug?: string
-          short_name?: string
+          created_by: string | null
+          full_name_slug: string | null
+          short_name: string | null
         }
         Insert: {
           id?: string
           email: string
           full_name: string
           role?: 'USER' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_3' | 'ADVISOR' | 'ADMIN_LEVEL_0'
-          department_id?: string
+          department_id?: string | null
           is_active?: boolean
           created_at?: string
-          created_by?: string
-          full_name_slug?: string
-          short_name?: string
+          created_by?: string | null
+          full_name_slug?: string | null
+          short_name?: string | null
         }
         Update: {
           id?: string
           email?: string
           full_name?: string
           role?: 'USER' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_3' | 'ADVISOR' | 'ADMIN_LEVEL_0'
-          department_id?: string
+          department_id?: string | null
           is_active?: boolean
           created_at?: string
-          created_by?: string
-          full_name_slug?: string
-          short_name?: string
+          created_by?: string | null
+          full_name_slug?: string | null
+          short_name?: string | null
         }
         Relationships: []
       }
       audit_logs: {
         Row: {
           id: string
-          user_id?: string
+          user_id: string | null
           action: string
           entity_type: string
           entity_id: string
-          before_value?: Json
-          after_value?: Json
+          before_value: Json | null
+          after_value: Json | null
           created_at: string
         }
         Insert: {
           id?: string
-          user_id?: string
+          user_id?: string | null
           action: string
           entity_type: string
           entity_id: string
-          before_value?: Json
-          after_value?: Json
+          before_value?: Json | null
+          after_value?: Json | null
           created_at?: string
         }
         Update: {
           id?: string
-          user_id?: string
+          user_id?: string | null
           action?: string
           entity_type?: string
           entity_id?: string
-          before_value?: Json
-          after_value?: Json
+          before_value?: Json | null
+          after_value?: Json | null
           created_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       cross_sales: {
         Row: {
           id: string
-          customer_id?: string
+          customer_id: string | null
           manager_id: string
           service_type: 'BIDV_DIRECT' | 'LIFE_INSURANCE' | 'LOAN_INSURANCE' | 'CREDIT_LIMIT_NEW'
-          amount?: number
+          amount: number | null
           recorded_date: string
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
-          customer_id?: string
+          customer_id?: string | null
           manager_id: string
           service_type: 'BIDV_DIRECT' | 'LIFE_INSURANCE' | 'LOAN_INSURANCE' | 'CREDIT_LIMIT_NEW'
-          amount?: number
+          amount?: number | null
           recorded_date?: string
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
-          customer_id?: string
+          customer_id?: string | null
           manager_id?: string
           service_type?: 'BIDV_DIRECT' | 'LIFE_INSURANCE' | 'LOAN_INSURANCE' | 'CREDIT_LIMIT_NEW'
-          amount?: number
+          amount?: number | null
           recorded_date?: string
           created_at?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "cross_sales_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cross_sales_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       cross_sell_products: {
         Row: {
           id: string
           name: string
           type: string
-          description?: string
-          target?: number
+          description: string | null
+          target: number | null
           created_at: string
           updated_at: string
           metric_type: string
           unit_label: string
-          is_active?: boolean
+          is_active: boolean | null
+          short_name: string | null
+          kpi_category: string | null
         }
         Insert: {
           id?: string
           name: string
           type?: string
-          description?: string
-          target?: number
+          description?: string | null
+          target?: number | null
           created_at?: string
           updated_at?: string
           metric_type?: string
           unit_label?: string
-          is_active?: boolean
+          is_active?: boolean | null
+          short_name?: string | null
+          kpi_category?: string | null
         }
         Update: {
           id?: string
           name?: string
           type?: string
-          description?: string
-          target?: number
+          description?: string | null
+          target?: number | null
           created_at?: string
           updated_at?: string
           metric_type?: string
           unit_label?: string
-          is_active?: boolean
+          is_active?: boolean | null
+          short_name?: string | null
+          kpi_category?: string | null
         }
         Relationships: []
       }
@@ -164,233 +193,312 @@ export interface Database {
         Row: {
           id: string
           product_id: string
-          customer_id?: string
+          customer_id: string | null
           agent_id: string
           status: string
           sale_date: string
-          note?: string
+          note: string | null
           created_at: string
           updated_at: string
           result_value: number
-          is_batch_entry?: boolean
-          is_allocated?: boolean
-          batch_note?: string
+          is_batch_entry: boolean | null
+          is_allocated: boolean | null
+          batch_note: string | null
         }
         Insert: {
           id?: string
           product_id: string
-          customer_id?: string
+          customer_id?: string | null
           agent_id: string
           status?: string
           sale_date?: string
-          note?: string
+          note?: string | null
           created_at?: string
           updated_at?: string
           result_value?: number
-          is_batch_entry?: boolean
-          is_allocated?: boolean
-          batch_note?: string
+          is_batch_entry?: boolean | null
+          is_allocated?: boolean | null
+          batch_note?: string | null
         }
         Update: {
           id?: string
           product_id?: string
-          customer_id?: string
+          customer_id?: string | null
           agent_id?: string
           status?: string
           sale_date?: string
-          note?: string
+          note?: string | null
           created_at?: string
           updated_at?: string
           result_value?: number
-          is_batch_entry?: boolean
-          is_allocated?: boolean
-          batch_note?: string
+          is_batch_entry?: boolean | null
+          is_allocated?: boolean | null
+          batch_note?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "cross_sell_records_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "cross_sell_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cross_sell_records_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cross_sell_records_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       customers: {
         Row: {
           id: string
-          phone?: string
-          email?: string
-          address?: string
-          note?: string
-          assigned_manager_id?: string
+          phone: string | null
+          email: string | null
+          address: string | null
+          note: string | null
+          assigned_manager_id: string | null
           created_at: string
           updated_at: string
-          deleted_at?: string
-          customer_type?: string
-          business_name?: string
-          tax_code?: string
-          representative_name?: string
+          deleted_at: string | null
+          customer_type: string | null
+          business_name: string | null
+          tax_code: string | null
+          representative_name: string | null
           full_name: string
-          loan_short_term?: number
-          loan_mid_long_term?: number
-          hdv_dau_ky?: number
-          hdv_phat_sinh?: number
-          hdv_tang_rong?: number
-          limit_approval_count?: number
-          cif_moi?: boolean
-          smart_banking?: boolean
-          bao_hiem_nhan_tho?: boolean
-          bao_hiem_khoan_vay?: boolean
-          the_tin_dung?: boolean
-          chuyen_tien_ngoai?: boolean
-          merchant_qr?: boolean
-          sp_khac?: string
-          cif_code?: string
+          loan_short_term: number | null
+          loan_mid_long_term: number | null
+          hdv_dau_ky: number | null
+          hdv_phat_sinh: number | null
+          hdv_tang_rong: number | null
+          limit_approval_count: number | null
+          cif_moi: boolean | null
+          smart_banking: boolean | null
+          bao_hiem_nhan_tho: boolean | null
+          bao_hiem_khoan_vay: boolean | null
+          the_tin_dung: boolean | null
+          chuyen_tien_ngoai: boolean | null
+          merchant_qr: boolean | null
+          sp_khac: string | null
+          cif_code: string | null
+          department_id: string | null
         }
         Insert: {
           id?: string
-          phone?: string
-          email?: string
-          address?: string
-          note?: string
-          assigned_manager_id?: string
+          phone?: string | null
+          email?: string | null
+          address?: string | null
+          note?: string | null
+          assigned_manager_id?: string | null
           created_at?: string
           updated_at?: string
-          deleted_at?: string
-          customer_type?: string
-          business_name?: string
-          tax_code?: string
-          representative_name?: string
+          deleted_at?: string | null
+          customer_type?: string | null
+          business_name?: string | null
+          tax_code?: string | null
+          representative_name?: string | null
           full_name: string
-          loan_short_term?: number
-          loan_mid_long_term?: number
-          hdv_dau_ky?: number
-          hdv_phat_sinh?: number
-          hdv_tang_rong?: number
-          limit_approval_count?: number
-          cif_moi?: boolean
-          smart_banking?: boolean
-          bao_hiem_nhan_tho?: boolean
-          bao_hiem_khoan_vay?: boolean
-          the_tin_dung?: boolean
-          chuyen_tien_ngoai?: boolean
-          merchant_qr?: boolean
-          sp_khac?: string
-          cif_code?: string
+          loan_short_term?: number | null
+          loan_mid_long_term?: number | null
+          hdv_dau_ky?: number | null
+          hdv_phat_sinh?: number | null
+          hdv_tang_rong?: number | null
+          limit_approval_count?: number | null
+          cif_moi?: boolean | null
+          smart_banking?: boolean | null
+          bao_hiem_nhan_tho?: boolean | null
+          bao_hiem_khoan_vay?: boolean | null
+          the_tin_dung?: boolean | null
+          chuyen_tien_ngoai?: boolean | null
+          merchant_qr?: boolean | null
+          sp_khac?: string | null
+          cif_code?: string | null
+          department_id?: string | null
         }
         Update: {
           id?: string
-          phone?: string
-          email?: string
-          address?: string
-          note?: string
-          assigned_manager_id?: string
+          phone?: string | null
+          email?: string | null
+          address?: string | null
+          note?: string | null
+          assigned_manager_id?: string | null
           created_at?: string
           updated_at?: string
-          deleted_at?: string
-          customer_type?: string
-          business_name?: string
-          tax_code?: string
-          representative_name?: string
+          deleted_at?: string | null
+          customer_type?: string | null
+          business_name?: string | null
+          tax_code?: string | null
+          representative_name?: string | null
           full_name?: string
-          loan_short_term?: number
-          loan_mid_long_term?: number
-          hdv_dau_ky?: number
-          hdv_phat_sinh?: number
-          hdv_tang_rong?: number
-          limit_approval_count?: number
-          cif_moi?: boolean
-          smart_banking?: boolean
-          bao_hiem_nhan_tho?: boolean
-          bao_hiem_khoan_vay?: boolean
-          the_tin_dung?: boolean
-          chuyen_tien_ngoai?: boolean
-          merchant_qr?: boolean
-          sp_khac?: string
-          cif_code?: string
+          loan_short_term?: number | null
+          loan_mid_long_term?: number | null
+          hdv_dau_ky?: number | null
+          hdv_phat_sinh?: number | null
+          hdv_tang_rong?: number | null
+          limit_approval_count?: number | null
+          cif_moi?: boolean | null
+          smart_banking?: boolean | null
+          bao_hiem_nhan_tho?: boolean | null
+          bao_hiem_khoan_vay?: boolean | null
+          the_tin_dung?: boolean | null
+          chuyen_tien_ngoai?: boolean | null
+          merchant_qr?: boolean | null
+          sp_khac?: string | null
+          cif_code?: string | null
+          department_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customers_assigned_manager_id_fkey"
+            columns: ["assigned_manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       daily_manager_snapshots: {
         Row: {
           id: string
           manager_id: string
           snapshot_date: string
-          total_short_term_loan_balance?: number
-          total_medium_term_loan_balance?: number
-          total_deposit_balance?: number
+          total_short_term_loan_balance: number | null
+          total_medium_term_loan_balance: number | null
+          total_deposit_balance: number | null
           created_at: string
         }
         Insert: {
           id?: string
           manager_id: string
           snapshot_date?: string
-          total_short_term_loan_balance?: number
-          total_medium_term_loan_balance?: number
-          total_deposit_balance?: number
+          total_short_term_loan_balance?: number | null
+          total_medium_term_loan_balance?: number | null
+          total_deposit_balance?: number | null
           created_at?: string
         }
         Update: {
           id?: string
           manager_id?: string
           snapshot_date?: string
-          total_short_term_loan_balance?: number
-          total_medium_term_loan_balance?: number
-          total_deposit_balance?: number
+          total_short_term_loan_balance?: number | null
+          total_medium_term_loan_balance?: number | null
+          total_deposit_balance?: number | null
           created_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "daily_manager_snapshots_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       daily_plans: {
         Row: {
           id: string
           user_id: string
           target_date: string
-          target_loans_amount?: number
-          target_deposits_amount?: number
-          target_calls?: number
-          target_cif_moi?: number
-          target_bidv_direct?: number
-          target_bh_nhan_tho?: number
-          target_bh_khoan_vay?: number
-          target_huy_dong_tang_rong?: number
-          target_du_no_ngan_han_tang_rong?: number
-          target_du_no_trung_han_tang_rong?: number
-          target_cap_moi_hmtd?: number
-          created_at?: string
-          updated_at?: string
-          product_targets?: Json
+          target_loans_amount: number | null
+          target_deposits_amount: number | null
+          target_calls: number | null
+          target_cif_moi: number | null
+          target_bidv_direct: number | null
+          target_bh_nhan_tho: number | null
+          target_bh_khoan_vay: number | null
+          target_huy_dong_tang_rong: number | null
+          target_du_no_ngan_han_tang_rong: number | null
+          target_du_no_trung_han_tang_rong: number | null
+          target_cap_moi_hmtd: number | null
+          created_at: string | null
+          updated_at: string | null
+          product_targets: Json | null
         }
         Insert: {
           id?: string
           user_id: string
           target_date: string
-          target_loans_amount?: number
-          target_deposits_amount?: number
-          target_calls?: number
-          target_cif_moi?: number
-          target_bidv_direct?: number
-          target_bh_nhan_tho?: number
-          target_bh_khoan_vay?: number
-          target_huy_dong_tang_rong?: number
-          target_du_no_ngan_han_tang_rong?: number
-          target_du_no_trung_han_tang_rong?: number
-          target_cap_moi_hmtd?: number
-          created_at?: string
-          updated_at?: string
-          product_targets?: Json
+          target_loans_amount?: number | null
+          target_deposits_amount?: number | null
+          target_calls?: number | null
+          target_cif_moi?: number | null
+          target_bidv_direct?: number | null
+          target_bh_nhan_tho?: number | null
+          target_bh_khoan_vay?: number | null
+          target_huy_dong_tang_rong?: number | null
+          target_du_no_ngan_han_tang_rong?: number | null
+          target_du_no_trung_han_tang_rong?: number | null
+          target_cap_moi_hmtd?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+          product_targets?: Json | null
         }
         Update: {
           id?: string
           user_id?: string
           target_date?: string
-          target_loans_amount?: number
-          target_deposits_amount?: number
-          target_calls?: number
-          target_cif_moi?: number
-          target_bidv_direct?: number
-          target_bh_nhan_tho?: number
-          target_bh_khoan_vay?: number
-          target_huy_dong_tang_rong?: number
-          target_du_no_ngan_han_tang_rong?: number
-          target_du_no_trung_han_tang_rong?: number
-          target_cap_moi_hmtd?: number
+          target_loans_amount?: number | null
+          target_deposits_amount?: number | null
+          target_calls?: number | null
+          target_cif_moi?: number | null
+          target_bidv_direct?: number | null
+          target_bh_nhan_tho?: number | null
+          target_bh_khoan_vay?: number | null
+          target_huy_dong_tang_rong?: number | null
+          target_du_no_ngan_han_tang_rong?: number | null
+          target_du_no_trung_han_tang_rong?: number | null
+          target_cap_moi_hmtd?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+          product_targets?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      departments: {
+        Row: {
+          id: string
+          code: string
+          name: string
+          description: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          name: string
+          description?: string | null
+          is_active?: boolean
           created_at?: string
           updated_at?: string
-          product_targets?: Json
+        }
+        Update: {
+          id?: string
+          code?: string
+          name?: string
+          description?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -405,7 +513,7 @@ export interface Database {
           status: 'ACTIVE' | 'CLOSED' | 'MATURED' | 'PENDING'
           created_at: string
           updated_at: string
-          deposit_type?: string
+          deposit_type: string | null
         }
         Insert: {
           id?: string
@@ -417,7 +525,7 @@ export interface Database {
           status?: 'ACTIVE' | 'CLOSED' | 'MATURED' | 'PENDING'
           created_at?: string
           updated_at?: string
-          deposit_type?: string
+          deposit_type?: string | null
         }
         Update: {
           id?: string
@@ -429,9 +537,17 @@ export interface Database {
           status?: 'ACTIVE' | 'CLOSED' | 'MATURED' | 'PENDING'
           created_at?: string
           updated_at?: string
-          deposit_type?: string
+          deposit_type?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "deposits_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       interactions: {
         Row: {
@@ -441,11 +557,11 @@ export interface Database {
           type: 'CALL' | 'MEETING' | 'SMS' | 'EMAIL' | 'VISIT'
           purpose: string
           result: 'SUCCESS' | 'NO_ANSWER' | 'FOLLOW_UP' | 'NOT_INTERESTED' | 'PENDING'
-          notes?: string
+          notes: string | null
           completion_status: boolean
           interaction_date: string
-          follow_up_date?: string
-          next_action?: string
+          follow_up_date: string | null
+          next_action: string | null
           created_at: string
           updated_at: string
         }
@@ -456,11 +572,11 @@ export interface Database {
           type: 'CALL' | 'MEETING' | 'SMS' | 'EMAIL' | 'VISIT'
           purpose: string
           result?: 'SUCCESS' | 'NO_ANSWER' | 'FOLLOW_UP' | 'NOT_INTERESTED' | 'PENDING'
-          notes?: string
+          notes?: string | null
           completion_status?: boolean
           interaction_date?: string
-          follow_up_date?: string
-          next_action?: string
+          follow_up_date?: string | null
+          next_action?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -471,24 +587,39 @@ export interface Database {
           type?: 'CALL' | 'MEETING' | 'SMS' | 'EMAIL' | 'VISIT'
           purpose?: string
           result?: 'SUCCESS' | 'NO_ANSWER' | 'FOLLOW_UP' | 'NOT_INTERESTED' | 'PENDING'
-          notes?: string
+          notes?: string | null
           completion_status?: boolean
           interaction_date?: string
-          follow_up_date?: string
-          next_action?: string
+          follow_up_date?: string | null
+          next_action?: string | null
           created_at?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "interactions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interactions_manager_id_fkey"
+            columns: ["manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       kpi_target_configs: {
         Row: {
           id: string
           metric_key: string
           metric_label: string
-          target_value?: number
-          unit?: string
-          period?: string
+          target_value: number | null
+          unit: string | null
+          period: string | null
           created_at: string
           updated_at: string
         }
@@ -496,9 +627,9 @@ export interface Database {
           id?: string
           metric_key: string
           metric_label: string
-          target_value?: number
-          unit?: string
-          period?: string
+          target_value?: number | null
+          unit?: string | null
+          period?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -506,9 +637,9 @@ export interface Database {
           id?: string
           metric_key?: string
           metric_label?: string
-          target_value?: number
-          unit?: string
-          period?: string
+          target_value?: number | null
+          unit?: string | null
+          period?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -522,20 +653,20 @@ export interface Database {
           loan_amount: number
           balance: number
           start_date: string
-          due_date?: string
+          due_date: string | null
           status: 'ACTIVE' | 'CLOSED' | 'DEFAULTED' | 'PENDING'
           overdue_days: number
-          warning_level?: string
+          warning_level: string | null
           created_at: string
           updated_at: string
-          term_type?: 'SHORT_TERM' | 'MEDIUM_LONG_TERM'
-          business_sector?: string
-          disbursement_purpose?: string
-          collateral_assets?: string
-          credit_limit?: number
-          loan_method?: string
-          loan_type?: string
-          interest_rate?: number
+          term_type: 'SHORT_TERM' | 'MEDIUM_LONG_TERM' | null
+          business_sector: string | null
+          disbursement_purpose: string | null
+          collateral_assets: string | null
+          credit_limit: number | null
+          loan_method: string | null
+          loan_type: string | null
+          interest_rate: number | null
         }
         Insert: {
           id?: string
@@ -544,20 +675,20 @@ export interface Database {
           loan_amount: number
           balance: number
           start_date: string
-          due_date?: string
+          due_date?: string | null
           status?: 'ACTIVE' | 'CLOSED' | 'DEFAULTED' | 'PENDING'
           overdue_days?: number
-          warning_level?: string
+          warning_level?: string | null
           created_at?: string
           updated_at?: string
-          term_type?: 'SHORT_TERM' | 'MEDIUM_LONG_TERM'
-          business_sector?: string
-          disbursement_purpose?: string
-          collateral_assets?: string
-          credit_limit?: number
-          loan_method?: string
-          loan_type?: string
-          interest_rate?: number
+          term_type?: 'SHORT_TERM' | 'MEDIUM_LONG_TERM' | null
+          business_sector?: string | null
+          disbursement_purpose?: string | null
+          collateral_assets?: string | null
+          credit_limit?: number | null
+          loan_method?: string | null
+          loan_type?: string | null
+          interest_rate?: number | null
         }
         Update: {
           id?: string
@@ -566,22 +697,30 @@ export interface Database {
           loan_amount?: number
           balance?: number
           start_date?: string
-          due_date?: string
+          due_date?: string | null
           status?: 'ACTIVE' | 'CLOSED' | 'DEFAULTED' | 'PENDING'
           overdue_days?: number
-          warning_level?: string
+          warning_level?: string | null
           created_at?: string
           updated_at?: string
-          term_type?: 'SHORT_TERM' | 'MEDIUM_LONG_TERM'
-          business_sector?: string
-          disbursement_purpose?: string
-          collateral_assets?: string
-          credit_limit?: number
-          loan_method?: string
-          loan_type?: string
-          interest_rate?: number
+          term_type?: 'SHORT_TERM' | 'MEDIUM_LONG_TERM' | null
+          business_sector?: string | null
+          disbursement_purpose?: string | null
+          collateral_assets?: string | null
+          credit_limit?: number | null
+          loan_method?: string | null
+          loan_type?: string | null
+          interest_rate?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "loans_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       manager_transfer_requests: {
         Row: {
@@ -590,7 +729,7 @@ export interface Database {
           requester_id: string
           target_manager_id: string
           status: string
-          reason?: string
+          reason: string | null
           created_at: string
           updated_at: string
         }
@@ -600,7 +739,7 @@ export interface Database {
           requester_id: string
           target_manager_id: string
           status?: string
-          reason?: string
+          reason?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -610,11 +749,33 @@ export interface Database {
           requester_id?: string
           target_manager_id?: string
           status?: string
-          reason?: string
+          reason?: string | null
           created_at?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "manager_transfer_requests_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manager_transfer_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manager_transfer_requests_target_manager_id_fkey"
+            columns: ["target_manager_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       notifications: {
         Row: {
@@ -624,7 +785,7 @@ export interface Database {
           message: string
           type: string
           is_read: boolean
-          link_url?: string
+          link_url: string | null
           created_at: string
         }
         Insert: {
@@ -634,7 +795,7 @@ export interface Database {
           message: string
           type: string
           is_read?: boolean
-          link_url?: string
+          link_url?: string | null
           created_at?: string
         }
         Update: {
@@ -644,106 +805,137 @@ export interface Database {
           message?: string
           type?: string
           is_read?: boolean
-          link_url?: string
+          link_url?: string | null
           created_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       plan_assignments: {
         Row: {
           id: string
           plan_id: string
           user_id: string
-          target_loans_amount?: number
-          target_deposits_amount?: number
-          target_calls?: number
-          actual_loans_amount?: number
-          actual_deposits_amount?: number
-          actual_calls?: number
+          target_loans_amount: number | null
+          target_deposits_amount: number | null
+          target_calls: number | null
+          actual_loans_amount: number | null
+          actual_deposits_amount: number | null
+          actual_calls: number | null
           created_at: string
           updated_at: string
-          target_cif_moi?: number
-          target_bidv_direct?: number
-          target_bh_nhan_tho?: number
-          target_bh_khoan_vay?: number
-          target_huy_dong_tang_rong?: number
-          target_du_no_ngan_han_tang_rong?: number
-          target_du_no_trung_han_tang_rong?: number
-          target_cap_moi_hmtd?: number
-          product_targets?: Json
+          target_cif_moi: number | null
+          target_bidv_direct: number | null
+          target_bh_nhan_tho: number | null
+          target_bh_khoan_vay: number | null
+          target_huy_dong_tang_rong: number | null
+          target_du_no_ngan_han_tang_rong: number | null
+          target_du_no_trung_han_tang_rong: number | null
+          target_cap_moi_hmtd: number | null
+          product_targets: Json | null
         }
         Insert: {
           id?: string
           plan_id: string
           user_id: string
-          target_loans_amount?: number
-          target_deposits_amount?: number
-          target_calls?: number
-          actual_loans_amount?: number
-          actual_deposits_amount?: number
-          actual_calls?: number
+          target_loans_amount?: number | null
+          target_deposits_amount?: number | null
+          target_calls?: number | null
+          actual_loans_amount?: number | null
+          actual_deposits_amount?: number | null
+          actual_calls?: number | null
           created_at?: string
           updated_at?: string
-          target_cif_moi?: number
-          target_bidv_direct?: number
-          target_bh_nhan_tho?: number
-          target_bh_khoan_vay?: number
-          target_huy_dong_tang_rong?: number
-          target_du_no_ngan_han_tang_rong?: number
-          target_du_no_trung_han_tang_rong?: number
-          target_cap_moi_hmtd?: number
-          product_targets?: Json
+          target_cif_moi?: number | null
+          target_bidv_direct?: number | null
+          target_bh_nhan_tho?: number | null
+          target_bh_khoan_vay?: number | null
+          target_huy_dong_tang_rong?: number | null
+          target_du_no_ngan_han_tang_rong?: number | null
+          target_du_no_trung_han_tang_rong?: number | null
+          target_cap_moi_hmtd?: number | null
+          product_targets?: Json | null
         }
         Update: {
           id?: string
           plan_id?: string
           user_id?: string
-          target_loans_amount?: number
-          target_deposits_amount?: number
-          target_calls?: number
-          actual_loans_amount?: number
-          actual_deposits_amount?: number
-          actual_calls?: number
+          target_loans_amount?: number | null
+          target_deposits_amount?: number | null
+          target_calls?: number | null
+          actual_loans_amount?: number | null
+          actual_deposits_amount?: number | null
+          actual_calls?: number | null
           created_at?: string
           updated_at?: string
-          target_cif_moi?: number
-          target_bidv_direct?: number
-          target_bh_nhan_tho?: number
-          target_bh_khoan_vay?: number
-          target_huy_dong_tang_rong?: number
-          target_du_no_ngan_han_tang_rong?: number
-          target_du_no_trung_han_tang_rong?: number
-          target_cap_moi_hmtd?: number
-          product_targets?: Json
+          target_cif_moi?: number | null
+          target_bidv_direct?: number | null
+          target_bh_nhan_tho?: number | null
+          target_bh_khoan_vay?: number | null
+          target_huy_dong_tang_rong?: number | null
+          target_du_no_ngan_han_tang_rong?: number | null
+          target_du_no_trung_han_tang_rong?: number | null
+          target_cap_moi_hmtd?: number | null
+          product_targets?: Json | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "plan_assignments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_assignments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       plans: {
         Row: {
           id: string
           title: string
-          description?: string
+          description: string | null
           target_date: string
-          created_by?: string
+          created_by: string | null
           created_at: string
         }
         Insert: {
           id?: string
           title: string
-          description?: string
+          description?: string | null
           target_date: string
-          created_by?: string
+          created_by?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           title?: string
-          description?: string
+          description?: string | null
           target_date?: string
-          created_by?: string
+          created_by?: string | null
           created_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "plans_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       profiles: {
         Row: {
@@ -751,120 +943,150 @@ export interface Database {
           email: string
           full_name: string
           role: 'USER' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_3' | 'ADVISOR' | 'ADMIN_LEVEL_0'
-          department_id?: string
+          department_id: string | null
           created_at: string
           updated_at: string
           is_active: boolean
-          full_name_slug?: string
-          short_name?: string
+          full_name_slug: string | null
+          short_name: string | null
         }
         Insert: {
           id?: string
           email: string
           full_name: string
           role?: 'USER' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_3' | 'ADVISOR' | 'ADMIN_LEVEL_0'
-          department_id?: string
+          department_id?: string | null
           created_at?: string
           updated_at?: string
           is_active?: boolean
-          full_name_slug?: string
-          short_name?: string
+          full_name_slug?: string | null
+          short_name?: string | null
         }
         Update: {
           id?: string
           email?: string
           full_name?: string
           role?: 'USER' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_3' | 'ADVISOR' | 'ADMIN_LEVEL_0'
-          department_id?: string
+          department_id?: string | null
           created_at?: string
           updated_at?: string
           is_active?: boolean
-          full_name_slug?: string
-          short_name?: string
+          full_name_slug?: string | null
+          short_name?: string | null
         }
         Relationships: []
       }
       role_delegations: {
         Row: {
           id: string
-          delegator_id?: string
-          delegatee_id?: string
+          delegator_id: string | null
+          delegatee_id: string | null
           delegated_role: 'USER' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_3' | 'ADVISOR' | 'ADMIN_LEVEL_0'
           start_date: string
           end_date: string
-          status?: string
-          created_at?: string
+          status: string | null
+          created_at: string | null
         }
         Insert: {
           id?: string
-          delegator_id?: string
-          delegatee_id?: string
+          delegator_id?: string | null
+          delegatee_id?: string | null
           delegated_role: 'USER' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_3' | 'ADVISOR' | 'ADMIN_LEVEL_0'
           start_date: string
           end_date: string
-          status?: string
-          created_at?: string
+          status?: string | null
+          created_at?: string | null
         }
         Update: {
           id?: string
-          delegator_id?: string
-          delegatee_id?: string
+          delegator_id?: string | null
+          delegatee_id?: string | null
           delegated_role?: 'USER' | 'ADMIN_LEVEL_2' | 'ADMIN_LEVEL_1' | 'ADMIN_LEVEL_3' | 'ADVISOR' | 'ADMIN_LEVEL_0'
           start_date?: string
           end_date?: string
-          status?: string
-          created_at?: string
+          status?: string | null
+          created_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "role_delegations_delegator_id_fkey"
+            columns: ["delegator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_delegations_delegatee_id_fkey"
+            columns: ["delegatee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       support_requests: {
         Row: {
           id: string
           item_id: string
           item_type: string
-          requester_id?: string
-          support_admin_id?: string
-          status?: string
+          requester_id: string | null
+          support_admin_id: string | null
+          status: string | null
           scheduled_date: string
-          created_at?: string
+          created_at: string | null
         }
         Insert: {
           id?: string
           item_id: string
           item_type: string
-          requester_id?: string
-          support_admin_id?: string
-          status?: string
+          requester_id?: string | null
+          support_admin_id?: string | null
+          status?: string | null
           scheduled_date: string
-          created_at?: string
+          created_at?: string | null
         }
         Update: {
           id?: string
           item_id?: string
           item_type?: string
-          requester_id?: string
-          support_admin_id?: string
-          status?: string
+          requester_id?: string | null
+          support_admin_id?: string | null
+          status?: string | null
           scheduled_date?: string
-          created_at?: string
+          created_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "support_requests_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_requests_support_admin_id_fkey"
+            columns: ["support_admin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       system_settings: {
         Row: {
           key: string
           value: string
-          updated_at?: string
+          updated_at: string | null
         }
         Insert: {
           key: string
           value: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           key?: string
           value?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -874,62 +1096,70 @@ export interface Database {
           user_id: string
           start_date: string
           end_date: string
-          target_loans_amount?: number
-          target_deposits_amount?: number
-          target_calls?: number
-          target_cif_moi?: number
-          target_bidv_direct?: number
-          target_bh_nhan_tho?: number
-          target_bh_khoan_vay?: number
-          target_huy_dong_tang_rong?: number
-          target_du_no_ngan_han_tang_rong?: number
-          target_du_no_trung_han_tang_rong?: number
-          target_cap_moi_hmtd?: number
-          created_at?: string
-          updated_at?: string
-          product_targets?: Json
+          target_loans_amount: number | null
+          target_deposits_amount: number | null
+          target_calls: number | null
+          target_cif_moi: number | null
+          target_bidv_direct: number | null
+          target_bh_nhan_tho: number | null
+          target_bh_khoan_vay: number | null
+          target_huy_dong_tang_rong: number | null
+          target_du_no_ngan_han_tang_rong: number | null
+          target_du_no_trung_han_tang_rong: number | null
+          target_cap_moi_hmtd: number | null
+          created_at: string | null
+          updated_at: string | null
+          product_targets: Json | null
         }
         Insert: {
           id?: string
           user_id: string
           start_date: string
           end_date: string
-          target_loans_amount?: number
-          target_deposits_amount?: number
-          target_calls?: number
-          target_cif_moi?: number
-          target_bidv_direct?: number
-          target_bh_nhan_tho?: number
-          target_bh_khoan_vay?: number
-          target_huy_dong_tang_rong?: number
-          target_du_no_ngan_han_tang_rong?: number
-          target_du_no_trung_han_tang_rong?: number
-          target_cap_moi_hmtd?: number
-          created_at?: string
-          updated_at?: string
-          product_targets?: Json
+          target_loans_amount?: number | null
+          target_deposits_amount?: number | null
+          target_calls?: number | null
+          target_cif_moi?: number | null
+          target_bidv_direct?: number | null
+          target_bh_nhan_tho?: number | null
+          target_bh_khoan_vay?: number | null
+          target_huy_dong_tang_rong?: number | null
+          target_du_no_ngan_han_tang_rong?: number | null
+          target_du_no_trung_han_tang_rong?: number | null
+          target_cap_moi_hmtd?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+          product_targets?: Json | null
         }
         Update: {
           id?: string
           user_id?: string
           start_date?: string
           end_date?: string
-          target_loans_amount?: number
-          target_deposits_amount?: number
-          target_calls?: number
-          target_cif_moi?: number
-          target_bidv_direct?: number
-          target_bh_nhan_tho?: number
-          target_bh_khoan_vay?: number
-          target_huy_dong_tang_rong?: number
-          target_du_no_ngan_han_tang_rong?: number
-          target_du_no_trung_han_tang_rong?: number
-          target_cap_moi_hmtd?: number
-          created_at?: string
-          updated_at?: string
-          product_targets?: Json
+          target_loans_amount?: number | null
+          target_deposits_amount?: number | null
+          target_calls?: number | null
+          target_cif_moi?: number | null
+          target_bidv_direct?: number | null
+          target_bh_nhan_tho?: number | null
+          target_bh_khoan_vay?: number | null
+          target_huy_dong_tang_rong?: number | null
+          target_du_no_ngan_han_tang_rong?: number | null
+          target_du_no_trung_han_tang_rong?: number | null
+          target_cap_moi_hmtd?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+          product_targets?: Json | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "weekly_plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {
