@@ -77,9 +77,14 @@ export async function POST(request: Request) {
     const { data: deletedCounts, error: rpcError } = await serviceClient.rpc('clear_activity_keep_customers')
 
     if (rpcError) {
-      logger.error('[Clear Activity] RPC failed', { error: getErrorMessage(rpcError) }, { production: true })
+      const rpcMessage = getErrorMessage(rpcError)
+      logger.error('[Clear Activity] RPC failed', { error: rpcMessage, code: rpcError.code }, { production: true })
+      // PGRST202 = function chưa tồn tại (chưa chạy migration). Các lỗi khác là lỗi runtime của function.
+      const notFound = rpcError.code === 'PGRST202' || /could not find the function|does not exist.*function/i.test(rpcMessage)
       return NextResponse.json({
-        error: 'Chưa chạy migration clear_activity_keep_customers trên Supabase. Xem migrations/05-maintenance/migration_clear_activity_keep_customers_20260611.sql',
+        error: notFound
+          ? 'Chưa chạy migration clear_activity_keep_customers trên Supabase. Xem migrations/05-maintenance/migration_clear_activity_keep_customers_20260611.sql'
+          : `Lỗi khi xóa lịch sử: ${rpcMessage}`,
       }, { status: 500 })
     }
 
